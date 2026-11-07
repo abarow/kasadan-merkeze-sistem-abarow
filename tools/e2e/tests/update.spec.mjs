@@ -431,8 +431,8 @@ test.describe.serial('Güncelleme merkezi: kayıt ve onay', () => {
       await skopeo(['copy', '--all', '--preserve-digests', '--src-tls-verify=false', '--dest-tls-verify=false', '--src-creds', CI_CREDS, '--dest-creds', CI_CREDS,
         `docker://${REGISTRY}/prod/abarow-x@${digest}`, `docker://${REGISTRY}/prod/${name}:0.4.0`])
     }
-    writeDigest('yanlis', 'abarow-w', digest)
-    await signImages(`${REGISTRY}/prod`, 'tools/e2e/out/trust/image/yanlis', 'pilot')
+    writeDigest('wrong', 'abarow-w', digest)
+    await signImages(`${REGISTRY}/prod`, 'tools/e2e/out/trust/image/wrong', 'pilot')
 
     // The prod level's policy is produced from the cosign keys in the trust file.
     const policy = await generatePolicy('prod', 'prod')

@@ -96,8 +96,8 @@ export async function podmanPull(policyDir, ref, creds) {
   try {
     const { stdout } = await execFileP('docker', [
       'run', '--rm', '--network', NETWORK, '--device', '/dev/fuse', '--security-opt', 'label=disable', '--security-opt', 'seccomp=unconfined',
-      '-v', `${policyDir}:/root/.config/containers:ro`, 'quay.io/podman/stable:v5.4',
-      'podman', 'pull', '--creds', creds, ref,
+      '--cap-add', 'SYS_ADMIN', '--security-opt', 'apparmor=unconfined', '-v', `${policyDir}:/root/.config/containers:ro`, 'quay.io/podman/stable:v5.4',
+      'podman', '--storage-driver', 'vfs', 'pull', '--creds', creds, ref,
     ], { maxBuffer: 16 << 20, timeout: 180_000 })
     return { ok: true, out: stdout }
   } catch (e) {
