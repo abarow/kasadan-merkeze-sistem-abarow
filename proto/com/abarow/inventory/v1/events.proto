@@ -1,0 +1,89 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.inventory.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// MovementKind is the kind of the stock movement.
+enum MovementKind {
+  MOVEMENT_KIND_UNSPECIFIED = 0;
+  // Sale (negative); the basis is the sale id.
+  MOVEMENT_KIND_SALE = 1;
+  // Goods receipt (positive); the basis is the delivery note no, the supplier in a separate field.
+  MOVEMENT_KIND_RECEIPT = 2;
+  // Count difference (positive or negative): counted − in the system.
+  MOVEMENT_KIND_COUNT = 3;
+  // Transfer out (negative); the basis is the transfer id.
+  MOVEMENT_KIND_TRANSFER_OUT = 4;
+  // Transfer in (positive); the basis is the transfer id.
+  MOVEMENT_KIND_TRANSFER_IN = 5;
+}
+
+// StockMoved (store.stock.moved.v1) is a stock movement at a place: a
+// sale, a goods receipt, a count or a transfer. The movements
+// do not change; headquarters keeps the stock of all places from their total.
+message StockMoved {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  // Place: the store id; "headquarters" for the headquarters warehouse.
+  string location_id = 3;
+  // The movement's id; if the same movement comes twice it is counted once.
+  string movement_id = 4;
+  MovementKind kind = 5;
+  // Basis: the sale id, delivery note no, count no or transfer id.
+  string ref = 6;
+  // The supplier in a goods receipt.
+  string supplier = 7;
+  // The person who made the movement (the cashier id in a sale).
+  string by = 8;
+  repeated MovementLine lines = 9;
+  // The other place in a transfer: the one sent to on an outflow, the sending place on an inflow
+  // (the store id or "headquarters").
+  string counterpart = 10;
+}
+
+// MovementLine is a product of the movement.
+message MovementLine {
+  string product_id = 1;
+  string product_name = 2;
+  // Signed quantity, in thousandths of a unit (1000 = 1 piece or 1 kg).
+  int64 qty_milli = 3;
+  // In a count: the counted and the system quantity at that moment (for audit).
+  int64 counted_milli = 4;
+  int64 system_milli = 5;
+}
+
+// TransferSent (transfer.<receiving place>.sent.v1) is a transfer sent to a place:
+// it goes down from headquarters' transfer stream to the receiving store. A transfer
+// sent from the headquarters warehouse or one sent by another store and forwarded by headquarters.
+// When the receiving place takes delivery of the goods it makes the transfer-in movement.
+message TransferSent {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  // The transfer's id: the basis of the sender's transfer-out movement.
+  string transfer_id = 3;
+  string from_location = 4;
+  string to_location = 5;
+  // The person who sent it.
+  string by = 6;
+  // The quantities sent (positive).
+  repeated MovementLine lines = 7;
+}
+
+// Locations (transfer.locations.v1) are the places transfers can be sent to:
+// the headquarters warehouse and the stores. Headquarters publishes; the store chooses on the
+// transfer screen. Only the latest state is valid.
+message Locations {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  repeated Location locations = 3;
+}
+
+// Location, bir yerdir.
+message Location {
+  string id = 1;
+  string name = 2;
+}

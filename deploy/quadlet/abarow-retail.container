@@ -1,0 +1,45 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow market module (with its screen)
+# Wants (not Requires): while the dependency is updated/restarted this
+# service does not stop, it renews the connection itself. After + Notify=healthy makes the start
+# wait for the dependency to be healthy.
+Wants=abarow-catalog.service
+After=abarow-catalog.service
+Wants=abarow-sales.service
+After=abarow-sales.service
+
+[Container]
+ContainerName=abarow-retail
+Image=ghcr.io/abarow/abarow-retail:0.1
+# Every service is updated on its own, but not by itself: a new release
+# is applied once approved on the screen (docs/UPDATE.md).
+Network=abarow.network
+Environment=ABAROW_CATALOG_ADDR=abarow-catalog:9000
+Environment=ABAROW_SALES_ADDR=abarow-sales:9000
+# The scale at the register is in device: when a weighed product is chosen the weight is read from there
+# (if no scale is installed the scale barcode is needed).
+Environment=ABAROW_DEVICE_ADDR=abarow-device:9000
+Environment=GOMEMLIMIT=48MiB
+Volume=abarow-retail-data:/data
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy; dependent services wait.
+Notify=healthy
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The register does not wait for the external network: the services only use the local abarow network; on a register
+# with no connection network-online.target may never come and the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

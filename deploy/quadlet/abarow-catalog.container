@@ -1,0 +1,36 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow katalog
+
+[Container]
+ContainerName=abarow-catalog
+Image=ghcr.io/abarow/abarow-catalog:0.1
+# Every service is updated on its own, but not by itself: a new release
+# is applied once approved on the screen (docs/UPDATE.md).
+Network=abarow.network
+Environment=ABAROW_CATALOG_SEED=/seed/catalog.json
+Environment=GOMEMLIMIT=48MiB
+Volume=abarow-catalog-data:/data
+# Starting data (not test data, the business's own file).
+Volume=%h/abarow/seed:/seed:ro,Z
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy; dependent services wait.
+Notify=healthy
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The register does not wait for the external network: the services only use the local abarow network; on a register
+# with no connection network-online.target may never come and the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+# Proje Linux'ta çalışır: depoda ve çalışma kopyasında satır sonları LF
+* text=auto eol=lf
+
+# Windows'a özgü betikler CRLF kalır
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# İkili dosyalar
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary

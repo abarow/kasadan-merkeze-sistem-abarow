@@ -1,0 +1,184 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# On every push and PR: the Go checks, the contracts (buf lint, breaking
+# changes, whether the generated code is current), the copyright headers and
+# the Docker simulation (register-sim scenarios, the browser test; the
+# three-tier simulation with headquarters, a store server and two registers;
+# the restaurant register).
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  go:
+    name: Go (gofmt, build, vet, test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      # The headquarters tests (ingest) run against a real PostgreSQL.
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      ABAROW_TEST_POSTGRES: postgres://postgres:test@localhost:5432/postgres?sslmode=disable
+      # The real pipeline of the Beko fiscal printer bridge (C++) is tested against a fake SDK.
+      ABAROW_BEKO_HELPER: ${{ github.workspace }}/services/fiscal/beko/hub/build/hubd-fake
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          cache-dependency-path: "**/go.sum"
+      - name: Beko bridge (built with the fake SDK)
+        run: make -C services/fiscal/beko/hub fake
+      - run: bash scripts/check.sh
+
+  contracts:
+    name: Contracts and copyright headers
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # buf breaking compares with the previous commit.
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.27"
+          cache-dependency-path: "**/go.sum"
+      - name: buf lint and whether the generated code is current
+        run: |
+          bash scripts/gen.sh
+          git add --intent-to-add gen
+          if ! git diff --exit-code --stat -- gen; then
+            echo "::error::gen/ is not current: run scripts/gen.sh and commit the result."
+            exit 1
+          fi
+      - name: Breaking changes in the proto contracts
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -z "$BASE" ] || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "There is no previous commit to compare with; skipped."
+            exit 0
+          fi
+          cd proto
+          go run github.com/bufbuild/buf/cmd/buf@v1.75.0 breaking --against "../.git#ref=$BASE,subdir=proto"
+      - name: Copyright headers
+        run: bash scripts/check-headers.sh
+      - name: Promotion tools
+        # Producing the notice, signing it and verifying it by level (the commands of
+        # promotion.yml), and the tests of the promotion gate (release, CI/e2e, SBOM and provenance checks).
+        run: |
+          bash scripts/channel-test.sh
+          python3 scripts/promotion_gate_test.py
+      - name: Quadlet files
+        # Podman's Quadlet generator must be able to turn every file (the register
+        # and the store server and headquarters units in the subdirectories) into
+        # a systemd unit. Timers (.timer) are not Quadlet files.
+        run: |
+          docker run --rm -v "$PWD/deploy/quadlet:/q:ro" -e QUADLET_UNIT_DIRS=/q \
+            quay.io/podman/stable:v5.4 /usr/libexec/podman/quadlet -dryrun -user > /tmp/quadlet.out
+          files=$(find deploy/quadlet -type f \( -name 'abarow*.container' -o -name 'abarow*.network' \) | wc -l)
+          units=$(grep -c '^---abarow-' /tmp/quadlet.out)
+          echo "$files Quadlet files, $units units"
+          [ "$files" -eq "$units" ] || { echo "::error::$files Quadlet files produced $units units"; exit 1; }
+
+  e2e:
+    name: End-to-end (${{ matrix.scenario }})
+    runs-on: ubuntu-latest
+    needs: [go]
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # Every scenario builds its own Docker stack (register, store server,
+      # optionally headquarters) and tries the rules of disconnection, partial
+      # flow and the delivery receipt with Playwright and API clients; the
+      # scenarios use the same ports, so they run on separate runners.
+      matrix:
+        scenario: [standalone, headquarters, restaurant, update]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Playwright
+        working-directory: tools/e2e
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Scenarios
+        working-directory: tools/e2e
+        run: npx playwright test tests/${{ matrix.scenario }}.spec.mjs
+      - name: Hand the files created in containers to the runner user
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" tools/e2e/out || true
+      - name: Report and screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-${{ matrix.scenario }}
+          path: tools/e2e/out
+          if-no-files-found: ignore
+      - name: Shut down
+        if: always()
+        run: |
+          for s in standalone headquarters restaurant-standalone restaurant-headquarters update; do
+            bash scripts/e2e.sh down "$s" || true
+          done
+
+  simulation:
+    name: Docker simulation
+    runs-on: ubuntu-latest
+    needs: [go]
+    timeout-minutes: 30
+    env:
+      COMPOSE: docker compose -f deploy/compose/compose.yaml
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the images and start the register
+        run: $COMPOSE up --build --detach --wait
+      - name: register-sim scenarios
+        run: $COMPOSE run --rm register-sim
+      - name: Browser test
+        run: $COMPOSE --profile ui-test run --rm ui-smoke
+      - name: Three-tier simulation (headquarters, store server and two registers)
+        # The same images are used; the registers are in separate projects and ports.
+        run: bash scripts/store-sim.sh
+      - name: Restaurant register (browser test)
+        run: bash scripts/restaurant-sim.sh
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-smoke
+          path: tools/ui-smoke/out
+          if-no-files-found: ignore
+      - name: Service logs
+        if: failure()
+        run: |
+          $COMPOSE logs --no-color
+          bash scripts/store-sim.sh logs || true
+          bash scripts/restaurant-sim.sh logs || true
+      - name: Shut down
+        if: always()
+        run: |
+          $COMPOSE down --volumes
+          bash scripts/store-sim.sh down
+          bash scripts/restaurant-sim.sh down

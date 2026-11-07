@@ -1,0 +1,24 @@
+go 1.26.0
+
+use (
+	./services/store
+	./services/headquarters/catalog
+	./services/headquarters/ingest
+	./services/headquarters/reporting
+	./services/core/catalog
+	./services/core/device
+	./services/core/gateway
+	./services/core/payment
+	./services/core/sales
+	./services/core/staff
+	./services/fiscal/beko
+	./services/fiscal/simulator
+	./gen
+	./services/update
+	./services/inventory
+	./services/modules/restaurant
+	./services/modules/retail
+	./pkg
+	./tools/register-sim
+	./tools/natsauth
+)

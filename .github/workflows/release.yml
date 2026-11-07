@@ -1,0 +1,128 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# On a release tag (like v0.1.0) builds the image of every service for amd64 and
+# arm64 and publishes it to GHCR. Two tags are printed: the fixed version (0.1.0) and the
+# channel (0.1). The Quadlet units at the registers are bound to the channel tag; a new
+# patch is not applied by itself, it is taken service by service once approved on the screen.
+#
+# An SBOM (SPDX) and provenance (SLSA, including the source commit) evidence is attached to every image; the promotion
+# gate (scripts/promotion-gate.py) does not promote an image without them.
+name: Release
+
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  images:
+    name: Image ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # The publisher's registry (optional): if defined, the images are also copied to the test channel.
+      PUBLISHER_REGISTRY: ${{ secrets.PUBLISHER_REGISTRY }}
+      COSIGN_KEY_TEST: ${{ secrets.COSIGN_KEY_TEST }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: gateway, module: services/core/gateway, pkg: ./cmd/gateway }
+          - { image: sales, module: services/core/sales, pkg: ./cmd/sales }
+          - { image: staff, module: services/core/staff, pkg: ./cmd/staff }
+          - { image: catalog, module: services/core/catalog, pkg: ./cmd/catalog }
+          - { image: payment, module: services/core/payment, pkg: ./cmd/payment }
+          - { image: device, module: services/core/device, pkg: ./cmd/device }
+          - { image: fiscal-simulator, module: services/fiscal/simulator, pkg: ./cmd/simulator }
+          - { image: natsauth, module: tools/natsauth, pkg: . }
+          - { image: report, module: services/store, pkg: ./cmd/report, ui: ui/apps/store }
+          - { image: inventory, module: services/inventory, pkg: ./cmd/inventory }
+          - { image: ingest, module: services/headquarters/ingest, pkg: ./cmd/ingest }
+          - { image: reporting, module: services/headquarters/reporting, pkg: ./cmd/reporting, ui: ui/apps/headquarters }
+          - { image: catalog-admin, module: services/headquarters/catalog, pkg: ./cmd/catalog-admin }
+          - { image: inventory-headquarters, module: services/inventory, pkg: ./cmd/inventory }
+          - { image: retail, module: services/modules/retail, pkg: ./cmd/retail, ui: ui/apps/retail }
+          - { image: restaurant, module: services/modules/restaurant, pkg: ./cmd/restaurant, ui: ui/apps/restaurant }
+          - { image: update, module: services/update, pkg: ./cmd/agent }
+          - { image: update-server, module: services/update, pkg: ./cmd/server }
+          - { image: update-auth, module: services/update, pkg: ./cmd/auth }
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version and channel
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "channel=${version%.*}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Go cross-compiles, so arm64 is built without emulation (the Containerfiles
+      # derlemeyi BUILDPLATFORM'da yapar).
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: .
+          file: deploy/container/${{ matrix.ui && 'module-ui' || 'go-service' }}.Containerfile
+          build-args: |
+            MODULE=${{ matrix.module }}
+            PKG=${{ matrix.pkg }}
+            UI=${{ matrix.ui }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          # The evidence is attached to the image index per platform; the digest is still the index's.
+          sbom: true
+          provenance: mode=max
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/abarow-${{ matrix.image }}:${{ steps.version.outputs.version }}
+            ghcr.io/${{ github.repository_owner }}/abarow-${{ matrix.image }}:${{ steps.version.outputs.channel }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=Apache-2.0
+      # The promotion workflow (promotion.yml) announces images by digest, not by tag: the
+      # unit name, repository and digest of every image are written to a file and uploaded.
+      - name: Digest record
+        env:
+          IMAGE: ${{ matrix.image }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          mkdir -p digest
+          jq -n --arg image "$IMAGE" --arg owner "$OWNER" --arg digest "$DIGEST" \
+            '{unit: ("abarow-" + $image), repo: ("ghcr.io/" + $owner + "/abarow-" + $image), digest: $digest}' > "digest/$IMAGE.json"
+      - name: To the publisher's registry (test channel)
+        if: ${{ env.PUBLISHER_REGISTRY != '' }}
+        env:
+          SRC_CREDS: ${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}
+          DST_CREDS: ${{ secrets.PUBLISHER_USER }}:${{ secrets.PUBLISHER_PASSWORD }}
+          OWNER: ${{ github.repository_owner }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          command -v skopeo >/dev/null || sudo apt-get install -y skopeo
+          bash scripts/image-copy.sh "ghcr.io/$OWNER" "$PUBLISHER_REGISTRY/test" "$VERSION" digest
+      - uses: sigstore/cosign-installer@v3
+        if: ${{ env.PUBLISHER_REGISTRY != '' && env.COSIGN_KEY_TEST != '' }}
+      - name: Sign the test channel image with the build key
+        if: ${{ env.PUBLISHER_REGISTRY != '' && env.COSIGN_KEY_TEST != '' }}
+        env:
+          DST_CREDS: ${{ secrets.PUBLISHER_USER }}:${{ secrets.PUBLISHER_PASSWORD }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD_TEST }}
+        run: |
+          umask 077
+          printf '%s' "$COSIGN_KEY_TEST" > cosign.key
+          COSIGN_KEY=cosign.key bash scripts/image-sign.sh "$PUBLISHER_REGISTRY/test" digest
+          rm -f cosign.key
+      - uses: actions/upload-artifact@v7
+        with:
+          name: digest-${{ matrix.image }}
+          path: digest/${{ matrix.image }}.json
+          if-no-files-found: error

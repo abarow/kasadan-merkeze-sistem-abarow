@@ -1,0 +1,93 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Connects the register to the store server (store simulation): it is added on top of compose.yaml,
+# used by scripts/store-sim.sh. The register's NATS connects to the store server
+# (store.yaml) as leaf; register-sim checks the store server too.
+#
+# There is more than one "nats" service on the shared abarow-store network (each
+# register's own NATS). The register-sim connected to this network connects to its own register's NATS
+# only by the name "register-nats" defined in the register's network.
+services:
+  # The leaf connection is TLS; the store server's certificate is verified with the store's CA.
+  # In a real install the CA certificate is copied to the register at install;
+  # here it is read from the store server's volume (only the ca folder).
+  nats-auth:
+    command: ["-out", "/auth", "-users", "sales,staff,catalog,register-sim", "-server-name", "${ABAROW_REGISTER_ID:-register-1}", "-leaf", "tls://store:7421", "-leaf-ca", "/store-ca/ca.pem"]
+    volumes:
+      - { type: volume, source: store-auth, target: /store-ca, read_only: true, volume: { subpath: ca } }
+
+  nats:
+    networks:
+      default:
+        aliases: [register-nats]
+      store: {}
+
+  # Headquarters' catalog comes down to the register from the store server's catalog stream.
+  catalog:
+    environment:
+      ABAROW_NATS_URL: nats://nats:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      ABAROW_CATALOG_SOURCE: store-1
+    volumes:
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: catalog } }
+    # The key folder is created when nats-auth finishes.
+    depends_on:
+      nats-auth: { condition: service_completed_successfully }
+
+  # The cashiers managed on the store server screen come down to the register; the store server's delivery
+  # receipt is received (an old event in the shift stream is deleted only with its receipt).
+  staff:
+    environment:
+      ABAROW_CASHIERS_SOURCE: store-1
+      ABAROW_RECEIPT_SOURCE: store-1
+
+  # Delivery receipt: an old event in the register stream only by the store server's
+  # makbuzuyla silinir.
+  sales:
+    environment:
+      ABAROW_RECEIPT_SOURCE: store-1
+
+  register-sim:
+    environment:
+      ABAROW_NATS_URL: nats://register-nats:4222
+      ABAROW_STORE_ID: store-1
+      ABAROW_REGISTER_ID: ${ABAROW_REGISTER_ID:-register-1}
+      ABAROW_STORE_NATS_URL: nats://store:4222
+      ABAROW_STORE_NATS_NKEY: /run/store-nats/nats.nk
+      ABAROW_STORE_REPORT_URL: http://report:8080
+      ABAROW_STORE_REPORT_PASSWORD: ${ABAROW_REPORT_PASSWORD:-}
+      # While there is a manager the store password is off; the trial manager (code:PIN).
+      ABAROW_STORE_REPORT_MANAGER: ${ABAROW_REPORT_MANAGER:-}
+      # If the store server is connected to headquarters the events are checked at headquarters too.
+      ABAROW_HEADQUARTERS_INGEST_URL: ${ABAROW_HEADQUARTERS_INGEST_URL:-}
+      # Headquarters' summary is compared with the store server's day report (trial
+      # account; not used in a real install).
+      ABAROW_HEADQUARTERS_REPORTING_URL: ${ABAROW_HEADQUARTERS_REPORTING_URL:-}
+      ABAROW_HEADQUARTERS_USER: ${ABAROW_HEADQUARTERS_USER:-}
+      ABAROW_HEADQUARTERS_PASSWORD: ${ABAROW_HEADQUARTERS_PASSWORD:-}
+      # A product added at headquarters (barcode:price) must show in the register's catalog.
+      ABAROW_CATALOG_ADDR: catalog:9000
+      ABAROW_HEADQUARTERS_PRODUCT: ${ABAROW_HEADQUARTERS_PRODUCT:-}
+      # A store price given at the store server (product:barcode:price) must be in effect at the register.
+      ABAROW_STORE_PRICE: ${ABAROW_STORE_PRICE:-}
+      # A cashier added at the store server must sign in at the register; they must not once the account is closed.
+      ABAROW_STORE_CASHIERS: ${ABAROW_STORE_CASHIERS:-}
+      # A sale must deduct from store stock; goods receipt and count must correct the stock.
+      ABAROW_STORE_STOCK: ${ABAROW_STORE_STOCK:-}
+      ABAROW_STORE_CATALOG: ${ABAROW_STORE_CATALOG:-}
+    volumes:
+      - { type: volume, source: store-auth, target: /run/store-nats, read_only: true, volume: { subpath: register-sim } }
+    networks: [default, store]
+
+networks:
+  store:
+    external: true
+    name: abarow-store
+
+volumes:
+  # The store server's NATS identities (store.yaml); the register sees only the CA
+  # certificate, register-sim sees only its own key folder.
+  store-auth:
+    external: true
+    name: abarow-store_nats-auth

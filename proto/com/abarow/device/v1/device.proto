@@ -1,0 +1,148 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.device.v1;
+
+// DeviceService is the register's peripherals: the receipt printer, the cash drawer
+// and the barcode reader. Only this service reaches the hardware; the other services send plain
+// text documents. The text is UTF-8; converting it to the printer's code page
+// is device's job.
+service DeviceService {
+  // Print prints a plain text document (receipt, report) on the receipt printer. If a line
+  // exceeds the printer's column count INVALID_ARGUMENT; the column count is learned
+  // from GetStatus. If the printer cannot be reached UNAVAILABLE.
+  rpc Print(PrintRequest) returns (PrintResponse);
+  // OpenDrawer opens the cash drawer.
+  rpc OpenDrawer(OpenDrawerRequest) returns (OpenDrawerResponse);
+  // GetStatus returns the printer's type, the column count and the numbers of documents
+  // printed and drawer openings since the service started.
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse);
+  // WatchScans gives the codes the barcode reader reads as they are read (for the register
+  // screen). It is not persistent: a code read while not listening is lost.
+  rpc WatchScans(WatchScansRequest) returns (stream WatchScansResponse);
+  // SimulateScan imitates a scan on the simulator reader (trial and
+  // tests). FAILED_PRECONDITION on a real reader; an invalid code
+  // INVALID_ARGUMENT.
+  rpc SimulateScan(SimulateScanRequest) returns (SimulateScanResponse);
+  // WatchPrinter gives the printer's state: first the current state, then every
+  // change (paper out, cover opened, printer turned off ...).
+  rpc WatchPrinter(WatchPrinterRequest) returns (stream WatchPrinterResponse);
+  // SimulatePrinter sets the simulator printer's state (trial and
+  // tests); a simulator that is out of paper, has the cover open, is off or has an error does not
+  // print. FAILED_PRECONDITION on a real printer.
+  rpc SimulatePrinter(SimulatePrinterRequest) returns (SimulatePrinterResponse);
+  // ReadWeight reads the stable weight of the scale at the register (when a weighed
+  // product is selected); if the scale is swinging it waits a short time for it to settle.
+  // NOT_FOUND if there is no scale; if no weight can be given (swinging, empty, negative,
+  // over capacity, scale error) FAILED_PRECONDITION and a reason to
+  // show the cashier; UNAVAILABLE if the scale does not answer.
+  rpc ReadWeight(ReadWeightRequest) returns (ReadWeightResponse);
+  // SimulateWeight sets the simulator scale's reading (trial and
+  // tests). FAILED_PRECONDITION on a real scale.
+  rpc SimulateWeight(SimulateWeightRequest) returns (SimulateWeightResponse);
+}
+
+// PrinterState is the printer's state.
+enum PrinterState {
+  // Unknown: the printer does not report its state or it has not been asked yet.
+  PRINTER_STATE_UNSPECIFIED = 0;
+  // Ready.
+  PRINTER_STATE_READY = 1;
+  // Paper low; it prints.
+  PRINTER_STATE_PAPER_NEAR_END = 2;
+  // Paper out; it does not print.
+  PRINTER_STATE_PAPER_OUT = 3;
+  // Cover open; it does not print.
+  PRINTER_STATE_COVER_OPEN = 4;
+  // The printer is off or not connected.
+  PRINTER_STATE_OFFLINE = 5;
+  // The printer reports an error (cutter jammed, overheated ...).
+  PRINTER_STATE_ERROR = 6;
+}
+
+message PrintRequest {
+  // The document's name (e.g. "Receipt SIM-000012", "Z report 5"); it shows in the logs.
+  string title = 1;
+  // The lines to be printed; each must not exceed the printer's column count.
+  repeated string lines = 2;
+  // Station (restaurant): "kitchen" or "bar". If that station's printer is
+  // installed it prints there, otherwise on the receipt printer; if empty the receipt printer.
+  string station = 3;
+}
+
+message PrintResponse {}
+
+message OpenDrawerRequest {
+  // Reason (e.g. "cash sale SIM-000012"); it shows in the logs.
+  string reason = 1;
+}
+
+message OpenDrawerResponse {}
+
+message GetStatusRequest {}
+
+message GetStatusResponse {
+  // Printer type: "simulator" or the name of the real adapter.
+  string printer = 1;
+  // The largest number of characters in a line (58 mm: 32, 80 mm: 48).
+  int32 columns = 2;
+  // The number of documents printed since the service started.
+  int64 printed = 3;
+  // The number of drawer openings since the service started.
+  int64 drawer_opened = 4;
+  // Barcode reader type: "simulator", "evdev" or "none".
+  string scanner = 5;
+  // The printer's last known state and its explanation to show the cashier.
+  PrinterState printer_state = 6;
+  string printer_message = 7;
+  // Scale type: "none" (no scale), "simulator", "toledo8217", "nci".
+  string scale = 8;
+  // The number of weights read from the scale since the service started.
+  int64 weighed = 9;
+}
+
+message WatchScansRequest {}
+
+// WatchScansResponse, okunan bir barkoddur.
+message WatchScansResponse {
+  // The code read (printable ASCII, at most 128 characters).
+  string code = 1;
+}
+
+message SimulateScanRequest {
+  string code = 1;
+}
+
+message SimulateScanResponse {}
+
+message WatchPrinterRequest {}
+
+message WatchPrinterResponse {
+  PrinterState state = 1;
+  // The explanation to show the cashier (e.g. "Paper out"); empty when ready.
+  string message = 2;
+}
+
+message SimulatePrinterRequest {
+  PrinterState state = 1;
+}
+
+message SimulatePrinterResponse {}
+
+message ReadWeightRequest {}
+
+message ReadWeightResponse {
+  // Stable weight, in grams.
+  int64 grams = 1;
+}
+
+message SimulateWeightRequest {
+  // The weight on the scale, in grams (0: empty, negative: the scale shows negative).
+  int64 grams = 1;
+  // The scale is swinging (the product was just put on).
+  bool moving = 2;
+}
+
+message SimulateWeightResponse {}

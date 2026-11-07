@@ -1,0 +1,17 @@
+{
+  "distSpecVersion": "1.1.1",
+  "storage": { "rootDirectory": "/var/lib/registry" },
+  "http": {
+    "address": "0.0.0.0",
+    "port": "5000",
+    "tls": { "cert": "/run/secrets/tls/server.pem", "key": "/run/secrets/tls/server.key" },
+    "auth": {
+      "bearer": {
+        "realm": "https://@ADRES@:5444/token",
+        "service": "abarow-zot",
+        "cert": "/etc/mirror/mirror.crt"
+      }
+    }
+  },
+  "log": { "level": "info" }
+}

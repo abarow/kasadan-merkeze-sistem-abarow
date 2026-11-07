@@ -1,0 +1,43 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+package main
+
+import (
+	"flag"
+	"fmt"
+	"io"
+
+	"abarow.com/pkg/nodes"
+	"abarow.com/pkg/pgtune"
+	"abarow.com/pkg/service"
+)
+
+// pgtuneCommand prints the database settings by the store's number of registers
+// (pkg/pgtune). The install script puts the output in the database container's
+// unit drop-in file; it is run again when a register is added or removed:
+//
+//	report pgtune [--registers N | --registers-file registers.json]
+//
+// The output is two lines: MEMORY_MB=<container memory limit> and
+// ARGS=<the -c flags to give to postgres>.
+func pgtuneCommand(args []string, out io.Writer) error {
+	fs := flag.NewFlagSet("pgtune", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	registers := fs.Int("registers", -1, "kasa sayısı; verilmezse kasa listesinden okunur")
+	file := fs.String("registers-file", service.Env("ABAROW_REGISTERS", "/config/registers.json"), "kasa listesi")
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("kullanım: report pgtune [--registers N | --registers-file dosya]: %w", err)
+	}
+	n := *registers
+	if n < 0 {
+		regs, err := nodes.Load(*file)
+		if err != nil {
+			return err
+		}
+		n = len(regs)
+	}
+	s := pgtune.ForStore(n)
+	_, err := fmt.Fprintf(out, "MEMORY_MB=%d\nARGS=%s\n", s.MemoryLimitMB, s.Args())
+	return err
+}

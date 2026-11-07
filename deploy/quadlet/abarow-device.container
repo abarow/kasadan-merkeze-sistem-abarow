@@ -1,0 +1,43 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow peripherals (receipt printer, cash drawer, barcode scanner)
+
+[Container]
+ContainerName=abarow-device
+Image=ghcr.io/abarow/abarow-device:0.1
+# Every service is updated on its own, but not by itself: a new release
+# is applied once approved on the screen (docs/UPDATE.md).
+Network=abarow.network
+# Receipt printer: if --printer is not given at install it is a simulator (documents are
+# printed to the log). When given, the drop-in file (devices.conf) opens the ESC/POS printer: USB or
+# network; the width (--receipt-width) and the code page (--code-page) are there too.
+Environment=ABAROW_PRINTER=simulator
+Environment=ABAROW_PRINTER_COLUMNS=32
+# Barcode scanner: if --barcode-scanner is not given at install it is a simulator (the scanner
+# types into the barcode field like a keyboard). When given, the drop-in file opens evdev.
+Environment=ABAROW_SCANNER=simulator
+# Scale: if --scale is not given at install there is none (weighed products are sold
+# with the scale barcode). When given, the drop-in file opens the scale on the serial port.
+Environment=ABAROW_SCALE=none
+Environment=GOMEMLIMIT=24MiB
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy; dependent services wait.
+Notify=healthy
+PodmanArgs=--memory=32m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The register does not wait for the external network: the services only use the local abarow network; on a register
+# with no connection network-online.target may never come and the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

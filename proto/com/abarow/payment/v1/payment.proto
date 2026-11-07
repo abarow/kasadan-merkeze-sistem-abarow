@@ -1,0 +1,56 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.payment.v1;
+
+// PaymentService takes the payments of sales. Amounts are in kuruş.
+service PaymentService {
+  // Charge takes the sale's payments and returns each payment with its reference.
+  // It is idempotent by sale id: if called again for the same sale it
+  // does not take a new payment, it returns the earlier result.
+  rpc Charge(ChargeRequest) returns (ChargeResponse);
+  // Refund gives back the payments taken for the sale: card transactions are reversed at
+  // the POS, the cashier gives the cash. It is for a sale whose fiscal record
+  // could not be made. It can be called again: the ones given back are marked, the rest
+  // are tried again. NOT_FOUND if there is no record.
+  rpc Refund(RefundRequest) returns (RefundResponse);
+}
+
+// PaymentMethod is the payment method.
+enum PaymentMethod {
+  PAYMENT_METHOD_UNSPECIFIED = 0;
+  PAYMENT_METHOD_CASH = 1;
+  PAYMENT_METHOD_CARD = 2;
+  // Meal card or voucher (Multinet, Pluxee, Ticket, Setcard ...); a separate
+  // line in Z, no change is given.
+  PAYMENT_METHOD_MEAL_CARD = 3;
+}
+
+// Payment is a payment.
+message Payment {
+  PaymentMethod method = 1;
+  int64 amount_kurus = 2;
+  // The payment's reference (e.g. card transaction number); can be empty for cash.
+  string ref = 3;
+  // The payment was given back (the card transaction was reversed or the cash was given).
+  bool refunded = 4;
+}
+
+message ChargeRequest {
+  string sale_id = 1;
+  repeated Payment payments = 2;
+}
+
+message ChargeResponse {
+  repeated Payment payments = 1;
+}
+
+message RefundRequest {
+  string sale_id = 1;
+}
+
+message RefundResponse {
+  repeated Payment payments = 1;
+}

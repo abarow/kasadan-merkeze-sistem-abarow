@@ -1,0 +1,35 @@
+# Go
+/bin/
+/dist/
+*.exe
+*.test
+*.out
+coverage.*
+
+# UI (Svelte / Vite)
+node_modules/
+ui/**/dist/
+
+# Yerel veri ve gizli bilgiler
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+
+# Claude Code yerel dosyaları
+.claude/settings.local.json
+.claude/*.lock
+
+# İşletim sistemi
+.DS_Store
+Thumbs.db
+
+# Başarım ölçümü çıktıları (scripts/bench-store.sh)
+/tmp/
+
+# Yerel çalışma dosyaları (depoda tutulmaz)
+/TODO.md
+/docs/ISIMLENDIRME.md
+__pycache__/

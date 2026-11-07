@@ -1,0 +1,205 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The Docker simulation of the store server: NATS (the registers' leaf
+# connections and the store stream), PostgreSQL, report and inventory.
+# The database password is a trial value (like the trial PINs); it is not used in a
+# real install. It runs scripts/store-sim.sh together with the registers: the registers
+# come up as separate projects with compose.yaml + register-store.yaml and
+# connect to the store server from the abarow-store
+# network.
+#   bash scripts/store-sim.sh
+#   http://localhost:8090                                       # store server screen
+#   bash scripts/store-sim.sh down                             # kapat, verileri sil
+name: abarow-store
+
+x-go-build: &go-build
+  context: ../..
+  dockerfile: deploy/container/go-service.Containerfile
+
+x-healthcheck: &healthcheck
+  test: ["CMD", "/service", "healthcheck"]
+  interval: 5s
+  timeout: 3s
+  retries: 12
+
+services:
+  # NATS identities and the registers' leaf permissions. The connected registers are in
+  # registers.json; to add a register:
+  #   docker compose -f deploy/compose/store.yaml run --rm nats-auth \
+  #     -registers /config/registers.json -add-register register-3 -register-key U...
+  # (the key is printed by natsauth -show-leaf-key at the register), then the store server
+  # is restarted.
+  nats-auth:
+    build:
+      <<: *go-build
+      args: { MODULE: tools/natsauth, PKG: . }
+    image: abarow-natsauth:dev
+    user: "0:0"
+    # The registers connect to the store server with the name "store"; the server certificate is
+    # issued for this name. In a real install the store server's IP and name are written.
+    command: ["-role", "store", "-out", "/auth", "-users", "report,inventory,catalog,register-sim", "-server-name", "store-1", "-registers", "/config/registers.json", "-leaf-hosts", "store"]
+    volumes: [nats-auth:/auth, config:/config]
+
+  # The store server's NATS. The registers connect to store:7421 as leaf, with TLS;
+  # the service name is not "nats" so that it is unique on the shared network.
+  store:
+    image: nats:2.12-alpine
+    command: ["-c", "/auth/nats.conf"]
+    environment:
+      GOMEMLIMIT: 96MiB
+    volumes: [nats-data:/data, nats-auth:/auth:ro]
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      nats-auth: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # The store server database (decision 04.11.2026): report and inventory use the same
+  # database with separate tables. Its name is not "db" so that it is not confused with the
+  # other services on the network (headquarters' database).
+  store-db:
+    image: postgres:18-alpine
+    # The settings are computed by the number of registers (pkg/pgtune; `report pgtune`).
+    # Here are the base values for up to four registers; the install script rewrites them
+    # by the real number of registers. If the settings change
+    # services/store/cmd/report/pgtune_test.go checks this file.
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=20", "-c", "work_mem=4MB", "-c", "maintenance_work_mem=16MB", "-c", "wal_buffers=2MB", "-c", "effective_cache_size=112MB", "-c", "min_wal_size=32MB", "-c", "max_wal_size=256MB", "-c", "checkpoint_completion_target=0.9", "-c", "autovacuum_max_workers=2", "-c", "max_worker_processes=4", "-c", "max_parallel_workers=0", "-c", "max_parallel_workers_per_gather=0", "-c", "max_parallel_maintenance_workers=0"]
+    environment:
+      POSTGRES_DB: abarow
+      POSTGRES_USER: abarow
+      POSTGRES_PASSWORD: ${ABAROW_DB_PASSWORD:-store-test}
+    volumes: [db-data:/var/lib/postgresql]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "abarow", "-d", "abarow"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  # Store reports: it sets up the store stream, processes the sale events
+  # into PostgreSQL; the daily report and the registers' state (including missing receipts).
+  # Store server screen: http://localhost:8090
+  report:
+    build:
+      context: ../..
+      dockerfile: deploy/container/module-ui.Containerfile
+      args: { MODULE: services/store, PKG: ./cmd/report, UI: ui/apps/store }
+    image: ghcr.io/abarow/abarow-report:dev
+    environment:
+      ABAROW_NATS_URL: nats://store:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      ABAROW_REGISTERS: /config/registers.json
+      ABAROW_TZ: Europe/Istanbul
+      # Store id: the cashiers and store prices go down to the registers with this id
+      # iner, merkeze bildirilir.
+      ABAROW_STORE_ID: store-1
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-store-test}@store-db:5432/abarow?sslmode=disable
+      # The bcrypt digest of the screen's store password; store-sim.sh produces it from the trial
+      # password (report hash-password). If empty report does not start.
+      ABAROW_REPORT_PASSWORD_HASH: ${ABAROW_REPORT_PASSWORD_HASH:-}
+      # Stock module: the screen's stock requests are forwarded to inventory.
+      ABAROW_INVENTORY_URL: http://inventory:8080
+      # Product and price management: the screen's catalog requests are forwarded to
+      # catalog-admin. While headquarters counts as connected it is closed to writing; when the manager
+      # closes the connection from the screen it is managed at the store.
+      ABAROW_CATALOG_ADMIN_URL: http://store-catalog-admin:8080
+      # Delivery receipt cleanup (the service's default if empty: 90 days, 1 minute);
+      # the end-to-end tests shorten it.
+      ABAROW_CLEAN_MAX_AGE: ${ABAROW_CLEAN_MAX_AGE:-}
+      ABAROW_CLEAN_INTERVAL: ${ABAROW_CLEAN_INTERVAL:-}
+      GOMEMLIMIT: 48MiB
+    volumes:
+      - config:/config:ro
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: report } }
+    mem_limit: 64m
+    ports: ["127.0.0.1:${ABAROW_REPORT_PORT:-8090}:8080"]
+    healthcheck: *healthcheck
+    depends_on:
+      store: { condition: service_healthy }
+      store-db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Store stock: it deducts the registers' sales from the store stream; goods receipt
+  # and count come from the screen (through report). The port is not exposed.
+  inventory:
+    build:
+      <<: *go-build
+      args: { MODULE: services/inventory, PKG: ./cmd/inventory }
+    image: ghcr.io/abarow/abarow-inventory:dev
+    environment:
+      ABAROW_NATS_URL: nats://store:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      ABAROW_STORE_ID: store-1
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-store-test}@store-db:5432/abarow?sslmode=disable
+      GOMEMLIMIT: 32MiB
+    volumes:
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: inventory } }
+    mem_limit: 48m
+    healthcheck: *healthcheck
+    depends_on:
+      store: { condition: service_healthy }
+      store-db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Product and price management at the store: the same image as headquarters' catalog-admin,
+  # in the store's database. The products' latest state is published to the store's
+  # catalog stream (report sets up the stream); the registers take it from there. Write permission
+  # belongs to the store manager. The port is not exposed; the screen connects through report.
+  # Its name has the store- prefix: in the simulation it is on the same network as headquarters' catalog-admin.
+  store-catalog-admin:
+    build:
+      <<: *go-build
+      args: { MODULE: services/headquarters/catalog, PKG: ./cmd/catalog-admin }
+    image: ghcr.io/abarow/abarow-catalog-admin:dev
+    environment:
+      ABAROW_NATS_URL: nats://store:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-store-test}@store-db:5432/abarow?sslmode=disable
+      ABAROW_TZ: Europe/Istanbul
+      ABAROW_CATALOG_STREAM: shared
+      ABAROW_CATALOG_WRITERS: manager
+      # report's catalog mirror uses tables of the same name: it works in its own schema.
+      ABAROW_DB_SCHEMA: catalog
+      GOMEMLIMIT: 32MiB
+    volumes:
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: catalog } }
+    mem_limit: 48m
+    healthcheck: *healthcheck
+    depends_on:
+      store: { condition: service_healthy }
+      store-db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Opens the store server screen in a real browser and takes screenshots.
+  ui-smoke:
+    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    # The dependencies are installed inside the container; only the images are written to the repository.
+    working_dir: /tmp/ui-smoke
+    command: ["sh", "-c", "cp /work/store.mjs /work/package.json . && npm install --no-audit --no-fund --silent && mkdir -p /work/out && node store.mjs"]
+    environment:
+      ABAROW_UI_URL: http://report:8080
+      ABAROW_UI_OUT: /work/out
+      ABAROW_REPORT_PASSWORD: ${ABAROW_REPORT_PASSWORD:-}
+      ABAROW_REPORT_MANAGER: ${ABAROW_REPORT_MANAGER:-}
+    volumes: [../../tools/ui-smoke:/work]
+    depends_on:
+      report: { condition: service_healthy }
+    profiles: [ui-test]
+
+networks:
+  # The registers' NATS is on this network too (register-store.yaml).
+  default:
+    external: true
+    name: abarow-store
+
+volumes:
+  nats-auth:
+  nats-data:
+  config:
+  db-data:

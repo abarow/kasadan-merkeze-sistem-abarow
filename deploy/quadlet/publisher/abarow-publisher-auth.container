@@ -1,0 +1,39 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow publisher registry authorization service (turns the units' abarow token into a registry token)
+
+[Container]
+ContainerName=abarow-publisher-auth
+Image=ghcr.io/abarow/abarow-update-auth:0.1
+# The publisher's root public key is given by a drop-in: ABAROW_UPDATE_ROOT_PUB.
+# Units are given only pull authority. The SHA-256 digest of CI's write token
+# is given by a drop-in (ABAROW_UPDATE_CI_SHA256; the token is produced by `openssl rand -hex 32` and kept secret in CI).
+Network=abarow-publisher.network
+Environment=ABAROW_UPDATE_REGISTRY_DIR=/data
+Environment=ABAROW_UPDATE_REGISTRY_SERVICE=abarow-zot
+Environment=ABAROW_UPDATE_AUTH_ADDR=:8083
+Environment=GOMEMLIMIT=24MiB
+Volume=abarow-publisher-auth:/data
+Secret=abarow-publisher-tls-cert,type=mount,target=/run/secrets/tls/server.pem,uid=65532,mode=0444
+Secret=abarow-publisher-tls-key,type=mount,target=/run/secrets/tls/server.key,uid=65532,mode=0400
+Environment=ABAROW_TLS_CERT=/run/secrets/tls/server.pem
+Environment=ABAROW_TLS_KEY=/run/secrets/tls/server.key
+PublishPort=5444:8083
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+PodmanArgs=--memory=32m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The install writes the network setting.
+
+[Install]
+WantedBy=default.target

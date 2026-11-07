@@ -1,0 +1,233 @@
+/* Copyright 2026 Mehmet ERGULCU and the abarow contributors */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* The market screen's layout: basket, product grid, customer screen. Shared
+   görünüm (renkler, düğmeler, pencereler, giriş, raporlar):
+   @abarow/core/register.css. */
+
+main {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: 16px;
+  padding: 16px;
+  /* The warning strips at the top (simulator, printer) are 40 px each. */
+  height: calc(100vh - var(--bars, 1) * 40px);
+}
+
+.basket,
+.side {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.basket header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.lines li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.lines .name {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.lines small {
+  color: var(--muted);
+}
+
+.lines .empty {
+  color: var(--muted);
+  justify-content: center;
+  padding: 48px 16px;
+}
+
+.step,
+.remove {
+  width: 48px;
+  padding: 0;
+  font-size: 1.4rem;
+}
+
+.remove {
+  color: var(--danger);
+}
+
+.amount {
+  min-width: 110px;
+  text-align: right;
+}
+
+.basket footer {
+  border-top: 1px solid var(--line);
+  padding: 12px 16px;
+}
+
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 1.6rem;
+  margin-bottom: 12px;
+}
+
+.pay {
+  font-size: 1.5rem;
+}
+
+.side {
+  padding: 16px;
+  gap: 12px;
+}
+
+.scan {
+  min-height: 64px;
+  font-size: 1.3rem;
+}
+
+.search {
+  display: flex;
+  gap: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.product {
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  text-align: left;
+  padding: 8px 12px;
+}
+
+.product small {
+  color: var(--muted);
+}
+
+.basket header {
+  gap: 12px;
+}
+
+.basket header .who {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+@media (max-width: 800px) {
+  main {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+}
+
+/* Customer screen (second screen): read from a distance, not touch. */
+main.customer {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px 32px;
+  font-size: 28px;
+  height: calc(100vh - var(--bars, 0) * 40px);
+}
+
+.customer .message {
+  margin: auto;
+  font-size: 64px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+.customer .items {
+  flex: 1;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.customer .items li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 24px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+/* The last scanned product stands out. */
+.customer .items li:last-child {
+  font-weight: 700;
+}
+
+.customer .items small {
+  display: block;
+  font-size: 20px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.customer .total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  border-top: 3px solid var(--text);
+  padding-top: 16px;
+  font-size: 40px;
+}
+
+.customer .total strong {
+  font-size: 64px;
+}
+
+.customer .done {
+  margin: auto;
+  width: min(100%, 900px);
+}
+
+.customer .done .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 40px;
+  margin: 8px 0;
+}
+
+.customer .done .change strong {
+  font-size: 72px;
+  color: var(--primary);
+}
+
+.customer .thanks {
+  text-align: center;
+  font-size: 48px;
+  font-weight: 700;
+  margin-top: 32px;
+}

@@ -1,0 +1,39 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow headquarters stock (the headquarters warehouse and the stock of every place)
+Wants=abarow-headquarters.service abarow-db.service
+After=abarow-headquarters.service abarow-db.service
+
+[Container]
+ContainerName=abarow-inventory-headquarters
+Image=ghcr.io/abarow/abarow-inventory-headquarters:0.1
+Network=abarow-headquarters.network
+Environment=ABAROW_NATS_URL=nats://abarow-headquarters:4222
+Environment=ABAROW_NATS_NKEY=/run/secrets/nats.nk
+# The store list: the places a transfer can be sent to (when a store is added
+# headquarters-install.sh restarts the service).
+Environment=ABAROW_STORES=/config/stores.json
+Volume=%h/abarow/headquarters/config:/config:ro,z
+Environment=GOMEMLIMIT=48MiB
+Secret=abarow-headquarters-nats-inventory,type=mount,target=/run/secrets/nats.nk,uid=65532,mode=0400
+Secret=abarow-db-url,type=env,target=ABAROW_DATABASE_URL
+# The port is not opened to the outside: the screen connects to reporting, which forwards the stock requests
+# here; this service checks the session too.
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

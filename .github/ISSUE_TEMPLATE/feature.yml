@@ -1,0 +1,22 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Özellik önerisi
+description: Yeni bir özellik ya da iyileştirme
+labels: [öneri]
+body:
+  - type: textarea
+    id: sorun
+    attributes:
+      label: Hangi sorunu çözüyor?
+      description: Mağazanızda ne yapamıyorsunuz ya da neyi zor yapıyorsunuz?
+    validations:
+      required: true
+  - type: textarea
+    id: oneri
+    attributes:
+      label: Önerdiğiniz çözüm
+  - type: textarea
+    id: alternatif
+    attributes:
+      label: Düşündüğünüz alternatifler

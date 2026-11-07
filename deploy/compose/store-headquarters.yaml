@@ -1,0 +1,33 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Connects the store server to headquarters: it is added on top of store.yaml,
+# used by scripts/store-sim.sh. The store server's NATS connects to headquarters as
+# leaf; the store stream becomes a source of the headquarters stream.
+services:
+  # The leaf connection is TLS; headquarters' certificate is verified with headquarters' CA.
+  # In a real install the CA certificate is copied to the store server at install;
+  # here it is read from headquarters' volume (only the ca folder).
+  nats-auth:
+    command: ["-role", "store", "-out", "/auth", "-users", "report,inventory,catalog,register-sim", "-server-name", "store-1", "-registers", "/config/registers.json", "-leaf-hosts", "store",
+      "-leaf", "tls://headquarters:7422", "-leaf-ca", "/headquarters-ca/ca.pem"]
+    volumes:
+      - { type: volume, source: headquarters-auth, target: /headquarters-ca, read_only: true, volume: { subpath: ca } }
+
+  # Headquarters' catalog is taken into the store for the registers; the store prices
+  # kasalara iner, merkeze bildirilir.
+  report:
+    environment:
+      ABAROW_CATALOG_SOURCE: headquarters
+
+  # Inventory takes the products from headquarters' catalog.
+  inventory:
+    environment:
+      ABAROW_CATALOG_SOURCE: headquarters
+
+volumes:
+  # Headquarters' NATS identities (headquarters.yaml); the store server sees only the CA
+  # certificate.
+  headquarters-auth:
+    external: true
+    name: abarow-headquarters_nats-auth

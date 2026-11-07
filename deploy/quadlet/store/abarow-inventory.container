@@ -1,0 +1,35 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow store stock (inventory)
+Wants=abarow-store.service abarow-store-db.service
+After=abarow-store.service abarow-store-db.service
+
+[Container]
+ContainerName=abarow-inventory
+Image=ghcr.io/abarow/abarow-inventory:0.1
+Network=abarow-store.network
+Environment=ABAROW_NATS_URL=nats://abarow-store:4222
+Environment=ABAROW_NATS_NKEY=/run/secrets/nats.nk
+Environment=GOMEMLIMIT=32MiB
+Secret=abarow-store-db-url,type=env,target=ABAROW_DATABASE_URL
+Secret=abarow-store-nats-inventory,type=mount,target=/run/secrets/nats.nk,uid=65532,mode=0400
+# The port is not opened to the outside: the screen connects to report, which forwards the stock requests
+# here in the name of the person in the session.
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+PodmanArgs=--memory=48m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

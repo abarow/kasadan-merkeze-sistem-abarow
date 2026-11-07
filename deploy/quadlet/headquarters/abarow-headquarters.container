@@ -1,0 +1,42 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow headquarters message path (NATS; the leaf connections of the stores, the headquarters stream)
+
+[Container]
+ContainerName=abarow-headquarters
+Image=docker.io/library/nats:2.12-alpine
+Network=abarow-headquarters.network
+Environment=GOMEMLIMIT=192MiB
+Volume=abarow-headquarters-data:/data
+# Identity, authorization and the leaf TLS (natsauth -role headquarters produces them; see
+# deploy/install/headquarters-install.sh). Stores connect only with their own keys and
+# with TLS.
+Secret=abarow-headquarters-nats-conf,type=mount,target=/etc/nats/nats.conf
+Secret=abarow-headquarters-tls-cert,type=mount,target=/etc/nats/tls/server.pem
+Secret=abarow-headquarters-tls-key,type=mount,target=/etc/nats/tls/server.key
+Exec=-c /etc/nats/nats.conf
+# The leaf port the stores connect to (can be opened to the internet: TLS, only
+# the store keys on the list). The client port (4222) is not opened.
+PublishPort=7422:7422
+HealthCmd=wget -q -O /dev/null http://127.0.0.1:8222/healthz?js-enabled-only=true
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy; dependent services wait.
+Notify=healthy
+PodmanArgs=--memory=256m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# Headquarters does not wait for the external network: the services connect to each other inside the machine,
+# the stores renew the connection themselves. On a machine where network-online.target
+# never comes the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

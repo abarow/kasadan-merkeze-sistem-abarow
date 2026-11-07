@@ -1,0 +1,220 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The Docker simulation of headquarters: NATS (the stores' leaf
+# connections, the headquarters and catalog streams), PostgreSQL, ingest,
+# catalog-admin (catalog management) and reporting (the headquarters screen). It runs scripts/store-sim.sh together with the store and registers:
+# the store servers connect to headquarters from the abarow-store network.
+#   bash scripts/store-sim.sh
+#   http://localhost:9090                                       # headquarters screen
+#   bash scripts/store-sim.sh down                             # kapat, verileri sil
+#
+# The database password and the screen's trial account (store-sim.sh sets it up)
+# are trial values (like the trial PINs); they are not used in a real install.
+name: abarow-headquarters
+
+x-go-build: &go-build
+  context: ../..
+  dockerfile: deploy/container/go-service.Containerfile
+
+services:
+  # NATS identities and the stores' leaf permissions. The connected stores are in
+  # stores.json; to add a store:
+  #   docker compose -f deploy/compose/headquarters.yaml run --rm nats-auth \
+  #     -stores /config/stores.json -add-store store-2 -store-key U...
+  # (the key is printed by natsauth -show-leaf-key at the store server), then the back
+  # office is restarted.
+  nats-auth:
+    build:
+      <<: *go-build
+      args: { MODULE: tools/natsauth, PKG: . }
+    image: abarow-natsauth:dev
+    user: "0:0"
+    # The store servers connect to headquarters with the name "headquarters"; the server certificate is
+    # issued for this name. In a real install headquarters' domain name and IP are written.
+    command: ["-role", "headquarters", "-out", "/auth", "-users", "ingest,catalog,inventory", "-server-name", "headquarters", "-stores", "/config/stores.json", "-leaf-hosts", "headquarters"]
+    volumes: [nats-auth:/auth, config:/config]
+
+  # Headquarters' NATS. The store servers connect to headquarters:7422 as
+  # leaf, with TLS.
+  headquarters:
+    image: nats:2.12-alpine
+    command: ["-c", "/auth/nats.conf"]
+    environment:
+      GOMEMLIMIT: 192MiB
+    volumes: [nats-data:/data, nats-auth:/auth:ro]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      nats-auth: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # The headquarters database. Its name is not "db" so that it
+  # is not confused with the other services on the network.
+  headquarters-db:
+    image: postgres:18-alpine
+    # The settings are computed by the number of stores (pkg/pgtune.ForHeadquarters; `reporting
+    # pgtune`). Here are the base values for one store; the install script rewrites them
+    # by the real number of stores. If the settings change
+    # services/headquarters/reporting/cmd/reporting/pgtune_test.go checks this file.
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=30", "-c", "work_mem=4MB", "-c", "maintenance_work_mem=16MB", "-c", "wal_buffers=2MB", "-c", "effective_cache_size=88MB", "-c", "min_wal_size=32MB", "-c", "max_wal_size=256MB", "-c", "checkpoint_completion_target=0.9", "-c", "autovacuum_max_workers=2", "-c", "max_worker_processes=4", "-c", "max_parallel_workers=0", "-c", "max_parallel_workers_per_gather=0", "-c", "max_parallel_maintenance_workers=0"]
+    environment:
+      POSTGRES_DB: abarow
+      POSTGRES_USER: abarow
+      POSTGRES_PASSWORD: ${ABAROW_DB_PASSWORD:-headquarters-test}
+    volumes: [db-data:/var/lib/postgresql]
+    mem_limit: 256m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "abarow", "-d", "abarow"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  # Event intake: it sets up the headquarters stream and writes the events coming from the stores
+  # to PostgreSQL. The stores' state: http://localhost:8095/api/stores
+  ingest:
+    build:
+      <<: *go-build
+      args: { MODULE: services/headquarters/ingest, PKG: ./cmd/ingest }
+    image: ghcr.io/abarow/abarow-ingest:dev
+    environment:
+      ABAROW_NATS_URL: nats://headquarters:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      ABAROW_STORES: /config/stores.json
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-headquarters-test}@headquarters-db:5432/abarow?sslmode=disable
+      GOMEMLIMIT: 48MiB
+    volumes:
+      - config:/config:ro
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: ingest } }
+    mem_limit: 64m
+    ports: ["127.0.0.1:${ABAROW_INGEST_PORT:-8095}:8080"]
+    healthcheck:
+      test: ["CMD", "/service", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      headquarters: { condition: service_healthy }
+      headquarters-db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Catalog management: products, barcodes, the headquarters price schedule; the product's
+  # latest state goes to the catalog stream (ABAROW_CATALOG). reporting forwards the screen's
+  # /api/catalog/ requests here. The registers' catalog.json can be
+  # loaded once:
+  #   docker compose -f deploy/compose/headquarters.yaml run --rm -T catalog-admin import < deploy/compose/seed/catalog.json
+  catalog-admin:
+    build:
+      <<: *go-build
+      args: { MODULE: services/headquarters/catalog, PKG: ./cmd/catalog-admin }
+    image: ghcr.io/abarow/abarow-catalog-admin:dev
+    environment:
+      ABAROW_NATS_URL: nats://headquarters:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-headquarters-test}@headquarters-db:5432/abarow?sslmode=disable
+      ABAROW_TZ: Europe/Istanbul
+      GOMEMLIMIT: 48MiB
+    volumes:
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: catalog } }
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD", "/service", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      headquarters: { condition: service_healthy }
+      headquarters-db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # The headquarters warehouse and the stock of all places (from the stores' movements).
+  # The port is not exposed; the screen connects through reporting. Its name has the headquarters-
+  # prefix: in the simulation the store is on headquarters' network too, so it
+  # is not confused with the store server's "inventory".
+  headquarters-inventory:
+    build:
+      <<: *go-build
+      args: { MODULE: services/inventory, PKG: ./cmd/inventory }
+    image: ghcr.io/abarow/abarow-inventory-headquarters:dev
+    environment:
+      ABAROW_NATS_URL: nats://headquarters:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      ABAROW_STORES: /config/stores.json
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-headquarters-test}@headquarters-db:5432/abarow?sslmode=disable
+      GOMEMLIMIT: 48MiB
+    volumes:
+      - config:/config:ro
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: inventory } }
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD", "/service", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      headquarters: { condition: service_healthy }
+      headquarters-db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # The headquarters screen and the report API; it only reads the database
+  # (except the users and sessions). Screen: http://localhost:9090
+  # To add a user (the password on standard input):
+  #   echo 'password' | docker compose -f deploy/compose/headquarters.yaml run --rm -T reporting user add ayse "Ayşe Yılmaz"
+  reporting:
+    build:
+      context: ../..
+      dockerfile: deploy/container/module-ui.Containerfile
+      args: { MODULE: services/headquarters/reporting, PKG: ./cmd/reporting, UI: ui/apps/headquarters }
+    image: ghcr.io/abarow/abarow-reporting:dev
+    environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-headquarters-test}@headquarters-db:5432/abarow?sslmode=disable
+      ABAROW_TZ: Europe/Istanbul
+      ABAROW_CATALOG_ADMIN_URL: http://catalog-admin:8080
+      # Stock module: the screen's stock requests are forwarded to headquarters' inventory.
+      ABAROW_INVENTORY_URL: http://headquarters-inventory:8080
+      GOMEMLIMIT: 48MiB
+    mem_limit: 64m
+    ports: ["127.0.0.1:${ABAROW_REPORTING_PORT:-9090}:8080"]
+    healthcheck:
+      test: ["CMD", "/service", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    # ingest sets up the sales tables.
+    depends_on:
+      ingest: { condition: service_healthy }
+      catalog-admin: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Opens the headquarters screen in a real browser and takes screenshots.
+  ui-smoke:
+    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    # The dependencies are installed inside the container; only the images are written to the repository.
+    working_dir: /tmp/ui-smoke
+    command: ["sh", "-c", "cp /work/headquarters.mjs /work/package.json . && npm install --no-audit --no-fund --silent && mkdir -p /work/out && node headquarters.mjs"]
+    environment:
+      ABAROW_UI_URL: http://reporting:8080
+      ABAROW_UI_OUT: /work/out
+      ABAROW_HEADQUARTERS_USER: ${ABAROW_HEADQUARTERS_USER:-}
+      ABAROW_HEADQUARTERS_PASSWORD: ${ABAROW_HEADQUARTERS_PASSWORD:-}
+    volumes: [../../tools/ui-smoke:/work]
+    depends_on:
+      reporting: { condition: service_healthy }
+    profiles: [ui-test]
+
+networks:
+  # The store servers' NATS is on this network too (store.yaml).
+  default:
+    external: true
+    name: abarow-store
+
+volumes:
+  nats-auth:
+  nats-data:
+  config:
+  db-data:

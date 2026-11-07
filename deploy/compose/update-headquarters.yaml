@@ -1,0 +1,178 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The update center trial (end-to-end tests, scripts/e2e.sh up update):
+# it is added to headquarters.yaml. The publisher's registration server (publisher), headquarters' agent
+# (headquarters-agent) and the registration server where headquarters approves the store server and registers
+# (headquarters-server). All are plain HTTP (ABAROW_UPDATE_ALLOW_INSECURE=1): starting without TLS
+# is for trial only. In a real install deploy/quadlet is used.
+x-go-build: &go-build
+  context: ../..
+  dockerfile: deploy/container/go-service.Containerfile
+  args: { MODULE: services/update }
+
+x-healthcheck: &healthcheck
+  test: ["CMD", "/service", "healthcheck"]
+  interval: 5s
+  timeout: 3s
+  retries: 12
+
+configs:
+  headquarters-machine-id: { content: "e2e-headquarters-makine\n" }
+
+services:
+  publisher-db:
+    image: postgres:18-alpine
+    environment: { POSTGRES_DB: abarow, POSTGRES_USER: abarow, POSTGRES_PASSWORD: publisher-test }
+    volumes: [publisher-db-data:/var/lib/postgresql]
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "abarow", "-d", "abarow"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  # The publisher's registration server: it approves only headquarters. The admin API is
+  # opened to the host so that the test can approve (in a real install it stays on the internal port).
+  publisher:
+    build:
+      <<: *go-build
+      args: { MODULE: services/update, PKG: ./cmd/server }
+    image: ghcr.io/abarow/abarow-update-server:dev
+    # The root key file is readable only by its owner (root); the trial stack runs as root.
+    user: "0:0"
+    environment:
+      ABAROW_DATABASE_URL: postgres://abarow:publisher-test@publisher-db:5432/abarow?sslmode=disable
+      ABAROW_UPDATE_ALLOWED: headquarters
+      ABAROW_UPDATE_ROOT_KEY_FILE: /keys/root.key
+      ABAROW_UPDATE_CHANNEL_DIR: /channel
+      ABAROW_UPDATE_ALLOW_INSECURE: "1"
+      GOMEMLIMIT: 24MiB
+    # The root and channel keys and the signed channel manifests are in directories on the host
+    # (scripts/e2e.sh produces them; the test signs a manifest and writes it to the channel directory).
+    volumes:
+      - ${ABAROW_E2E_TRUST:-../../tools/e2e/out/trust}/keys:/keys:ro
+      - ${ABAROW_E2E_TRUST:-../../tools/e2e/out/trust}/channel:/channel:ro
+    ports: ["127.0.0.1:${ABAROW_PUBLISHER_ADMIN_PORT:-8182}:8082"]
+    mem_limit: 32m
+    healthcheck: *healthcheck
+    depends_on:
+      publisher-db: { condition: service_healthy }
+    restart: unless-stopped
+
+  # The publisher's image registry (Zot). The only authentication: the publisher-auth token.
+  # CI writes to the test/, pilot/, prod/ paths with the write token (user ci); the units
+  # pull only their own level's path with the abarow token.
+  publisher-auth:
+    build:
+      <<: *go-build
+      args: { MODULE: services/update, PKG: ./cmd/auth }
+    image: ghcr.io/abarow/abarow-update-auth:dev
+    environment:
+      ABAROW_UPDATE_ROOT_PUB: ${ABAROW_PUBLISHER_ROOT_PUB:-}
+      ABAROW_UPDATE_REGISTRY_DIR: /data
+      ABAROW_UPDATE_REGISTRY_SERVICE: abarow-zot
+      ABAROW_UPDATE_AUTH_ADDR: ":8083"
+      ABAROW_UPDATE_CI_SHA256: ${ABAROW_PUBLISHER_CI_SHA256:-}
+      ABAROW_UPDATE_ALLOW_INSECURE: "1"
+      GOMEMLIMIT: 24MiB
+    volumes: [publisher-auth:/data]
+    mem_limit: 32m
+    healthcheck: *healthcheck
+    restart: unless-stopped
+
+  publisher-registry:
+    image: ghcr.io/project-zot/zot-linux-amd64:latest
+    volumes:
+      - ${ABAROW_E2E_TRUST:-../../tools/e2e/out/trust}/registry/zot.json:/etc/zot/config.json:ro
+      - publisher-auth:/etc/mirror:ro
+      - publisher-registry-data:/var/lib/registry
+    mem_limit: 256m
+    depends_on:
+      publisher-auth: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Headquarters' agent: it registers with the publisher, gets a certificate and a token.
+  headquarters-agent:
+    build:
+      <<: *go-build
+      args: { MODULE: services/update, PKG: ./cmd/agent }
+    image: ghcr.io/abarow/abarow-update:dev
+    environment:
+      ABAROW_UPDATE_SERVER_URL: http://publisher:8443
+      ABAROW_UPDATE_ALLOW_INSECURE: "1"
+      ABAROW_UPDATE_TIER: headquarters
+      ABAROW_UPDATE_NAME: Merkez
+      ABAROW_UPDATE_DIR: /data
+      ABAROW_UPDATE_HOST_ROOT: /host
+      GOMEMLIMIT: 24MiB
+      # New release flow (trial runtime: real containers are not touched).
+      ABAROW_UPDATE_TRUST_FILE: /etc/abarow/trust.json
+      ABAROW_UPDATE_RUNTIME: dryrun
+      ABAROW_UPDATE_DRYRUN_UNITS: "abarow-reporting=ghcr.io/abarow/abarow-reporting@sha256:1111111111111111111111111111111111111111111111111111111111111111,abarow-ingest=ghcr.io/abarow/abarow-ingest@sha256:1111111111111111111111111111111111111111111111111111111111111111,abarow-headquarters-update=ghcr.io/abarow/abarow-headquarters-update@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      ABAROW_UPDATE_DRYRUN_BAD: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      ABAROW_UPDATE_DRYRUN_PULL: 1s
+      ABAROW_UPDATE_HEALTH_TIMEOUT: 8s
+      ABAROW_UPDATE_OWN_UNIT: abarow-headquarters-update
+      ABAROW_UPDATE_POLL_INTERVAL: 5s
+      ABAROW_UPDATE_APPROVE_SECRET: e2e-onay-gizli
+    configs: [{ source: headquarters-machine-id, target: /host/etc/machine-id }]
+    volumes:
+      - headquarters-agent-data:/data
+      - ${ABAROW_E2E_TRUST:-../../tools/e2e/out/trust}/trust.json:/etc/abarow/trust.json:ro
+    # The status API is opened to the host so that the test can read the approval code at the publisher.
+    ports: ["127.0.0.1:${ABAROW_HEADQUARTERS_AGENT_PORT:-8183}:8080"]
+    mem_limit: 32m
+    healthcheck: *healthcheck
+    depends_on:
+      publisher: { condition: service_healthy }
+    restart: unless-stopped
+
+  headquarters-server-db:
+    image: postgres:18-alpine
+    environment: { POSTGRES_DB: abarow, POSTGRES_USER: abarow, POSTGRES_PASSWORD: headquarters-test }
+    volumes: [headquarters-server-db-data:/var/lib/postgresql]
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "abarow", "-d", "abarow"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  # Headquarters' registration server: it approves the store server and registers. The headquarters agent
+  # cannot start until it gets the certificate; scripts/e2e.sh approves headquarters at the publisher,
+  # then starts this service.
+  headquarters-server:
+    build:
+      <<: *go-build
+      args: { MODULE: services/update, PKG: ./cmd/server }
+    image: ghcr.io/abarow/abarow-update-server:dev
+    environment:
+      ABAROW_DATABASE_URL: postgres://abarow:headquarters-test@headquarters-server-db:5432/abarow?sslmode=disable
+      ABAROW_UPDATE_ALLOWED: store,register
+      ABAROW_UPDATE_IDENTITY_DIR: /identity
+      ABAROW_UPDATE_ALLOW_INSECURE: "1"
+      GOMEMLIMIT: 24MiB
+    volumes: [headquarters-agent-data:/identity:ro]
+    mem_limit: 32m
+    healthcheck: *healthcheck
+    depends_on:
+      headquarters-server-db: { condition: service_healthy }
+    profiles: [update-server]
+    restart: unless-stopped
+
+  # The headquarters screen connects the update endpoints.
+  reporting:
+    environment:
+      ABAROW_UPDATE_ADMIN_URL: http://headquarters-server:8082
+      ABAROW_UPDATE_AGENT_URL: http://headquarters-agent:8080
+      ABAROW_UPDATE_APPROVE_SECRET: e2e-onay-gizli
+
+volumes:
+  publisher-auth:
+  publisher-registry-data:
+  publisher-db-data:
+  headquarters-agent-data:
+  headquarters-server-db-data:

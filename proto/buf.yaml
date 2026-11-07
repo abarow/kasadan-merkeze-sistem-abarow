@@ -1,0 +1,13 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Lint and breaking change check:
+#   go run github.com/bufbuild/buf/cmd/buf@v1.75.0 lint
+#   go run github.com/bufbuild/buf/cmd/buf@v1.75.0 breaking --against '../.git#branch=main,subdir=proto'
+version: v2
+lint:
+  use:
+    - STANDARD
+breaking:
+  use:
+    - FILE

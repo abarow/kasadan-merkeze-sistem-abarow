@@ -1,0 +1,50 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow update agent (store server: registration, token and a proxy for the registers)
+Wants=abarow-store.service
+After=abarow-store.service
+
+[Container]
+ContainerName=abarow-store-update
+Image=ghcr.io/abarow/abarow-update:0.1
+# Nothing updates by itself: the agent only registers and renews the image pull token
+# renews it; a new release is applied once approved on the screen (docs/UPDATE.md).
+Network=abarow-store.network
+Environment=ABAROW_UPDATE_TIER=store
+Environment=ABAROW_UPDATE_DIR=/data
+Environment=ABAROW_UPDATE_CA_FILE=/run/update/ca.pem
+# For the hardware fingerprint the host's files are mounted read-only
+# (the install script adds the DMI serial numbers too if they are readable).
+Environment=ABAROW_UPDATE_HOST_ROOT=/host
+Environment=GOMEMLIMIT=24MiB
+# A proxy for the registers: a register can only talk to the store server; its requests are forwarded to headquarters.
+# The certificate is the same as the store server screen's (signed by the store CA).
+Environment=ABAROW_UPDATE_RELAY_ADDR=:8443
+Secret=abarow-store-tls-cert,type=mount,target=/run/secrets/tls/server.pem,uid=65532,mode=0444
+Secret=abarow-store-tls-key,type=mount,target=/run/secrets/tls/server.key,uid=65532,mode=0400
+Environment=ABAROW_TLS_CERT=/run/secrets/tls/server.pem
+Environment=ABAROW_TLS_KEY=/run/secrets/tls/server.key
+Volume=abarow-store-update-data:/data
+Volume=/etc/machine-id:/host/etc/machine-id:ro
+# The server's CA certificate (written by the install script).
+Volume=%h/abarow/update/ca.pem:/run/update/ca.pem:ro,Z
+PublishPort=8443:8443
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy.
+Notify=healthy
+PodmanArgs=--memory=32m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The install script writes the network setting.
+
+[Install]
+WantedBy=default.target

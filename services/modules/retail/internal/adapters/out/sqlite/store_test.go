@@ -1,0 +1,87 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+package sqlite
+
+import (
+	"context"
+	"errors"
+	"path/filepath"
+	"reflect"
+	"testing"
+	"time"
+
+	"abarow.com/services/modules/retail/internal/app"
+	"abarow.com/services/modules/retail/internal/domain"
+)
+
+func TestBasketsSurviveRestart(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "retail.db")
+	st, err := Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 10, 26, 9, 0, 0, 0, time.UTC)
+	b := domain.NewBasket("b1", "ayse", now)
+	if err := b.Add(domain.Product{ID: "ekmek", Name: "Ekmek", Barcode: "8690000000012", Unit: domain.Piece, UnitPrice: 1500, TaxRate: 100}, 2000, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Add(domain.Product{ID: "domates", Name: "Domates", Unit: domain.Kg, UnitPrice: 3990, TaxRate: 100}, 1250, true); err != nil {
+		t.Fatal(err)
+	}
+	b.UpdatedAt = now.Add(time.Nanosecond)
+	if err := st.Save(ctx, b); err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+
+	// The service restarted: the basket comes back as it was.
+	st, err = Open(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	got, err := st.Get(ctx, "b1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, b) {
+		t.Errorf("sepet değişti:\n%+v\nistenen\n%+v", got, b)
+	}
+
+	// The state and the sale of a basket that went to payment are stored.
+	if err := got.CheckOut("sale-1"); err != nil {
+		t.Fatal(err)
+	}
+	got.UpdatedAt = now.Add(time.Second)
+	if err := st.Save(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+	// The last changed basket; thanks to the fixed-width time even a 1 ns difference
+	// is ordered correctly.
+	other := domain.NewBasket("b2", "ayse", now.Add(time.Second-time.Nanosecond))
+	if err := st.Save(ctx, other); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := st.Latest(ctx, "ayse", now)
+	if err != nil || latest.ID != "b1" || latest.Status != domain.CheckedOut || latest.SaleID != "sale-1" {
+		t.Errorf("son sepet: %+v, %v", latest, err)
+	}
+	if _, err := st.Latest(ctx, "mert", now); !errors.Is(err, app.ErrNotFound) {
+		t.Errorf("başka kasiyerin sepeti: %v", err)
+	}
+	if _, err := st.Latest(ctx, "ayse", now.Add(time.Hour)); !errors.Is(err, app.ErrNotFound) {
+		t.Errorf("pencere dışı sepet: %v", err)
+	}
+
+	if err := st.DeleteBefore(ctx, now.Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.Get(ctx, "b2"); !errors.Is(err, app.ErrNotFound) {
+		t.Errorf("eski sepet silinmedi: %v", err)
+	}
+	if _, err := st.Get(ctx, "b1"); err != nil {
+		t.Errorf("yeni sepet silindi: %v", err)
+	}
+}

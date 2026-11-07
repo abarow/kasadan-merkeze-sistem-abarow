@@ -1,0 +1,160 @@
+/* Copyright 2026 Mehmet ERGULCU and the abarow contributors */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* A screen that the business owner and headquarters can use from a computer, tablet or phone.
+   baktığı rapor ekranı. Ortak görünüm ui/packages/admin/src/admin.css'tedir;
+   burada yalnızca merkeze özgü kurallar (süzgeçler, ürünler, kullanıcılar,
+   mağaza fiyatları). */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: end;
+  margin-top: 24px;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.filters label > * {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.days li {
+  grid-template-columns: 7.5em 1fr auto 4.5em;
+}
+
+.grid-form .wide {
+  grid-column: span 2;
+}
+
+.grid-form label.check,
+fieldset label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.grid-form label.check input {
+  min-height: auto;
+}
+
+/* Only to lock the fields (read-only): it does not change the layout. */
+fieldset.contents {
+  display: contents;
+}
+
+fieldset.stores {
+  flex-wrap: wrap;
+}
+
+table.store-prices th,
+table.store-prices td {
+  vertical-align: top;
+}
+
+.panel[role='region'] {
+  overflow-x: auto;
+}
+
+@media (max-width: 420px) {
+  .grid-form .wide {
+    grid-column: auto;
+  }
+
+  .panels {
+    grid-template-columns: 1fr;
+  }
+
+  .hours li {
+    grid-template-columns: 3.2em 1fr auto;
+  }
+
+  .days li {
+    grid-template-columns: 7.5em 1fr auto;
+  }
+
+  .hours li .muted {
+    display: none;
+  }
+}
+
+.negative,
+.negative button.link {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.panel.scroll {
+  overflow-x: auto;
+}
+
+table.stock button.link {
+  font: inherit;
+}
+
+/* The product's option groups (restaurant). */
+fieldset.options {
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 12px;
+}
+
+fieldset.options .group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  align-items: end;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+fieldset.options ul {
+  grid-column: 1 / -1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+fieldset.options li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+fieldset.options input.price {
+  width: 7em;
+  text-align: right;
+}
+
+/* Product image. */
+.image-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 600px) {
+  .grid-form .wide {
+    grid-column: 1 / -1;
+  }
+}

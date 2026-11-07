@@ -1,0 +1,69 @@
+/* Copyright 2026 Mehmet ERGULCU and the abarow contributors */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* The report screen the store manager looks at from a computer or tablet.
+   Ortak görünüm ui/packages/admin/src/admin.css'tedir; burada yalnızca
+   operasyona özgü kurallar (fiyatlar, kasiyerler). */
+
+.controls .who {
+  color: var(--muted);
+}
+
+table.prices td,
+table.prices th {
+  vertical-align: top;
+}
+
+table.prices button.link {
+  margin-top: 0;
+  min-height: 0;
+  text-align: left;
+}
+
+.different {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+table.cashiers td,
+table.cashiers th {
+  vertical-align: top;
+}
+
+table.cashiers button.link {
+  margin-top: 0;
+  min-height: 0;
+  text-align: left;
+}
+
+tr.off th,
+tr.off td {
+  opacity: 0.7;
+}
+
+fieldset label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+@media (max-width: 420px) {
+  .panels {
+    grid-template-columns: 1fr;
+  }
+
+  .hours li {
+    grid-template-columns: 3.2em 1fr auto;
+  }
+
+  .hours li .muted {
+    display: none;
+  }
+}
+
+.negative {
+  color: var(--danger);
+  font-weight: 600;
+}

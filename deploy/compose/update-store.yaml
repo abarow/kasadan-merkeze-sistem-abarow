@@ -1,0 +1,55 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The update center trial (scripts/e2e.sh up update): it is added to
+# store.yaml. The store server's agent registers with headquarters' registration server and offers
+# a proxy for the registers (:8443). Plain HTTP is for trial only.
+configs:
+  store-machine-id: { content: "e2e-store-makine\n" }
+
+services:
+  store-agent:
+    build:
+      context: ../..
+      dockerfile: deploy/container/go-service.Containerfile
+      args: { MODULE: services/update, PKG: ./cmd/agent }
+    image: ghcr.io/abarow/abarow-update:dev
+    environment:
+      ABAROW_UPDATE_SERVER_URL: http://headquarters-server:8443
+      ABAROW_UPDATE_ALLOW_INSECURE: "1"
+      ABAROW_UPDATE_TIER: store
+      ABAROW_UPDATE_NAME: Operasyon store-1
+      ABAROW_UPDATE_RELAY_ADDR: ":8443"
+      ABAROW_STORE_ID: store-1
+      ABAROW_UPDATE_DIR: /data
+      ABAROW_UPDATE_HOST_ROOT: /host
+      GOMEMLIMIT: 24MiB
+      # New release flow (trial runtime: real containers are not touched).
+      ABAROW_UPDATE_TRUST_FILE: /etc/abarow/trust.json
+      ABAROW_UPDATE_RUNTIME: dryrun
+      ABAROW_UPDATE_DRYRUN_UNITS: "abarow-report=ghcr.io/abarow/abarow-report@sha256:1111111111111111111111111111111111111111111111111111111111111111,abarow-inventory=ghcr.io/abarow/abarow-inventory@sha256:1111111111111111111111111111111111111111111111111111111111111111,abarow-store-update=ghcr.io/abarow/abarow-store-update@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+      ABAROW_UPDATE_DRYRUN_BAD: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+      ABAROW_UPDATE_DRYRUN_PULL: 1s
+      ABAROW_UPDATE_HEALTH_TIMEOUT: 8s
+      ABAROW_UPDATE_OWN_UNIT: abarow-store-update
+      ABAROW_UPDATE_POLL_INTERVAL: 5s
+      ABAROW_UPDATE_APPROVE_SECRET: e2e-onay-gizli
+    configs: [{ source: store-machine-id, target: /host/etc/machine-id }]
+    volumes:
+      - store-agent-data:/data
+      - ${ABAROW_E2E_TRUST:-../../tools/e2e/out/trust}/trust.json:/etc/abarow/trust.json:ro
+    mem_limit: 32m
+    healthcheck:
+      test: ["CMD", "/service", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  report:
+    environment:
+      ABAROW_UPDATE_AGENT_URL: http://store-agent:8080
+      ABAROW_UPDATE_APPROVE_SECRET: e2e-onay-gizli
+
+volumes:
+  store-agent-data:

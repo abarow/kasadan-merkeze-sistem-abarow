@@ -1,0 +1,56 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Dependency updates come as a single weekly PR (Go modules, npm and GitHub
+# Actions in separate groups). Security updates are opened independently of this schedule.
+# The image recipes (deploy/container/*.Containerfile) were not added here since
+# Dependabot's "docker" ecosystem does not recognize them.
+version: 2
+updates:
+  - package-ecosystem: gomod
+    directories:
+      - "/gen"
+      - "/pkg"
+      - "/services/core/device"
+      - "/services/core/gateway"
+      - "/services/core/catalog"
+      - "/services/core/payment"
+      - "/services/core/sales"
+      - "/services/core/staff"
+      - "/services/fiscal/beko"
+      - "/services/fiscal/simulator"
+      - "/services/update"
+      - "/services/inventory"
+      - "/services/headquarters/ingest"
+      - "/services/headquarters/catalog"
+      - "/services/headquarters/reporting"
+      - "/services/modules/restaurant"
+      - "/services/modules/retail"
+      - "/services/store"
+      - "/tools/register-sim"
+      - "/tools/natsauth"
+    schedule:
+      interval: weekly
+    groups:
+      go:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directories:
+      - "/tools/e2e"
+      - "/tools/ui-smoke"
+      - "/ui/apps/headquarters"
+      - "/ui/apps/store"
+      - "/ui/apps/restaurant"
+      - "/ui/apps/retail"
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

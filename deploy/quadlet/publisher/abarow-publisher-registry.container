@@ -1,0 +1,34 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow publisher image registry (CI writes, units pull with a token)
+Wants=abarow-publisher-auth.service
+After=abarow-publisher-auth.service
+
+[Container]
+ContainerName=abarow-publisher-registry
+# Zot: a single authentication, the publisher-auth token. CI writes to the test/, pilot/ and prod/ paths with the write token (user ci;
+# ABAROW_UPDATE_CI_SHA256 in the auth service)
+# (scripts/image-copy.sh, image-sign.sh); units pull only the path of their own
+# level with the abarow token. The configuration is written from zot.json.template: %h/abarow/publisher/zot.json.
+Image=ghcr.io/project-zot/zot-linux-amd64:v2.1.23
+Network=abarow-publisher.network
+Exec=serve /etc/zot/zot.json
+Volume=%h/abarow/publisher/zot.json:/etc/zot/zot.json:ro,Z
+Volume=abarow-publisher-auth:/etc/mirror:ro
+Volume=abarow-publisher-data:/var/lib/registry
+Secret=abarow-publisher-tls-cert,type=mount,target=/run/secrets/tls/server.pem,mode=0444
+Secret=abarow-publisher-tls-key,type=mount,target=/run/secrets/tls/server.key,mode=0400
+PublishPort=5443:5000
+PodmanArgs=--memory=512m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The install writes the network setting.
+
+[Install]
+WantedBy=default.target

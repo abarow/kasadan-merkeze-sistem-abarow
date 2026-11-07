@@ -1,0 +1,8 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+blank_issues_enabled: false
+contact_links:
+  - name: Güvenlik açığı bildirimi
+    url: https://github.com/abarow/abarow/security/advisories/new
+    about: Güvenlik açıklarını herkese açık issue olarak değil, buradan özel olarak bildirin.

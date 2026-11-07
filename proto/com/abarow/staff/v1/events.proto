@@ -1,0 +1,59 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.staff.v1;
+
+import "com/abarow/staff/v1/staff.proto";
+import "google/protobuf/timestamp.proto";
+
+// The shift events are published in NATS with a short subject (shift.opened.v1), and with the full
+// name as the CloudEvents type (com.abarow.shift.opened.v1).
+// The content is the protobuf encoding of these messages (content-type:
+// application/protobuf); the other CloudEvents properties are in the ce-* headers.
+// event_id is unique for every event (the same as ce-id); consumers de-duplicate repeats
+// with it. The events go from staff's outbox to the ABAROW_STAFF stream;
+// the store server sees the cashier on the shift and the cash difference from here.
+
+// ShiftOpened (shift.opened.v1) announces that the cashier opened their shift.
+message ShiftOpened {
+  string event_id = 1;
+  string store_id = 2;
+  string register_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  Shift shift = 5;
+}
+
+// ShiftClosed (shift.closed.v1) announces that the shift closed, with its report:
+// the sales, expected and counted cash, the cash difference.
+message ShiftClosed {
+  string event_id = 1;
+  string store_id = 2;
+  string register_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  ShiftReport report = 5;
+}
+
+// CashierState is the latest state of a store's cashier: the store manager adds, changes
+// the name, role or PIN, closes the account on the back house
+// screen. It is used in two places:
+//   - config.cashier.<cashier> (ABAROW_STORE_CONFIG, the last state per
+//     cashier): goes down to the registers; only the PIN's bcrypt digest is carried.
+//   - store.cashier.changed.v1 (the store stream): reported to headquarters
+//     (the cashier name in reports); pin_hash is empty.
+message CashierState {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  string store_id = 3;
+  string cashier_id = 4;
+  string name = 5;
+  // cashier ya da manager.
+  string role = 6;
+  // The PIN's bcrypt digest (only in the message that goes to the registers).
+  bytes pin_hash = 7;
+  // The account is closed: they cannot sign in at the register.
+  bool disabled = 8;
+  // The one who made the change (the store server screen).
+  string updated_by = 9;
+}

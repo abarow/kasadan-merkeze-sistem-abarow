@@ -1,0 +1,10 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The network of the publisher's registry services (run by the party that publishes the image;
+# it is not in a customer install, see docs/UPDATE.md "Who runs it").
+[Network]
+NetworkName=abarow-publisher
+
+[Quadlet]
+DefaultDependencies=false

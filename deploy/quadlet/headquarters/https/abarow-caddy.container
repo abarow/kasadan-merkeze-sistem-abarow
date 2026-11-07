@@ -1,0 +1,47 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Installed only by headquarters-install.sh --domain (see deploy/quadlet/README.md).
+
+[Unit]
+Description=abarow HTTPS for the headquarters screen (Caddy; it gets and renews the certificate itself)
+Wants=abarow-reporting.service
+After=abarow-reporting.service
+
+[Container]
+ContainerName=abarow-caddy
+# Because it is open to the internet patches must not be delayed; it does not update by itself,
+# a new release is applied once approved on the screen (docs/UPDATE.md).
+Image=docker.io/library/caddy:2.11-alpine
+Network=abarow-headquarters.network
+Environment=GOMEMLIMIT=96MiB
+# The certificates and the ACME account are persistent: they are not fetched again after a restart.
+Volume=abarow-caddy-data:/data
+Volume=abarow-caddy-config:/config
+# headquarters-install.sh writes the Caddyfile.
+Volume=%h/abarow/headquarters/caddy/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+# 80: certificate validation and the redirect to HTTPS; 443: the screen (for HTTP/3
+# UDP too). So that rootless Podman can open 80 the install
+# net.ipv4.ip_unprivileged_port_start=80 yapar.
+PublishPort=80:80
+PublishPort=443:443
+PublishPort=443:443/udp
+# The admin API listens only inside the container (localhost:2019).
+HealthCmd=wget -q -O /dev/null http://127.0.0.1:2019/config/
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+PodmanArgs=--memory=128m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# Headquarters does not wait for the external network; if Caddy cannot get the certificate it retries
+# dener.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

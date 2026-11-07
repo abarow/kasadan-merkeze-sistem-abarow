@@ -1,0 +1,35 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow mesaj yolu (NATS JetStream)
+
+[Container]
+ContainerName=abarow-nats
+Image=docker.io/library/nats:2.12-alpine
+Network=abarow.network
+Environment=GOMEMLIMIT=48MiB
+Volume=abarow-nats-data:/data
+# Identity and authorization configuration (natsauth produces it; see README): a connection
+# without an identity is not accepted, only sales can publish a sale event.
+Secret=abarow-nats-conf,type=mount,target=/etc/nats/nats.conf
+Exec=-c /etc/nats/nats.conf
+HealthCmd=wget -q -O /dev/null http://127.0.0.1:8222/healthz?js-enabled-only=true
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy; dependent services wait.
+Notify=healthy
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The register does not wait for the external network: the services only use the local abarow network; on a register
+# with no connection network-online.target may never come and the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

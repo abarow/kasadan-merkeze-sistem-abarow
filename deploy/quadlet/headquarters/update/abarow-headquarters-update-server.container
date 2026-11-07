@@ -1,0 +1,49 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow update registration server (headquarters: approves the registrations of store servers and registers)
+# The headquarters agent produces and renews the token signing key and the certificate
+# the publisher issued; the server reads them. The agent starts first.
+Wants=abarow-headquarters-update.service abarow-db.service
+After=abarow-headquarters-update.service abarow-db.service
+
+[Container]
+ContainerName=abarow-headquarters-update-server
+Image=ghcr.io/abarow/abarow-update-server:0.1
+# Nothing updates by itself (docs/UPDATE.md).
+Network=abarow-headquarters.network
+Environment=ABAROW_UPDATE_ALLOWED=store,register
+Environment=ABAROW_UPDATE_IDENTITY_DIR=/identity
+Environment=ABAROW_UPDATE_DEVICE_ADDR=:8443
+# The admin API is only on the internal network, on the port the headquarters screen (reporting) reaches;
+# it is not opened to the host. Only the screen service can set the person with headers.
+Environment=ABAROW_UPDATE_ADMIN_ADDR=:8082
+Environment=GOMEMLIMIT=24MiB
+# The database address (contains the password; written as a secret at install).
+Secret=abarow-db-url,type=env,target=ABAROW_DATABASE_URL
+# The headquarters agent's directory (signing key and certificate), read-only.
+Volume=abarow-headquarters-update-data:/identity:ro
+# The device API serves HTTPS; the certificate is the same as headquarters' leaf connection.
+Secret=abarow-headquarters-tls-cert,type=mount,target=/run/secrets/tls/server.pem,uid=65532,mode=0444
+Secret=abarow-headquarters-tls-key,type=mount,target=/run/secrets/tls/server.key,uid=65532,mode=0400
+Environment=ABAROW_TLS_CERT=/run/secrets/tls/server.pem
+Environment=ABAROW_TLS_KEY=/run/secrets/tls/server.key
+PublishPort=8443:8443
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy.
+Notify=healthy
+PodmanArgs=--memory=32m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The install script writes the network setting.
+
+[Install]
+WantedBy=default.target

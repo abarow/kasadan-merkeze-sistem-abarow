@@ -1,0 +1,47 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Installed at a restaurant register in place of the market module (register-install.sh --module
+# restaurant): tables, check, menu with pictures, kitchen and bar tickets.
+
+[Unit]
+Description=abarow restaurant module (with its screen)
+Wants=abarow-catalog.service
+After=abarow-catalog.service
+Wants=abarow-sales.service
+After=abarow-sales.service
+Wants=abarow-device.service
+After=abarow-device.service
+Wants=abarow-staff.service
+After=abarow-staff.service
+
+[Container]
+ContainerName=abarow-restaurant
+Image=ghcr.io/abarow/abarow-restaurant:0.1
+Network=abarow.network
+Environment=ABAROW_CATALOG_ADDR=abarow-catalog:9000
+Environment=ABAROW_SALES_ADDR=abarow-sales:9000
+# Kitchen, bar and check tickets are printed from device.
+Environment=ABAROW_DEVICE_ADDR=abarow-device:9000
+# Cancelling a sent order and the floor layout need the manager's approval.
+Environment=ABAROW_STAFF_ADDR=abarow-staff:9000
+Environment=ABAROW_TZ=Europe/Istanbul
+Environment=GOMEMLIMIT=48MiB
+# Masalar ve adisyonlar (restaurant.db).
+Volume=abarow-restaurant-data:/data
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

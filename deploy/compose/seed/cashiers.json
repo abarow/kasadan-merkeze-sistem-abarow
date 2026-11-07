@@ -1,0 +1,5 @@
+[
+  {"id": "ayse", "name": "Kasiyer Ayşe", "role": "cashier", "pin": "1111"},
+  {"id": "mert", "name": "Kasiyer Mert", "role": "cashier", "pin": "2222"},
+  {"id": "ali", "name": "Müdür Ali", "role": "manager", "pin": "9999"}
+]

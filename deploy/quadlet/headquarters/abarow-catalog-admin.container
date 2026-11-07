@@ -1,0 +1,39 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow headquarters catalog management (products, headquarters prices; goes down to the stores)
+Wants=abarow-headquarters.service abarow-db.service
+After=abarow-headquarters.service abarow-db.service
+
+[Container]
+ContainerName=abarow-catalog-admin
+Image=ghcr.io/abarow/abarow-catalog-admin:0.1
+Network=abarow-headquarters.network
+Environment=ABAROW_NATS_URL=nats://abarow-headquarters:4222
+Environment=ABAROW_NATS_NKEY=/run/secrets/nats.nk
+Environment=ABAROW_TZ=Europe/Istanbul
+Environment=GOMEMLIMIT=48MiB
+# NATS identity: publishing only to the catalog stream (secret key).
+Secret=abarow-headquarters-nats-catalog,type=mount,target=/run/secrets/nats.nk,uid=65532,mode=0400
+Secret=abarow-db-url,type=env,target=ABAROW_DATABASE_URL
+# Not opened to the outside: reporting forwards the screen's catalog requests.
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# Headquarters does not wait for the external network: the services connect to each other inside the machine,
+# the stores renew the connection themselves. On a machine where network-online.target
+# never comes the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

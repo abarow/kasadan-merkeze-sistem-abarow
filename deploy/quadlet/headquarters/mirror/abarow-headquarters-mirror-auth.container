@@ -1,0 +1,42 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow image mirror authorization service (headquarters: turns the abarow token into a registry token)
+
+[Container]
+ContainerName=abarow-headquarters-mirror-auth
+Image=ghcr.io/abarow/abarow-update-auth:0.1
+# The client (Podman) presents the abarow token as the password; the service verifies the token offline
+# with the publisher root and gives a short-lived token for the repositories by level
+# (docs/UPDATE.md, "Authority at the mirror"). The install script writes the publisher's root key
+# with mirror-root.conf.
+Network=abarow-headquarters.network
+Environment=ABAROW_UPDATE_REGISTRY_DIR=/data
+Environment=ABAROW_UPDATE_REGISTRY_SERVICE=abarow-zot
+Environment=ABAROW_UPDATE_AUTH_ADDR=:8083
+Environment=GOMEMLIMIT=24MiB
+# The token signing key and certificate are generated at the first start; Zot mounts the same volume read-only.
+Volume=abarow-headquarters-mirror-auth:/data
+Secret=abarow-headquarters-tls-cert,type=mount,target=/run/secrets/tls/server.pem,uid=65532,mode=0444
+Secret=abarow-headquarters-tls-key,type=mount,target=/run/secrets/tls/server.key,uid=65532,mode=0400
+Environment=ABAROW_TLS_CERT=/run/secrets/tls/server.pem
+Environment=ABAROW_TLS_KEY=/run/secrets/tls/server.key
+PublishPort=5444:8083
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy.
+Notify=healthy
+PodmanArgs=--memory=32m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The install script writes the network setting.
+
+[Install]
+WantedBy=default.target

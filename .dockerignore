@@ -1,0 +1,8 @@
+.git
+.claude
+docs
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/node_modules
+ui/**/dist

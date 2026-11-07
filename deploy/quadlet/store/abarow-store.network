@@ -1,0 +1,11 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The network of the store server services; it is separate from the register services' network (abarow).
+# In a small store the store server can run on the same machine as a register.
+[Network]
+NetworkName=abarow-store
+
+[Quadlet]
+# The store server does not wait for the external network (see the container units).
+DefaultDependencies=false
