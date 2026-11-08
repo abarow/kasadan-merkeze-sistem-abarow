@@ -1,0 +1,16 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The weekly base backup of the headquarters database (abarow-basebackup.service). If the
+# machine is off at that time it is taken when it comes on. It is not a Quadlet unit: it
+# is installed as a systemd user unit (~/.config/systemd/user).
+[Unit]
+Description=abarow headquarters weekly base backup
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

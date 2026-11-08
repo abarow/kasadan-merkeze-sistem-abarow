@@ -13,6 +13,7 @@
 #   sudo deploy/install/headquarters-install.sh account email <user> [address]
 #   sudo deploy/install/headquarters-install.sh account identity-remove <user>
 #   sudo deploy/install/headquarters-install.sh restore <backup file> [--yes]
+#   sudo deploy/install/headquarters-install.sh restore-to "2026-11-12 14:30:00+03" [--yes]
 #   sudo deploy/install/headquarters-install.sh reprocess
 #   sudo deploy/install/headquarters-install.sh catalog-load <catalog.json>
 #   sudo deploy/install/headquarters-install.sh backup-copy
@@ -54,7 +55,10 @@
 # restore: restores the database from a backup. The current state is backed up
 # first (so you can go back if the wrong file is chosen); then the events that
 # came after the backup are reprocessed from the headquarters stream (90 days).
-# In a non-interactive run --yes is needed. reprocess: only reprocesses the
+# In a non-interactive run --yes is needed. restore-to: restores the database to a
+# moment from the weekly base backup and the WAL archive (deploy/quadlet/README.md); the
+# current state is backed up first, then the events after the moment are
+# reprocessed from the headquarters stream. reprocess: only reprocesses the
 # headquarters stream from the start (existing events are skipped, missing ones
 # are added). catalog-load: loads the registers' starting catalog (catalog.json)
 # into headquarters; the information and prices of existing products change to
@@ -108,7 +112,7 @@ confirmed=
 command=install
 
 case "${1:-}" in
-store-add | store-remove | account | restore | reprocess | catalog-load | backup-copy)
+store-add | store-remove | account | restore | restore-to | reprocess | catalog-load | backup-copy)
 	command=$1
 	shift
 	;;
@@ -301,6 +305,22 @@ if [ "$command" = restore ]; then
 	start_units $(unit_names "$quadlet")
 	replay
 	say "The events that came after the backup are being reprocessed from the headquarters stream"
+	exit 0
+fi
+
+if [ "$command" = restore-to ]; then
+	[ $# -eq 1 ] || die 'usage: headquarters-install.sh restore-to "2026-11-12 14:30:00+03" [--yes]'
+	if [ -z "$confirmed" ]; then
+		[ -t 0 ] || die "confirmation cannot be asked (not interactive); give --yes."
+		read -r -p "The headquarters database will be taken back to $1; what was written after it is lost (the current state is backed up first). Type yes to continue: " answer
+		[ "$answer" = yes ] || die "cancelled."
+	fi
+	restore_to headquarters-install.sh "$headquarters" abarow-db abarow-db-data abarow-backup "$1" \
+		abarow-reporting.service abarow-ingest.service abarow-catalog-admin.service abarow-inventory-headquarters.service
+	# shellcheck disable=SC2046 # unit names contain no spaces
+	start_units $(unit_names "$quadlet")
+	replay
+	say "The events that came after $1 are being reprocessed from the headquarters stream"
 	exit 0
 fi
 
@@ -519,6 +539,8 @@ if [ "$command" = install ]; then
 	as systemctl --user start abarow-backup.service ||
 		die "could not take the database backup (journalctl --user -u abarow-backup)"
 	say "Daily backup set up ($backups; the first backup was taken)"
+	# The weekly base backup and the WAL archive (restore-to).
+	basebackup_install "$headquarters" "$quadlet/backup" abarow-basebackup
 fi
 
 # 5c. Copying the backups off the machine (--backup-target): after every

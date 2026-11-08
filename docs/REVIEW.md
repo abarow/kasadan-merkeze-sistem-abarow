@@ -34,6 +34,7 @@ Bulgular aşağıda yazıldıkları gibi duruyor; yapılanlar bu tabloda izleniy
 | G6 | Çözüldü (12.11.2026) | `staticcheck` bulguları düzeltildi; `staticcheck` CI'da. |
 | G7 | Çözüldü (12.11.2026) | Yorum düzeltildi; kasa satışları artık saklama süresinden sonra siliniyor (D1). |
 | D1 | Çözüldü (12.11.2026) | Saklama süreleri ve temizlik: [RETENTION.md](decisions/RETENTION.md). Satış defteri silinmiyor. |
+| D2 | Çözüldü (12.11.2026) | Mağaza sunucusu ve merkezde sürekli WAL arşivi, haftalık fiziksel yedek ve belirli bir ana dönüş (`restore-to`, [deploy/quadlet/README.md](../deploy/quadlet/README.md)); CI'da Docker'la uçtan uca deneniyor (`scripts/pitr-test.sh`). Arşiv veritabanıyla aynı diskte. Kasada yedek bilinçli olarak yok: olay mağazaya ulaşana kadar kasada kalır, ulaşınca mağazada ve merkezde kopyası olur. Bu iş sırasında bulunan hata: yedek birimleri `backup` klasörünü ve eski `backup-hedef.env` adını kullanıyordu, kurulum betiği `backups` ve `backup-target.env` yazıyordu; birimler düzeltildi. |
 | D4 | Çözüldü (12.11.2026) | CI, temel committe var olan bir migration dosyası değişirse başarısız oluyor (`scripts/check-migrations.sh`). |
 | D5 | Çözüldü (12.11.2026) | `staff` şemasında dört indeks (`00002_fk_indexes.sql`). |
 | D6 | Çözüldü (12.11.2026) | `plan_cache_mode` sunucu ayarı değil, yalnız rapor işleminde `SET LOCAL`. |

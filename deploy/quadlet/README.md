@@ -214,13 +214,13 @@ Operasyonda yönetilen kasiyeri kasadaki dosya artık değiştirmez; dosya yaln�
 
 Ayarlar `/etc/abarow/store.env`'de (root), anahtarlar ve CA `~abarow/abarow/store/auth`'ta (yalnızca `abarow`), kasa listesi `~abarow/abarow/store/config/registers.json`'dadır. Veritabanı parolası `auth/db-password`'tadır (yeniden kurulumda korunur).
 
-**Yedekler (operasyon):** veritabanının yedeği her gün 03:45'te `~abarow/abarow/store/backup` klasörüne alınır (`abarow-2026-11-04-034512.dump`); 14 günden eskiler silinir; kurulumda ilk yedek hemen alınır. Elle yedek: `systemctl --user start abarow-store-backup` (`abarow` kullanıcısıyla). Geri yükleme (önce şimdiki hal yedeklenir; yedekten sonra gelen satışlar mağaza stream'inden otomatik yeniden işlenir, rapor ve stok eksiğini kapatır):
+**Yedekler (operasyon):** veritabanının yedeği her gün 03:45'te `~abarow/abarow/store/backups` klasörüne alınır (`abarow-2026-11-04-034512.dump`); 14 günden eskiler silinir; kurulumda ilk yedek hemen alınır. Elle yedek: `systemctl --user start abarow-store-backup` (`abarow` kullanıcısıyla). Geri yükleme (önce şimdiki hal yedeklenir; yedekten sonra gelen satışlar mağaza stream'inden otomatik yeniden işlenir, rapor ve stok eksiğini kapatır):
 
 ```
-sudo deploy/install/store-install.sh restore ~abarow/abarow/store/backup/abarow-2026-11-04-034512.dump
+sudo deploy/install/store-install.sh restore ~abarow/abarow/store/backups/abarow-2026-11-04-034512.dump
 ```
 
-Yeniden işleme yalnızca satış olaylarını geri getirir: yedekten sonra girilen mal kabul ve sayım, mağaza fiyatı ve kasiyer değişiklikleri yalnızca veritabanında durduğundan geri gelmez (kasiyerler ve fiyatlar kasalarda ve merkezde durur; operasyona yeniden girilir). Elle yeniden işleme: `sudo deploy/install/store-install.sh reprocess`.
+Yeniden işleme yalnızca satış olaylarını geri getirir: yedekten sonra girilen mal kabul ve sayım, mağaza fiyatı ve kasiyer değişiklikleri yalnızca veritabanında durduğundan geri gelmez (kasiyerler ve fiyatlar kasalarda ve merkezde durur; operasyona yeniden girilir). Elle yeniden işleme: `sudo deploy/install/store-install.sh reprocess`. Belirli bir ana geri dönmek için (WAL arşivi; o ana kadar girilen mal kabul, sayım ve fiyat değişiklikleri de korunur): `sudo deploy/install/store-install.sh restore-to "2026-11-12 14:30:00+03"`. Ayrıntı merkezin "Belirli bir ana geri dönme" bölümündedir.
 
 Yedekler aynı diskte durur: disk bozulursa birlikte gider. `--backup-target` merkezdekiyle aynıdır (aynı betikler): harici disk ya da NAS (`--backup-target /mnt/backup/abarow`) veya SSH ile başka bir sunucu (`--backup-target yedek@backup.ornek.com`; kurulum kopyalama için ayrı bir anahtar üretir ve sunucuda nasıl yetkilendirileceğini yazar). Her başarılı yedekten sonra yedekler hedefe kopyalanır; hemen kopyalamak için `sudo deploy/install/store-install.sh backup-copy`. Ayrıntı için merkezin "Yedekler" bölümüne bakın.
 
@@ -301,7 +301,7 @@ Ekran varsayılan olarak yalnızca merkez makinesinden açılır (`http://127.0.
 
 ### 4. Yedekler
 
-Veritabanının yedeği her gün 03:30'da `~abarow/abarow/headquarters/backup` klasörüne alınır (ör. `abarow-2026-10-28-033012.dump`: tarih ve saat; pg_dump'ın sıkıştırılmış biçimi); 14 günden eskiler silinir. Kurulumda ilk yedek hemen alınır. Elle yedek: `systemctl --user start abarow-backup` (`abarow` kullanıcısıyla).
+Veritabanının yedeği her gün 03:30'da `~abarow/abarow/headquarters/backups` klasörüne alınır (ör. `abarow-2026-10-28-033012.dump`: tarih ve saat; pg_dump'ın sıkıştırılmış biçimi); 14 günden eskiler silinir. Kurulumda ilk yedek hemen alınır. Elle yedek: `systemctl --user start abarow-backup` (`abarow` kullanıcısıyla).
 
 Yedekler aynı diskte durur: disk bozulursa birlikte gider. **Yedekleri makine dışına kopyalayın:** kurulum betiği her başarılı yedekten sonra yedekleri `--backup-target`'e kopyalar (rsync; `sudo apt install rsync openssh-client`):
 
@@ -324,7 +324,7 @@ Ayrıca merkez stream'i mağazalardan gelen olayları 90 gün saklar. Mağazalar
 ### 5. Yedekten geri yükleme
 
 ```sh
-sudo deploy/install/headquarters-install.sh restore ~abarow/abarow/headquarters/backup/abarow-2026-10-28-033012.dump
+sudo deploy/install/headquarters-install.sh restore ~abarow/abarow/headquarters/backups/abarow-2026-10-28-033012.dump
 ```
 
 Betik:
@@ -333,6 +333,36 @@ Betik:
 3. yedekten sonra gelmiş olayları merkez stream'inden yeniden işletir (`reprocess`). Var olan olaylar olay kimliğiyle atlanır, eksikler eklenir. Böylece son 90 günün olayları kaybolmaz.
 
 Yedek başka makineye kurulan yeni bir merkeze de aynı komutla yüklenir.
+
+### 6. Belirli bir ana geri dönme (WAL arşivi)
+
+Günlük yedek en çok bir günlük merkez değişikliğini kaybettirir: katalog, fiyat, hesap ve stok düzeltmeleri gibi. Mağazalardan gelen satışlar bu kayba girmez, stream'den yeniden işlenir. Bu yüzden merkez ve operasyon veritabanı her değişikliğin kaydını (WAL) sürekli arşivler:
+
+- **Arşiv:** veritabanı biriminin kökünde (`/var/lib/postgresql`). Bir yazma en geç 15 dakika içinde arşivlenir.
+- **Fiziksel yedek:** her pazar 04:30'da `backups` klasörüne alınır (`base-2026-11-15-043012.tar.gz`; `abarow-basebackup.timer`, operasyonda `abarow-store-basebackup.timer`). Son 2 tanesi kalır; arşiv en eskisinin başından bu yana tutulur. Kurulumda ilki hemen alınır.
+- **Geri dönülebilecek aralık:** en eski fiziksel yedekten (1–2 hafta) şimdiye kadar herhangi bir an.
+
+Örnek: bir ürün listesi saat 14:35'te yanlışlıkla silindiyse 14:30'a dönülür:
+
+```sh
+sudo deploy/install/headquarters-install.sh restore-to "2026-11-12 14:30:00+03"
+sudo deploy/install/store-install.sh restore-to "2026-11-12 14:30:00+03"      # operasyon
+```
+
+Betik:
+1. önce şimdiki hali yedekler (`pg_dump`),
+2. servisleri ve veritabanını durdurur,
+3. o andan önceki en yeni fiziksel yedeği açar,
+4. arşivi o ana kadar yeniden oynatır, veritabanını yazmaya açar,
+5. servisleri başlatır ve o andan sonra gelen olayları stream'den yeniden işletir,
+6. yeni bir fiziksel yedek alır.
+
+Önceki veri klasörü silinmez; veritabanı biriminde `18/before-restore-<zaman>` olarak durur, geri dönüşü kontrol ettikten sonra silin.
+
+Sınırlar:
+- Arşiv ve veritabanı aynı diskte durur. Disk bozulursa arşiv de gider; o durumda makine dışına kopyalanan son yedeğe dönülür. `--backup-target` fiziksel yedekleri de kopyalar, arşivi kopyalamaz.
+- Arşiv diski kullanır. Yoğun bir merkezde günde birkaç yüz MB ile birkaç GB arası WAL birikebilir; ölçülmedi.
+- Mekanizma CI'da Docker'la uçtan uca denenir (`scripts/pitr-test.sh`): yedek, iki yazma arasındaki bir ana dönüş, yazmanın açılması. Kurulum betiğindeki `restore-to` komutu gerçek bir Podman makinesinde denenmedi.
 
 Ayarlar `/etc/abarow/headquarters.env`'de (root); anahtarlar, CA ve veritabanı parolası `~abarow/abarow/headquarters/auth`'ta (yalnızca `abarow`); mağaza listesi `~abarow/abarow/headquarters/config/stores.json`'dadır. Veritabanı parolası yalnızca ilk kurulumda veritabanına yazılır. `auth` klasörü kaybolursa ve veritabanı birimi (volume) kalırsa parola uyuşmaz. Bu yüzden `auth` klasörü de yedeklenmelidir. Bu klasör gizli anahtarları içerir; yedeği de gizli tutulmalıdır.
 

@@ -21,7 +21,7 @@ target=${ABAROW_BACKUP_TARGET:?target (ABAROW_BACKUP_TARGET)}
 days=${ABAROW_BACKUP_COPY_DAYS:-90}
 # Only completed backups (those being written end with .tmp); there are no
 # subdirectories in the directory.
-set -- --recursive --times --ignore-existing --chmod=F600 --include='*.dump' --exclude='*' --out-format='%n'
+set -- --recursive --times --ignore-existing --chmod=F600 --include='*.dump' --include='base-*.tar.gz' --exclude='*' --out-format='%n'
 # Copies run one at a time (the one after a backup and a manually started one
 # can come together; a server restricted with rrsync refuses the second at the same time).
 exec 9>"${XDG_RUNTIME_DIR:-/tmp}/abarow-backup-copy.lock"
@@ -37,7 +37,7 @@ case "$target" in
 		exit 1
 	fi
 	copied=$(rsync "$@" "$src/" "$target/")
-	find "$target" -maxdepth 1 -type f -name '*.dump' -mtime +"$days" -delete
+	find "$target" -maxdepth 1 -type f \( -name '*.dump' -o -name 'base-*.tar.gz' \) -mtime +"$days" -delete
 	;;
 *:* | *@*)
 	# With a target without a path, it is written to the user's home directory
@@ -55,4 +55,4 @@ case "$target" in
 	exit 1
 	;;
 esac
-echo "copied off the machine: $(printf '%s\n' "$copied" | grep -c '\.dump$' || true) new backups → $target"
+echo "copied off the machine: $(printf '%s\n' "$copied" | grep -c -e '\.dump$' -e '\.tar\.gz$' || true) new backups → $target"

@@ -39,6 +39,12 @@
 //   - Parallel hash joins live in /dev/shm; with Docker's 64 MB default the workers failed
 //     ("could not resize shared memory segment"). ShmMB is sized from that measurement and added
 //     to the memory limit, because /dev/shm is charged to the container.
+//   - The store server and headquarters archive their WAL continuously (decision 12.11.2026,
+//     deploy/quadlet/README.md): with a base backup (deploy/quadlet/backup/basebackup.sh) the database
+//     can be restored to any moment since. The archive is the root of the data volume
+//     (ArchiveDir): it exists in every volume and the postgres user can write to it, so the
+//     archive cannot stop for a missing directory and fill the disk with WAL. A segment
+//     is archived at the latest after archive_timeout, also when it is not full.
 package pgtune
 
 import (
@@ -85,6 +91,11 @@ const (
 	ParallelManyWorkers = 4
 	// DefaultShmMB is the container's /dev/shm size while parallel query is off.
 	DefaultShmMB = 64
+	// ArchiveDir is the WAL archive inside the database container (the root of the data
+	// volume; PGDATA is under it).
+	ArchiveDir = "/var/lib/postgresql"
+	// ArchiveTimeout is the longest a written change waits before its WAL segment is archived.
+	ArchiveTimeout = "15min"
 	// parallelLeaders is the connection pool of the report service (pkg/pgpool.Report).
 	parallelLeaders = 8
 )
@@ -105,6 +116,8 @@ type Settings struct {
 	ParallelWorkers int
 	// ShmMB is the size of the container's /dev/shm.
 	ShmMB int
+	// Archive turns on the continuous WAL archive (store server and headquarters).
+	Archive bool
 }
 
 // ForStore computes the settings of a store (store server) with registers registers.
@@ -191,6 +204,7 @@ func compute(registers int, p profile) Settings {
 		MemoryLimitMB:        roundUp(limit+shmInLimit, roundMB),
 		ParallelWorkers:      parallel,
 		ShmMB:                shm,
+		Archive:              true,
 	}
 }
 
@@ -239,6 +253,17 @@ func (s Settings) Flags() []string {
 		{"max_parallel_workers", fmt.Sprint(s.ParallelWorkers)},
 		{"max_parallel_workers_per_gather", fmt.Sprint(s.ParallelWorkers)},
 		{"max_parallel_maintenance_workers", "0"},
+	}
+	if s.Archive {
+		kv = append(kv, []struct {
+			k string
+			v string
+		}{
+			{"archive_mode", "on"},
+			{"archive_library", "basic_archive"},
+			{"basic_archive.archive_directory", ArchiveDir},
+			{"archive_timeout", ArchiveTimeout},
+		}...)
 	}
 	out := make([]string, 0, 2*len(kv))
 	for _, e := range kv {

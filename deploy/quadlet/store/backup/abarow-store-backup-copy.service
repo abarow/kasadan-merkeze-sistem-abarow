@@ -11,7 +11,7 @@ Description=abarow copies the store server backups off the machine
 
 [Service]
 Type=oneshot
-# ABAROW_BACKUP_TARGET: hedef (store-install.sh yazar).
-EnvironmentFile=%h/abarow/store/backup-hedef.env
-ExecStart=%h/abarow/store/backup-copy.sh %h/abarow/store/backup
+# ABAROW_BACKUP_TARGET: the target (store-install.sh writes it).
+EnvironmentFile=%h/abarow/store/backup-target.env
+ExecStart=%h/abarow/store/backup-copy.sh %h/abarow/store/backups
 TimeoutStartSec=3600

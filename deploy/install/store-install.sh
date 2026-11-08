@@ -18,6 +18,7 @@
 #   sudo deploy/install/store-install.sh email <manager-code> [address]
 #   sudo deploy/install/store-install.sh identity-remove <manager-code>
 #   sudo deploy/install/store-install.sh restore <backup file> [--yes]
+#   sudo deploy/install/store-install.sh restore-to "2026-11-12 14:30:00+03" [--yes]
 #   sudo deploy/install/store-install.sh reprocess
 #   sudo deploy/install/store-install.sh backup-copy
 #
@@ -110,7 +111,7 @@ confirmed=
 command=install
 
 case "${1:-}" in
-register-add | register-remove | cashiers-load | pin | email | identity-remove | restore | reprocess | backup-copy)
+register-add | register-remove | cashiers-load | pin | email | identity-remove | restore | restore-to | reprocess | backup-copy)
 	command=$1
 	shift
 	;;
@@ -329,6 +330,26 @@ if [ "$command" = restore ]; then
 	exit 0
 fi
 
+if [ "$command" = restore-to ]; then
+	if [ "${2:-}" = --yes ]; then
+		confirmed=1
+		set -- "$1"
+	fi
+	[ $# -eq 1 ] || die 'usage: store-install.sh restore-to "2026-11-12 14:30:00+03" [--yes]'
+	if [ -z "$confirmed" ]; then
+		[ -t 0 ] || die "confirmation cannot be asked (not interactive); give --yes."
+		read -r -p "The store database will be taken back to $1; what was written after it is lost (the current state is backed up first). Type yes to continue: " answer
+		[ "$answer" = yes ] || die "cancelled."
+	fi
+	restore_to store-install.sh "$store" abarow-store-db abarow-store-db-data abarow-store-backup "$1" \
+		abarow-report.service abarow-inventory.service abarow-store-catalog-admin.service
+	# shellcheck disable=SC2046 # unit names contain no spaces
+	start_units $(unit_names "$quadlet")
+	replay
+	say "The sales that came after $1 are being reprocessed from the store stream"
+	exit 0
+fi
+
 case "$command" in
 register-add)
 	[ $# -ge 2 ] || die "usage: store-install.sh register-add <register-id> <key> [name]"
@@ -523,6 +544,8 @@ if [ "$command" = install ]; then
 	as systemctl --user start abarow-store-backup.service ||
 		die "could not take the database backup (journalctl --user -u abarow-store-backup)"
 	say "Daily backup set up ($backups; the first backup was taken)"
+	# The weekly base backup and the WAL archive (restore-to).
+	basebackup_install "$store" "$quadlet/backup" abarow-store-basebackup
 	# Copying the backups off the machine (--backup-target): after every
 	# successful backup (the drop-in file of abarow-store-backup).
 	if [ -n "$backup_target" ]; then

@@ -11,7 +11,7 @@ Description=abarow copies the headquarters backups off the machine
 
 [Service]
 Type=oneshot
-# ABAROW_BACKUP_TARGET: hedef (headquarters-install.sh yazar).
-EnvironmentFile=%h/abarow/headquarters/backup-hedef.env
-ExecStart=%h/abarow/headquarters/backup-copy.sh %h/abarow/headquarters/backup
+# ABAROW_BACKUP_TARGET: the target (headquarters-install.sh writes it).
+EnvironmentFile=%h/abarow/headquarters/backup-target.env
+ExecStart=%h/abarow/headquarters/backup-copy.sh %h/abarow/headquarters/backups
 TimeoutStartSec=3600

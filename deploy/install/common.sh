@@ -448,6 +448,68 @@ backup_copy_command() {
 	backup_copy "$cmd" "$dir" "$backups" "$target" || return 1
 }
 
+# basebackup_install <tier-directory> <unit-directory> <unit>: installs the weekly base
+# backup (basebackup.sh, <unit>.service and .timer) and the restore script; at the
+# first install the first base backup is taken right away, so a restore to a moment
+# works from the install day on.
+basebackup_install() {
+	local dir=$1 units=$2 unit=$3
+	install -o "$user" -g "$user" -m 0755 "$here/deploy/quadlet/backup/basebackup.sh" "$dir/basebackup.sh"
+	install -o "$user" -g "$user" -m 0644 "$here/deploy/quadlet/backup/pitr-restore.sh" "$dir/pitr-restore.sh"
+	install -o "$user" -g "$user" -m 0644 "$units/$unit.service" "$units/$unit.timer" "$home/.config/systemd/user/"
+	as systemctl --user daemon-reload
+	as systemctl --user enable --now "$unit.timer"
+	if ! ls "$dir"/backups/base-*.tar.gz >/dev/null 2>&1; then
+		as systemctl --user start "$unit.service" ||
+			die "could not take the first base backup (journalctl --user -u $unit)"
+		say "Weekly base backup set up (the first one was taken; the WAL archive is on)"
+	fi
+}
+
+# restore_to <command> <tier-directory> <database-container> <data-volume> <backup-unit> <moment> <unit>...:
+# the "restore-to" command. Restores the database to the moment from the newest base
+# backup taken before it and the WAL archive (pitr-restore.sh). The current state is
+# backed up first (pg_dump) and its data directory is kept in the volume
+# (before-restore-<time>). The units are the services that use the database; they are
+# stopped and the caller starts them again.
+restore_to() {
+	local cmd=$1 dir=$2 db=$3 volume=$4 backup_unit=$5 moment=$6 base='' f stamp
+	shift 6
+	stamp=$(date -d "$moment" +%Y-%m-%d-%H%M%S 2>/dev/null) ||
+		die "$cmd restore-to: the moment \"$moment\" is not a time (example: \"2026-11-12 14:30:00+03\")"
+	[ "$(date -d "$moment" +%s)" -le "$(date +%s)" ] || die "$cmd restore-to: $moment is in the future."
+	for f in "$dir"/backups/base-*.tar.gz; do
+		[ -e "$f" ] || continue
+		# The names are the local time the backup started; sort order is time order.
+		[ "$(basename "$f" .tar.gz)" \< "base-$stamp" ] && base=$(basename "$f")
+	done
+	[ -n "$base" ] || die "$cmd restore-to: there is no base backup before $moment (the oldest kept one is the limit; ls $dir/backups)."
+	as systemctl --user is-active --quiet "$db.service" || die "$db is not running."
+	as systemctl --user start "$backup_unit.service" || die "could not back up the current state; nothing was restored."
+	say "The current state was backed up ($dir/backups)"
+	as systemctl --user stop "$@" "$db.service"
+	as podman run --rm -v "$volume:/var/lib/postgresql" -v "$dir/backups:/backup:ro,Z" -v "$dir/pitr-restore.sh:/pitr-restore.sh:ro,Z" \
+		docker.io/library/postgres:18-alpine sh /pitr-restore.sh "/backup/$base" "$moment" ||
+		die "the restore could not be prepared; the services are off. Start them again: systemctl --user start $db.service"
+	as systemctl --user start "$db.service" || die "$db did not start after the restore (journalctl --user -u $db)"
+	# The archive is replayed up to the moment; then the database opens for writing.
+	local i open=false
+	for i in $(seq 3600); do
+		if [ "$(as podman exec "$db" psql -U abarow -d abarow -tAc 'SELECT pg_is_in_recovery()' 2>/dev/null)" = f ]; then
+			open=true
+			break
+		fi
+		sleep 1
+	done
+	$open || die "$db is still replaying the archive after an hour (journalctl --user -u $db)"
+	as podman exec "$db" psql -q -U abarow -d abarow -c 'ALTER SYSTEM RESET restore_command' -c 'ALTER SYSTEM RESET recovery_target_action' \
+		-c 'ALTER SYSTEM RESET recovery_target_time' -c 'SELECT pg_reload_conf()' >/dev/null
+	say "The database was restored to $moment (from $base). The previous data directory is kept in the $volume volume (before-restore-*); remove it once you have checked the restore."
+	# A base backup of the restored state (a new timeline) is the next restore's start.
+	as systemctl --user start "${backup_unit%-backup}-basebackup.service" ||
+		say "WARNING: the base backup after the restore could not be taken (journalctl --user -u ${backup_unit%-backup}-basebackup)"
+}
+
 # oidc_url_validate <option> <url>: checks that the corporate sign-in (OIDC)
 # address is HTTPS (for local development HTTP is allowed only on localhost).
 # The address is written to the unit drop-in file, so it cannot contain spaces, quotes, \ or %.
