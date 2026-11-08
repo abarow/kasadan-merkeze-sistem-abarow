@@ -20,7 +20,7 @@ func TestPgtuneCommandStoresFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if len(lines) != 3 || lines[0] != "MEMORY_MB=2304" || lines[2] != "SHM_MB=512" || !strings.Contains(lines[1], "-c shared_buffers=832MB") ||
+	if len(lines) != 3 || lines[0] != "MEMORY_MB=2560" || lines[2] != "SHM_MB=768" || !strings.Contains(lines[1], "-c shared_buffers=832MB") ||
 		!strings.Contains(lines[1], "-c max_connections=30") || !strings.Contains(lines[1], "-c work_mem=32MB") {
 		t.Errorf("50 stores:\n%s", out.String())
 	}

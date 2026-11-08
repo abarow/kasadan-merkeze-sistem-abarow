@@ -29,7 +29,7 @@ func TestPgtuneCommandRegistersFlag(t *testing.T) {
 	if err := pgtuneCommand([]string{"--registers", "12"}, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "shared_buffers=128MB") || !strings.Contains(out.String(), "MEMORY_MB=512") {
+	if !strings.Contains(out.String(), "shared_buffers=128MB") || !strings.Contains(out.String(), "MEMORY_MB=576") {
 		t.Errorf("12 kasa:\n%s", out.String())
 	}
 }

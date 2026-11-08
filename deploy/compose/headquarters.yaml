@@ -61,7 +61,7 @@ services:
     # pgtune`). Here are the base values for one store; the install script rewrites them
     # by the real number of stores. If the settings change
     # services/headquarters/reporting/cmd/reporting/pgtune_test.go checks this file.
-    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=30", "-c", "work_mem=4MB", "-c", "maintenance_work_mem=16MB", "-c", "wal_buffers=2MB", "-c", "effective_cache_size=88MB", "-c", "random_page_cost=1.1", "-c", "min_wal_size=32MB", "-c", "max_wal_size=256MB", "-c", "checkpoint_completion_target=0.9", "-c", "autovacuum_max_workers=2", "-c", "max_worker_processes=4", "-c", "max_parallel_workers=0", "-c", "max_parallel_workers_per_gather=0", "-c", "max_parallel_maintenance_workers=0"]
+    command: ["postgres", "-c", "shared_buffers=64MB", "-c", "max_connections=30", "-c", "work_mem=4MB", "-c", "maintenance_work_mem=16MB", "-c", "wal_buffers=2MB", "-c", "effective_cache_size=88MB", "-c", "random_page_cost=1.1", "-c", "plan_cache_mode=force_custom_plan", "-c", "min_wal_size=32MB", "-c", "max_wal_size=256MB", "-c", "checkpoint_completion_target=0.9", "-c", "autovacuum_max_workers=2", "-c", "max_worker_processes=4", "-c", "max_parallel_workers=0", "-c", "max_parallel_workers_per_gather=0", "-c", "max_parallel_maintenance_workers=0"]
     environment:
       POSTGRES_DB: abarow
       POSTGRES_USER: abarow

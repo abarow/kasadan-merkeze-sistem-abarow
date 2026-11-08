@@ -48,6 +48,27 @@ func (d Dialect) bucket(col string) string {
 	return "CAST(strftime('%s', " + col + ") AS INTEGER) / " + n
 }
 
+// noSlice is the slice number of a row that is not grouped by time.
+const noSlice = -1
+
+// salesQuery is the report's sales query and its arguments. SQLite has no GROUPING SETS and
+// only the tests run the report on it; there the same rows come from a UNION ALL.
+func (d Dialect) salesQuery(where string, args []any) (string, []any) {
+	bucket := d.bucket("s.paid_at")
+	sums := `count(*), CAST(sum(s.total) AS BIGINT), CAST(sum(s.tax_total) AS BIGINT), CAST(sum(s.change_amount) AS BIGINT)`
+	if d.Postgres() {
+		return `SELECT COALESCE(s.store_id, ''), COALESCE(s.register_id, ''), COALESCE(s.cashier_id, ''),
+		       COALESCE(` + bucket + `, ` + strconv.Itoa(noSlice) + `), ` + sums + `
+		FROM sales s WHERE ` + where + `
+		GROUP BY GROUPING SETS ((s.store_id, s.register_id, s.cashier_id), (` + bucket + `))`, args
+	}
+	return `SELECT s.store_id, s.register_id, s.cashier_id, ` + strconv.Itoa(noSlice) + `, ` + sums + `
+		FROM sales s WHERE ` + where + ` GROUP BY s.store_id, s.register_id, s.cashier_id
+		UNION ALL
+		SELECT '', '', '', ` + bucket + `, ` + sums + `
+		FROM sales s WHERE ` + where + ` GROUP BY 4`, append(append([]any{}, args...), args...)
+}
+
 // binary compares text byte by byte (the same as the ordering in Go).
 func (d Dialect) binary(expr string) string {
 	if d.Postgres() {
@@ -183,8 +204,8 @@ func (d Dialect) Report(ctx context.Context, db DB, f ledger.Filter) (ledger.Rep
 		}
 	}
 	inSales := `s.paid_at >= ? AND s.paid_at < ?` + strings.ReplaceAll(stores, "%s", "s.store_id")
-	each := func(query string, scan func(*sql.Rows) error) error {
-		rows, err := db.QueryContext(ctx, d.Q(query), args...)
+	query := func(q string, qargs []any, scan func(*sql.Rows) error) error {
+		rows, err := db.QueryContext(ctx, d.Q(q), qargs...)
 		if err != nil {
 			return err
 		}
@@ -196,19 +217,24 @@ func (d Dialect) Report(ctx context.Context, db DB, f ledger.Filter) (ledger.Rep
 		}
 		return rows.Err()
 	}
+	each := func(q string, scan func(*sql.Rows) error) error { return query(q, args, scan) }
 
-	err := each(`
-		SELECT s.store_id, s.register_id, s.cashier_id, `+d.bucket("s.paid_at")+`, count(*),
-		       CAST(sum(s.total) AS BIGINT), CAST(sum(s.tax_total) AS BIGINT), CAST(sum(s.change_amount) AS BIGINT)
-		FROM sales s WHERE `+inSales+`
-		GROUP BY s.store_id, s.register_id, s.cashier_id, 4`, func(rows *sql.Rows) error {
+	// The totals per store, register and cashier and the totals per time slice come from one
+	// statement, so both are read from the same snapshot. A row with no slice (noSlice) is a
+	// total. Grouping by all four at once returned about one row per sale.
+	salesQuery, salesArgs := d.salesQuery(inSales, args)
+	err := query(salesQuery, salesArgs, func(rows *sql.Rows) error {
 		var store, register, cashier string
 		var bucket, n int64
 		var total, tax, change money.Money
 		if err := rows.Scan(&store, &register, &cashier, &bucket, &n, &total, &tax, &change); err != nil {
 			return err
 		}
-		b.AddSales(store, register, cashier, time.Unix(bucket*int64(ledger.Bucket/time.Second), 0), n, total, tax, change)
+		if bucket == noSlice {
+			b.AddSalesTotals(store, register, cashier, n, total, tax, change)
+		} else {
+			b.AddSalesSlice(time.Unix(bucket*int64(ledger.Bucket/time.Second), 0), n, total)
+		}
 		return nil
 	})
 	if err != nil {

@@ -34,12 +34,12 @@ Kasa eklenince ya da çıkarılınca kurulum betiği PostgreSQL ayarlarını yen
 | Kasa (operasyon) | Container belleği | shared_buffers | work_mem |
 |---|---|---|---|
 | 1–4 | 256 MB | 64 MB | 4 MB |
-| 10 | 512 MB | 112 MB | 8 MB |
-| 30 ve üstü | 896 MB | 256 MB | 16 MB |
+| 10 | 576 MB | 112 MB | 8 MB |
+| 30 ve üstü | 1024 MB | 256 MB | 16 MB |
 
-10 kasadan itibaren dönem raporları paralel sorgu kullanır (10–49 kasa 2 işçi, 50 ve üstü 4 işçi); container belleğine `/dev/shm` payı (16 × `work_mem`) eklenmiştir.
+10 kasadan itibaren dönem raporları paralel sorgu kullanır (10–49 kasa 2 işçi, 50 ve üstü 4 işçi); container belleğine `/dev/shm` payı (24 × `work_mem`) eklenmiştir.
 
-Merkez için ayrı formül vardır (veri mağaza sayısıyla büyür): 10 mağazada 768 MB / 192 MB, 50 mağazada 2304 MB / 832 MB. Ölçümde bu ayarlar 50 kasada kayıt işleme gecikmesini 680 → 397 ms'ye, 50 mağazada 2,5 sn → 1,0 sn'ye indirdi. Tüm tablolar: [docs/PERFORMANCE.md](PERFORMANCE.md).
+Merkez için ayrı formül vardır (veri mağaza sayısıyla büyür): 10 mağazada 896 MB / 192 MB, 50 mağazada 2560 MB / 832 MB. Ölçümde bu ayarlar 50 kasada kayıt işleme gecikmesini 680 → 397 ms'ye, 50 mağazada 2,5 sn → 1,0 sn'ye indirdi. Tüm tablolar: [docs/PERFORMANCE.md](PERFORMANCE.md).
 
 ## Donanım ihtiyacı
 
@@ -56,7 +56,7 @@ Aşağıdaki sayılar abarow'un **kendi servislerinin** (container'ların) ihtiy
 | Kasa (9 container) | **192 MB** | **544 MB** | 1 | 2 |
 | Operasyon, 4 kasaya kadar | 384 MB | 544 MB | 1 | 2 |
 | Operasyon, 5 kasa | 448 MB | 608 MB | 1 | 2 |
-| Operasyon, 50 kasa | 1024 MB | 1184 MB | 4 | 8 |
+| Operasyon, 50 kasa | 1152 MB | 1312 MB | 4 | 8 |
 
 (Kasa: ölçülen en yüksek ≈137 MiB. Operasyon: veritabanı + diğer servislerin ≈110 MB zirvesi; optimumda NATS 128, report 64, envanter 48, catalog-admin 48 MB tavanı. Diskte veritabanı kasa başına ayda ≈17 MB, yılda ≈200 MB büyür.)
 
@@ -87,6 +87,6 @@ Operasyon makinesi: operasyon 448 / 608 MB + kasa 192 / 544 MB.
 | Makine | Adet | Bellek asgari | Bellek optimum | CPU asgari | CPU optimum |
 |---|---|---|---|---|---|
 | Yalnız kasa | 50 (her biri) | **192 MB** | **544 MB** | 1 | 2 |
-| Operasyon (yalnız) | 1 | 1024 MB | 1184 MB | 4 | 8 |
+| Operasyon (yalnız) | 1 | 1152 MB | 1312 MB | 4 | 8 |
 
 Operasyon makinesi disk: veritabanı 50 kasada ≈830 MB / 30 gün, yılda ≈10 GB. Ölçülmeyenler ve riskler: operasyon NATS'ının 50 leaf bağlantısındaki belleği ve CPU'su (tavan 128 MB; kasa sayısı arttıkça izlenmeli), operasyondaki catalog-admin örneğinin kendi ölçümü (merkezdeki örneğe göre ≈10 MB varsayıldı).

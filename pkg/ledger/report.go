@@ -153,6 +153,13 @@ func (b *Builder) store(id string) *GroupTotal {
 // the receipt count, the VAT-included total, the VAT and the change. at is a moment
 // inside the slice.
 func (b *Builder) AddSales(store, register, cashier string, at time.Time, receipts int64, total, tax, change money.Money) {
+	b.AddSalesTotals(store, register, cashier, receipts, total, tax, change)
+	b.AddSalesSlice(at, receipts, total)
+}
+
+// AddSalesTotals adds the sales of a store, register and cashier to the totals and the
+// group tables, without their time.
+func (b *Builder) AddSalesTotals(store, register, cashier string, receipts int64, total, tax, change money.Money) {
 	b.r.Receipts += receipts
 	b.r.Total += total
 	b.r.TaxTotal += tax
@@ -161,6 +168,10 @@ func (b *Builder) AddSales(store, register, cashier string, at time.Time, receip
 		g.Receipts += receipts
 		g.Total += total
 	}
+}
+
+// AddSalesSlice adds the sales of a time slice to the hours and the days.
+func (b *Builder) AddSalesSlice(at time.Time, receipts int64, total money.Money) {
 	local := at.In(b.f.Location)
 	h := &b.r.Hours[local.Hour()]
 	h.Receipts += receipts

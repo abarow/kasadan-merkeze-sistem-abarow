@@ -34,7 +34,7 @@ func TestDerived(t *testing.T) {
 // The memory limit is 2 × shared_buffers + 128 MB (a multiple of 64): at least
 // shared_buffers of room is left for the page cache. effective_cache_size does not exceed the limit.
 func TestMemoryLimitFormula(t *testing.T) {
-	for n, want := range map[int]int{1: 256, 4: 256, 5: 320, 9: 384, 10: 512, 20: 768, 49: 896, 50: 896, 1000: 896} {
+	for n, want := range map[int]int{1: 256, 4: 256, 5: 320, 9: 384, 10: 576, 20: 896, 49: 1024, 50: 1024, 1000: 1024} {
 		s := ForStore(n)
 		if s.MemoryLimitMB != want {
 			t.Errorf("%d registers: memory limit %d, want %d", n, s.MemoryLimitMB, want)
@@ -68,7 +68,7 @@ func TestWorkMemTiersAndParallel(t *testing.T) {
 			t.Errorf("%d registers: /dev/shm %d", n, s.ShmMB)
 		}
 	}
-	for _, c := range []struct{ n, workers, shm int }{{10, 2, 128}, {16, 2, 128}, {17, 2, 256}, {49, 2, 256}, {50, 4, 256}, {1000, 4, 256}} {
+	for _, c := range []struct{ n, workers, shm int }{{10, 2, 192}, {16, 2, 192}, {17, 2, 384}, {49, 2, 384}, {50, 4, 384}, {1000, 4, 384}} {
 		s := ForStore(c.n)
 		for _, want := range []string{
 			fmt.Sprintf("-c max_parallel_workers_per_gather=%d", c.workers),
@@ -83,7 +83,7 @@ func TestWorkMemTiersAndParallel(t *testing.T) {
 			t.Errorf("%d registers: /dev/shm %d, want %d", c.n, s.ShmMB, c.shm)
 		}
 	}
-	if got := ForHeadquarters(100).ShmMB; got != 512 {
+	if got := ForHeadquarters(100).ShmMB; got != 768 {
 		t.Errorf("headquarters, 100 registers: /dev/shm %d", got)
 	}
 }
@@ -161,9 +161,9 @@ func TestForHeadquarters(t *testing.T) {
 		t.Errorf("2 kasa: %+v", s)
 	}
 	// 50 stores × 2 registers = 100 registers: 64 + 8 × 96 = 832 MB of buffers; memory 2 × 832 + 128 = 1792 MB
-	// and 512 MB of /dev/shm for parallel query.
+	// and 768 MB of /dev/shm for parallel query.
 	s = ForHeadquarters(100)
-	if s.SharedBuffersMB != 832 || s.MemoryLimitMB != 2304 || s.WorkMemMB != 32 || s.MaxWalSizeMB != 1600 || s.MaintenanceWorkMemMB != 128 {
+	if s.SharedBuffersMB != 832 || s.MemoryLimitMB != 2560 || s.WorkMemMB != 32 || s.MaxWalSizeMB != 1600 || s.MaintenanceWorkMemMB != 128 {
 		t.Errorf("100 kasa: %+v", s)
 	}
 	if got := ForHeadquarters(100000).SharedBuffersMB; got != MaxHeadquartersSharedBuffersMB {

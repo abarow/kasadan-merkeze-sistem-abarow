@@ -337,11 +337,11 @@ Gerekçe ve okuma:
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 256 MB | 64 MB | 4 MB | 88 MB | 256 MB | 16 MB | 30 | 0 | 64 MB |
 | 2 | 256 MB | 64 MB | 4 MB | 88 MB | 256 MB | 16 MB | 30 | 0 | 64 MB |
-| 5 | 512 MB | 112 MB | 8 MB | 216 MB | 256 MB | 28 MB | 30 | 2 | 128 MB |
-| 10 | 768 MB | 192 MB | 16 MB | 344 MB | 320 MB | 48 MB | 30 | 2 | 256 MB |
-| 25 | 1536 MB | 432 MB | 32 MB | 856 MB | 800 MB | 108 MB | 30 | 4 | 512 MB |
-| 50 | 2304 MB | 832 MB | 32 MB | 1624 MB | 1600 MB | 128 MB | 30 | 4 | 512 MB |
-| 100 | 2688 MB | 1024 MB | 32 MB | 2008 MB | 3200 MB | 128 MB | 30 | 4 | 512 MB |
+| 5 | 576 MB | 112 MB | 8 MB | 216 MB | 256 MB | 28 MB | 30 | 2 | 192 MB |
+| 10 | 896 MB | 192 MB | 16 MB | 344 MB | 320 MB | 48 MB | 30 | 2 | 384 MB |
+| 25 | 1792 MB | 432 MB | 32 MB | 856 MB | 800 MB | 108 MB | 30 | 4 | 768 MB |
+| 50 | 2560 MB | 832 MB | 32 MB | 1624 MB | 1600 MB | 128 MB | 30 | 4 | 768 MB |
+| 100 | 2944 MB | 1024 MB | 32 MB | 2008 MB | 3200 MB | 128 MB | 30 | 4 | 768 MB |
 
 Ölçülenler 1, 2, 5, 10 ve 50 mağazadır; 25 ve 100 formülün ara/üst değeridir. Kasa sayısı 10'dan azsa paralel sorgu kapalıdır; açıkken `/dev/shm` payı container belleğine eklenir ("Paralel sorgu" bölümü).
 
@@ -396,7 +396,7 @@ Yalnızca `sale_lines` anahtarının kapsayıcı olduğu, taze veride doğrulama
 
 > Geliştirici bilgisayarında (Docker Desktop, 16 CPU); sayılar sıralama ve oran için güvenilirdir, mağaza donanımı için garanti değildir.
 
-**Kural:** 10 kasanın altında kapalı, 10–49 kasada 2 işçi, 50 kasa ve üstünde 4 işçi. İşçi üst sınırı veritabanının toplamıdır, açık rapor ekranları bütün çekirdekleri alamaz. `/dev/shm` = 16 × `work_mem` ve bu pay container belleğine eklenir.
+**Kural:** 10 kasanın altında kapalı, 10–49 kasada 2 işçi, 50 kasa ve üstünde 4 işçi. İşçi üst sınırı veritabanının toplamıdır, açık rapor ekranları bütün çekirdekleri alamaz. `/dev/shm` = 24 × `work_mem` ve bu pay container belleğine eklenir.
 
 **Tek kullanıcı, yük yok (50 mağaza, 900 bin satış, SQL süresi):** aylık rapor 6,3 → 3,2 sn. Ödemeler 823 → 323 ms, KDV 1185 → 349 ms, ürün sıralaması 2455 → 712 ms. Satışlar sorgusu (1,8 sn, 900 bin satır döner) paralelleşmiyor. RAM'i 1792'den 4096 MB'a çıkarmak süreyi değiştirmedi (6,3 → 6,1 sn). `work_mem` 256 MB'ta planlayıcı ürün sıralamasında paralel planı bırakıyor (712 → 2355 ms), bu yüzden `work_mem` artırılmadı.
 
@@ -412,7 +412,25 @@ Yalnızca `sale_lines` anahtarının kapsayıcı olduğu, taze veride doğrulama
 
 - Paralel sorgu raporu tek kullanıcıda yaklaşık 2 kat hızlandırır; 11 ekranın aynı anda rapor istediği yükte kazanç küçüktür (~%8).
 - **Ölçüm düzeneği uyarısı:** araç Windows'ta çalışıp veritabanına Docker'ın yayınlanmış portundan bağlanınca paralel sorguda kayıt p50 9–12 sn, p95 12–23 sn, kuyruk 250–470 çıktı. Araç veritabanıyla aynı Docker ağına alınınca bu kayboldu (yukarıdaki tablo); örneklemede yazan bağlantı veritabanında neredeyse hiç beklemiyordu. Bu bölümden önceki merkez tablolarının kayıt işleme sütunları aynı Windows düzeneğiyle ölçülmüştür; 50 mağazadaki p50/p95 değerleri gerçek kurulumdan yüksek olabilir.
-- **`/dev/shm`:** 50 mağazada 2 işçi ve 256 MB (8 × `work_mem`) ile aylık ve ürün özetleri 7–10 kez "could not resize shared memory segment" hatası verdi; 512 MB (16 × `work_mem`) ile hata çıkmadı.
+- **`/dev/shm`:** 50 mağazada 2 işçi ve 256 MB (8 × `work_mem`) ile aylık ve ürün özetleri 7–10 kez "could not resize shared memory segment" hatası verdi; 512 MB (16 × `work_mem`) ile de bir yük turunda 3 kez aynı hata görüldü. 768 MB (24 × `work_mem`) ile iki yük turunda hata yok.
 - **10 kasa ve 10 mağaza (2 işçi, 2 tur, Windows düzeneği):** rapor ve kayıt süreleri ölçüm gürültüsü içinde aynı (mağaza sunucusu aylık 778–787 → 742–895 ms; merkez aylık 1,68–1,86 → 1,55–1,70 sn; kayıt p95 değişmedi); 64–128 MB `/dev/shm` ile hata yok. Bu kademede yük yokken ölçüm yapılmadı.
 - **Mağaza sunucusu 50 kasa (4 işçi, 1 tur, Windows düzeneği):** aylık 6,8 → 6,0 sn, ürün sıralaması 8,6 → 8,0 sn, kayıt p95 217 → 373 ms, kuyruk 11 → 27.
-- Bellek tavanı da değişti: 50 kasa mağaza sunucusu 640 → 896 MB, 50 mağaza merkez 1792 → 2304 MB. Bu bölümden önceki tablolar paralel sorgu ve bu bellek değerleri öncesinde ölçülmüştür.
+- Bellek tavanı da değişti: 50 kasa mağaza sunucusu 640 → 1024 MB, 50 mağaza merkez 1792 → 2560 MB. Bu bölümden önceki tablolar paralel sorgu ve bu bellek değerleri öncesinde ölçülmüştür.
+
+## Aylık rapor: tek satış sorgusu ve özel plan (08.11.2026)
+
+İki düzeltme, ikisi de 50 mağaza, 900 bin satış, araç veritabanıyla aynı Docker ağında:
+
+1. **Satış sorgusu `GROUPING SETS` oldu.** Önceden mağaza + kasa + kasiyer + 15 dakikalık dilim birlikte gruplanıyor, neredeyse her satış için bir satır (900 bin) dönüyordu; uygulama bunları toplayıp atıyordu. Şimdi toplamlar ve zaman dilimleri tek SQL cümlesinden gelir (3.281 satır, tek anlık görüntü). SQL süresi 3,4 → 1,2 sn.
+2. **`plan_cache_mode = force_custom_plan`.** Günlük ve aylık rapor aynı SQL metnini kullanır, yalnızca tarihleri farklıdır. Birkaç çalıştırmadan sonra PostgreSQL hazır sorguyu tarihleri bilmeyen genel plana geçiriyor ve kısa aralık varsayıp milyonlarca satırı iç içe döngüyle okuyordu (ürün sıralaması 0,7 sn yerine 4,3–6,2 sn). `psql` ile elde çalıştırılan SQL bu sorunu göstermediği için önceki SQL ölçümleri uygulamanın gördüğünden iyi görünüyordu.
+
+| 50 mağaza, 4 işçi | Düzeltmeden önce | `GROUPING SETS` | `GROUPING SETS` + özel plan |
+|---|---|---|---|
+| Aylık rapor, tek kullanıcı (uygulama üzerinden) | 6,6 sn (paralel kapalı) | 7,2–7,7 sn | **1,8 sn** |
+| Aylık rapor p50, yük altında (11 ekran, 20 satış/sn) | 11,6–12,0 sn | 5,5–6,7 sn | 5,9–6,8 sn |
+| Ürün sıralaması p50, yük altında | 12,2–13,5 sn | 5,8–7,2 sn | 5,2–6,4 sn |
+| Kayıt işleme p50 / p95, yük altında | 19–21 ms / 539–1180 ms | 8–12 ms / 32–34 ms | 13 ms / 39–43 ms |
+| Kuyruk en çok | 34–40 | 4–5 | 4–7 |
+
+Yukarıdaki "Paralel sorgu" tablosu ve eski merkez tabloları bu iki düzeltmeden önce ölçülmüştür. Tek kullanıcı süresi uygulama yolundan, her biri 3–4 çalıştırmanın medyanıdır. Yük altındaki süreler 11 ekranın aynı anda rapor istediği durumdur, 3 sn hedefinin altında değildir.
+

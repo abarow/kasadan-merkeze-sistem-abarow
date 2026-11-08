@@ -33,6 +33,10 @@
 //     set aside accordingly.
 //   - maintenance_work_mem = shared_buffers / 4 (at most 64 MB), wal_buffers =
 //     shared_buffers / 32 (1–16 MB).
+//   - plan_cache_mode = force_custom_plan: the daily and the monthly report share their SQL
+//     text and differ only in the dates. After a few runs PostgreSQL moved the prepared
+//     statement to a generic plan that does not know the dates and assumes a short range:
+//     the monthly product ranking then took 4.3-6.2 s instead of 0.7 s (50 stores).
 //   - Parallel query is off below 10 registers: a small store's machine has few cores and its
 //     reports are already short. From 10 registers the period summaries use 2 workers, from 50
 //     registers 4 (the database machine of that size is expected to be a strong one).
@@ -85,6 +89,8 @@ const (
 	ParallelManyWorkers = 4
 	// DefaultShmMB is the container's /dev/shm size while parallel query is off.
 	DefaultShmMB = 64
+	// parallelLeaders is the connection pool of the report service (pkg/pgpool.Report).
+	parallelLeaders = 8
 )
 
 // Settings are the PostgreSQL settings (memory in MB).
@@ -160,9 +166,11 @@ func compute(registers int, p profile) Settings {
 	}
 	parallel, shm, shmInLimit := workers(registers), DefaultShmMB, 0
 	if parallel > 0 {
-		// Several report screens run at once, each with its own parallel hash joins. Measured
-		// at 50 stores: 8 × work_mem (256 MB) ran out with 2 workers, 16 × work_mem did not.
-		shm = 16 * wm
+		// Parallel hash tables live in /dev/shm and take work_mem × hash_mem_multiplier (2) per
+		// participant. The participants are the workers and the leaders; a leader runs its
+		// part even when no worker is free, so up to the report pool (8) can be at work.
+		// Measured at 50 stores with 11 screens: 16 × work_mem still ran out, seldom.
+		shm = 2 * (parallelLeaders + ParallelManyWorkers) * wm
 		shmInLimit = shm
 	}
 	return Settings{
@@ -217,6 +225,7 @@ func (s Settings) Flags() []string {
 		{"wal_buffers", mb(s.WalBuffersMB)},
 		{"effective_cache_size", mb(s.EffectiveCacheSizeMB)},
 		{"random_page_cost", "1.1"},
+		{"plan_cache_mode", "force_custom_plan"},
 		{"min_wal_size", mb(s.MinWalSizeMB)},
 		{"max_wal_size", mb(s.MaxWalSizeMB)},
 		{"checkpoint_completion_target", "0.9"},
