@@ -3,6 +3,8 @@
 
 [Unit]
 Description=abarow katalog
+Wants=abarow-register-db.service
+After=abarow-register-db.service
 
 [Container]
 ContainerName=abarow-catalog
@@ -12,7 +14,7 @@ Image=ghcr.io/abarow/abarow-catalog:0.1
 Network=abarow.network
 Environment=ABAROW_CATALOG_SEED=/seed/catalog.json
 Environment=GOMEMLIMIT=48MiB
-Volume=abarow-catalog-data:/data
+Secret=abarow-register-db-url,type=env,target=ABAROW_DATABASE_URL
 # Starting data (not test data, the business's own file).
 Volume=%h/abarow/seed:/seed:ro,Z
 HealthCmd=["/service", "healthcheck"]

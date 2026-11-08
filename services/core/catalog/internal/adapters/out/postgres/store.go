@@ -1,8 +1,8 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Package sqlite is the app.Repository adapter that keeps the products in SQLite.
-package sqlite
+// Package postgres is the app.Repository adapter that keeps the products in PostgreSQL.
+package postgres
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"abarow.com/pkg/sqlitedb"
+	"abarow.com/pkg/pgdb"
 	"abarow.com/pkg/text"
 	"abarow.com/services/core/catalog/internal/app"
 	"abarow.com/services/core/catalog/internal/domain"
@@ -23,7 +23,7 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// Store, app.Repository'yi SQLite ile uygular.
+// Store implements app.Repository with PostgreSQL.
 type Store struct {
 	db *sql.DB
 }
@@ -31,8 +31,8 @@ type Store struct {
 var _ app.Repository = (*Store)(nil)
 
 // Open opens the database and applies the migrations.
-func Open(ctx context.Context, path string) (*Store, error) {
-	db, err := sqlitedb.Open(ctx, path, migrations)
+func Open(ctx context.Context, dsn string) (*Store, error) {
+	db, err := pgdb.Open(ctx, dsn, "catalog", migrations)
 	if err != nil {
 		return nil, err
 	}
@@ -66,8 +66,8 @@ func (s *Store) fillSortNames(ctx context.Context) error {
 		return err
 	}
 	for _, r := range empty {
-		if _, err := s.db.ExecContext(ctx, `UPDATE products SET sort_name = ? WHERE id = ?`, text.SortKey(r.name), r.id); err != nil {
-			return fmt.Errorf("sıralama anahtarı yazılamadı (%s): %w", r.id, err)
+		if _, err := s.db.ExecContext(ctx, `UPDATE products SET sort_name = $1 WHERE id = $2`, text.SortKey(r.name), r.id); err != nil {
+			return fmt.Errorf("could not write the sort key (%s): %w", r.id, err)
 		}
 	}
 	return nil
@@ -83,7 +83,7 @@ const productColumns = `p.id, p.name, p.unit, p.tax_rate, p.quick_key, p.categor
 
 // Get returns the product (it is not found if withdrawn from sale).
 func (s *Store) Get(ctx context.Context, id string) (domain.Product, error) {
-	products, err := s.query(ctx, `SELECT `+productColumns+` FROM products p WHERE p.id = ? AND p.discontinued = 0`, id)
+	products, err := s.query(ctx, `SELECT `+productColumns+` FROM products p WHERE p.id = $1 AND NOT p.discontinued`, id)
 	if err != nil {
 		return domain.Product{}, err
 	}
@@ -95,13 +95,13 @@ func (s *Store) Get(ctx context.Context, id string) (domain.Product, error) {
 
 // Menu: the products that have a category (are on the menu).
 func (s *Store) Menu(ctx context.Context) ([]domain.Product, error) {
-	return s.query(ctx, `SELECT `+productColumns+` FROM products p WHERE p.category != '' AND p.discontinued = 0`)
+	return s.query(ctx, `SELECT `+productColumns+` FROM products p WHERE p.category != '' AND NOT p.discontinued`)
 }
 
 // SaveImage writes the product's image; if Data is empty it deletes the image.
 func (s *Store) SaveImage(ctx context.Context, img domain.Image) error {
 	if len(img.Data) == 0 {
-		_, err := s.db.ExecContext(ctx, `DELETE FROM images WHERE product_id = ?`, img.ProductID)
+		_, err := s.db.ExecContext(ctx, `DELETE FROM images WHERE product_id = $1`, img.ProductID)
 		return err
 	}
 	return saveImage(ctx, s.db, img)
@@ -113,7 +113,7 @@ type execer interface {
 
 func saveImage(ctx context.Context, db execer, img domain.Image) error {
 	_, err := db.ExecContext(ctx, `
-		INSERT INTO images (product_id, sha256, content_type, data) VALUES (?, ?, ?, ?)
+		INSERT INTO images (product_id, sha256, content_type, data) VALUES ($1, $2, $3, $4)
 		ON CONFLICT (product_id) DO UPDATE SET sha256 = excluded.sha256, content_type = excluded.content_type, data = excluded.data`,
 		img.ProductID, img.SHA256, img.ContentType, img.Data)
 	return err
@@ -125,7 +125,7 @@ func (s *Store) Image(ctx context.Context, productID string) (domain.Image, erro
 	img := domain.Image{ProductID: productID}
 	err := s.db.QueryRowContext(ctx, `
 		SELECT i.sha256, i.content_type, i.data FROM images i JOIN products p ON p.id = i.product_id AND p.image_sha256 = i.sha256
-		WHERE i.product_id = ? AND p.discontinued = 0`, productID).Scan(&img.SHA256, &img.ContentType, &img.Data)
+		WHERE i.product_id = $1 AND NOT p.discontinued`, productID).Scan(&img.SHA256, &img.ContentType, &img.Data)
 	if errors.Is(err, sql.ErrNoRows) {
 		return domain.Image{}, app.ErrNotFound
 	}
@@ -134,7 +134,7 @@ func (s *Store) Image(ctx context.Context, productID string) (domain.Image, erro
 
 func (s *Store) ByBarcode(ctx context.Context, barcode string) (domain.Product, error) {
 	products, err := s.query(ctx, `SELECT `+productColumns+` FROM barcodes b JOIN products p ON p.id = b.product_id
-		WHERE b.barcode = ? AND p.discontinued = 0`, barcode)
+		WHERE b.barcode = $1 AND NOT p.discontinued`, barcode)
 	if err != nil {
 		return domain.Product{}, err
 	}
@@ -146,12 +146,12 @@ func (s *Store) ByBarcode(ctx context.Context, barcode string) (domain.Product, 
 
 func (s *Store) Search(ctx context.Context, key string, limit int) ([]domain.Product, error) {
 	pattern := "%" + escapeLike(key) + "%"
-	return s.query(ctx, `SELECT `+productColumns+` FROM products p WHERE p.search_name LIKE ? ESCAPE '\' AND p.discontinued = 0
-		ORDER BY p.sort_name LIMIT ?`, pattern, limit)
+	return s.query(ctx, `SELECT `+productColumns+` FROM products p WHERE p.search_name LIKE $1 ESCAPE '\' AND NOT p.discontinued
+		ORDER BY p.sort_name LIMIT $2`, pattern, limit)
 }
 
 func (s *Store) QuickKeys(ctx context.Context, limit int) ([]domain.Product, error) {
-	return s.query(ctx, `SELECT `+productColumns+` FROM products p WHERE p.quick_key = 1 AND p.discontinued = 0 ORDER BY p.sort_name LIMIT ?`, limit)
+	return s.query(ctx, `SELECT `+productColumns+` FROM products p WHERE p.quick_key AND NOT p.discontinued ORDER BY p.sort_name LIMIT $1`, limit)
 }
 
 // Upsert adds or updates the products. The product's headquarters price schedule is
@@ -166,7 +166,7 @@ func (s *Store) Upsert(ctx context.Context, products []domain.Product, origin do
 	for _, p := range products {
 		if origin == domain.OriginSeed {
 			var existing string
-			err := tx.QueryRowContext(ctx, `SELECT origin FROM products WHERE id = ?`, p.ID).Scan(&existing)
+			err := tx.QueryRowContext(ctx, `SELECT origin FROM products WHERE id = $1`, p.ID).Scan(&existing)
 			if err != nil && !errors.Is(err, sql.ErrNoRows) {
 				return err
 			}
@@ -185,7 +185,7 @@ func (s *Store) Upsert(ctx context.Context, products []domain.Product, origin do
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO products (id, name, search_name, sort_name, unit, tax_rate, quick_key, origin, discontinued,
 				category, menu_order, station, option_groups, image_sha256, image_type)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 			ON CONFLICT (id) DO UPDATE SET
 				name = excluded.name, search_name = excluded.search_name, sort_name = excluded.sort_name, unit = excluded.unit,
 				tax_rate = excluded.tax_rate, quick_key = excluded.quick_key, origin = excluded.origin, discontinued = excluded.discontinued,
@@ -203,24 +203,24 @@ func (s *Store) Upsert(ctx context.Context, products []domain.Product, origin do
 				return fmt.Errorf("görsel yazılamadı (%s): %w", p.ID, err)
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM prices WHERE product_id = ? AND source = 'headquarters'`, p.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM prices WHERE product_id = $1 AND source = 'headquarters'`, p.ID); err != nil {
 			return err
 		}
 		for _, pr := range p.Prices {
 			if pr.Source != domain.HeadquartersPrice {
 				return fmt.Errorf("ürün yazılamadı (%s): mağaza fiyatı ürünle birlikte yazılmaz", p.ID)
 			}
-			if _, err := tx.ExecContext(ctx, `INSERT INTO prices (product_id, source, from_ms, amount, clear) VALUES (?, 'headquarters', ?, ?, 0)`,
+			if _, err := tx.ExecContext(ctx, `INSERT INTO prices (product_id, source, from_ms, amount, clear) VALUES ($1, 'headquarters', $2, $3, FALSE)`,
 				p.ID, fromMillis(pr.From), pr.Amount); err != nil {
 				return fmt.Errorf("fiyat yazılamadı (%s): %w", p.ID, err)
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM barcodes WHERE product_id = ?`, p.ID); err != nil {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM barcodes WHERE product_id = $1`, p.ID); err != nil {
 			return err
 		}
 		for _, b := range p.Barcodes {
 			_, err := tx.ExecContext(ctx, `
-				INSERT INTO barcodes (barcode, product_id) VALUES (?, ?)
+				INSERT INTO barcodes (barcode, product_id) VALUES ($1, $2)
 				ON CONFLICT (barcode) DO UPDATE SET product_id = excluded.product_id`, b, p.ID)
 			if err != nil {
 				return fmt.Errorf("barkod yazılamadı (%s): %w", b, err)
@@ -238,17 +238,17 @@ func (s *Store) SetStorePrices(ctx context.Context, productID string, prices []d
 	}
 	defer tx.Rollback()
 	var exists bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM products WHERE id = ?)`, productID).Scan(&exists); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM products WHERE id = $1)`, productID).Scan(&exists); err != nil {
 		return err
 	}
 	if !exists {
 		return app.ErrNotFound
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM prices WHERE product_id = ? AND source = 'store'`, productID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM prices WHERE product_id = $1 AND source = 'store'`, productID); err != nil {
 		return err
 	}
 	for _, pr := range prices {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO prices (product_id, source, from_ms, amount, clear) VALUES (?, 'store', ?, ?, ?)`,
+		if _, err := tx.ExecContext(ctx, `INSERT INTO prices (product_id, source, from_ms, amount, clear) VALUES ($1, 'store', $2, $3, $4)`,
 			productID, fromMillis(pr.From), pr.Amount, pr.Clear); err != nil {
 			return fmt.Errorf("mağaza fiyatı yazılamadı (%s): %w", productID, err)
 		}
@@ -296,7 +296,7 @@ func (s *Store) query(ctx context.Context, query string, args ...any) ([]domain.
 
 // prices returns the product's price schedule sorted by effective moment.
 func (s *Store) prices(ctx context.Context, productID string) ([]domain.Price, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT source, from_ms, amount, clear FROM prices WHERE product_id = ? ORDER BY from_ms, source`, productID)
+	rows, err := s.db.QueryContext(ctx, `SELECT source, from_ms, amount, clear FROM prices WHERE product_id = $1 ORDER BY from_ms, source`, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +325,7 @@ func fromMillis(t time.Time) int64 {
 }
 
 func (s *Store) barcodes(ctx context.Context, productID string) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT barcode FROM barcodes WHERE product_id = ? ORDER BY barcode`, productID)
+	rows, err := s.db.QueryContext(ctx, `SELECT barcode FROM barcodes WHERE product_id = $1 ORDER BY barcode`, productID)
 	if err != nil {
 		return nil, err
 	}

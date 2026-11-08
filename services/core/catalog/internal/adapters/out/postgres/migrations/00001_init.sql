@@ -5,23 +5,23 @@
 CREATE TABLE products (
     id          TEXT PRIMARY KEY,
     name        TEXT    NOT NULL,
-    search_name TEXT    NOT NULL, -- Türkçe küçük harf (domain.SearchKey)
+    search_name TEXT    NOT NULL, -- Turkish lower case (domain.SearchKey)
     -- Sort key by the Turkish alphabet (domain.SortKey): the byte order
     -- is the alphabetical order (Ç after C; Ş after S).
-    sort_name   TEXT    NOT NULL DEFAULT '',
+    sort_name   TEXT    COLLATE "C" NOT NULL DEFAULT '',
     unit        TEXT    NOT NULL CHECK (unit IN ('piece', 'kg')),
-    tax_rate    INTEGER NOT NULL,
-    quick_key   INTEGER NOT NULL DEFAULT 0,
+    tax_rate    BIGINT  NOT NULL,
+    quick_key   BOOLEAN NOT NULL DEFAULT FALSE,
     -- origin: where the product came from. 'seed' from the initial file (catalog.json),
     -- 'headquarters' from headquarters' catalog stream. A product that came from headquarters is not
     -- changed by the initial file: even if the file is old headquarters' latest state is valid.
     origin       TEXT    NOT NULL DEFAULT 'seed' CHECK (origin IN ('seed', 'headquarters')),
     -- discontinued: headquarters withdrew the product from sale; it is not found at the register.
-    discontinued INTEGER NOT NULL DEFAULT 0,
+    discontinued BOOLEAN NOT NULL DEFAULT FALSE,
     -- Restaurant menu: category (not on the menu if empty), menu order, kitchen
     -- station, option groups (JSON) and the digest and type of the current image.
     category       TEXT    NOT NULL DEFAULT '',
-    menu_order     INTEGER NOT NULL DEFAULT 0,
+    menu_order     BIGINT  NOT NULL DEFAULT 0,
     station        TEXT    NOT NULL DEFAULT '',
     option_groups  TEXT    NOT NULL DEFAULT '',
     image_sha256   TEXT    NOT NULL DEFAULT '',
@@ -42,9 +42,9 @@ CREATE INDEX barcodes_product ON barcodes (product_id);
 CREATE TABLE prices (
     product_id TEXT    NOT NULL REFERENCES products (id) ON DELETE CASCADE,
     source     TEXT    NOT NULL CHECK (source IN ('headquarters', 'store')),
-    from_ms    INTEGER NOT NULL,
-    amount     INTEGER NOT NULL,
-    clear      INTEGER NOT NULL DEFAULT 0,
+    from_ms    BIGINT  NOT NULL,
+    amount     BIGINT  NOT NULL,
+    clear      BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (product_id, source, from_ms)
 );
 
@@ -55,7 +55,7 @@ CREATE TABLE images (
     product_id   TEXT PRIMARY KEY,
     sha256       TEXT NOT NULL,
     content_type TEXT NOT NULL,
-    data         BLOB NOT NULL
+    data         BYTEA NOT NULL
 );
 
 -- +goose Down

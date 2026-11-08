@@ -23,7 +23,7 @@ import (
 	"abarow.com/pkg/service"
 	"abarow.com/services/core/catalog/internal/adapters/in/grpcserver"
 	"abarow.com/services/core/catalog/internal/adapters/in/natscatalog"
-	"abarow.com/services/core/catalog/internal/adapters/out/sqlite"
+	"abarow.com/services/core/catalog/internal/adapters/out/postgres"
 	"abarow.com/services/core/catalog/internal/app"
 	"abarow.com/services/core/catalog/internal/domain"
 )
@@ -31,7 +31,11 @@ import (
 func main() {
 	healthAddr := service.Env("ABAROW_CATALOG_HEALTH_ADDR", ":8081")
 	service.Main("catalog", healthAddr, func(ctx context.Context, log *slog.Logger) error {
-		store, err := sqlite.Open(ctx, service.Env("ABAROW_CATALOG_DB", "/data/catalog.db"))
+		dsn, err := service.MustEnv("ABAROW_DATABASE_URL")
+		if err != nil {
+			return err
+		}
+		store, err := postgres.Open(ctx, dsn)
 		if err != nil {
 			return err
 		}

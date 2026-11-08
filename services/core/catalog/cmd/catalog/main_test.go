@@ -10,7 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"abarow.com/services/core/catalog/internal/adapters/out/sqlite"
+	"abarow.com/pkg/pgdb/pgdbtest"
+	"abarow.com/services/core/catalog/internal/adapters/out/postgres"
 	"abarow.com/services/core/catalog/internal/app"
 	"abarow.com/services/core/catalog/internal/domain"
 )
@@ -21,7 +22,7 @@ const pngHeader = "\x89PNG\r\n\x1a\n"
 func TestSeedFile(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	st, err := sqlite.Open(ctx, filepath.Join(dir, "catalog.db"))
+	st, err := postgres.Open(ctx, pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func TestSeedFile(t *testing.T) {
 // the images are found and their contents are recognized.
 func TestRestaurantSeed(t *testing.T) {
 	ctx := context.Background()
-	st, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "catalog.db"))
+	st, err := postgres.Open(ctx, pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

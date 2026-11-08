@@ -1,17 +1,17 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
 	"abarow.com/pkg/menu"
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/core/catalog/internal/app"
 	"abarow.com/services/core/catalog/internal/domain"
 )
@@ -25,7 +25,7 @@ var products = []domain.Product{
 
 func openSeeded(t *testing.T) (*Store, *app.Service) {
 	t.Helper()
-	st, err := Open(context.Background(), filepath.Join(t.TempDir(), "catalog.db"))
+	st, err := Open(context.Background(), pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,7 +104,7 @@ func TestSeedUpdatesExisting(t *testing.T) {
 
 func TestTurkishOrder(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "catalog.db")
+	path := pgdbtest.URL(t)
 	st, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestPriceSchedule(t *testing.T) {
 	if err := st.Upsert(ctx, []domain.Product{p}, domain.OriginSeed); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.db.ExecContext(ctx, `INSERT INTO prices (product_id, source, from_ms, amount, clear) VALUES ('ekmek', 'store', ?, 1800, 0)`,
+	if _, err := st.db.ExecContext(ctx, `INSERT INTO prices (product_id, source, from_ms, amount, clear) VALUES ('ekmek', 'store', $1, 1800, FALSE)`,
 		monday.Add(time.Hour).UnixMilli()); err != nil {
 		t.Fatal(err)
 	}

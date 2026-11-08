@@ -113,9 +113,12 @@ services:
       args: { MODULE: services/core/catalog, PKG: ./cmd/catalog }
     image: ghcr.io/abarow/abarow-catalog:dev
     environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
       ABAROW_CATALOG_SEED: /seed/catalog.json
       GOMEMLIMIT: 48MiB
-    volumes: [catalog-data:/data, ./seed:/seed:ro]
+    volumes: [./seed:/seed:ro]
+    depends_on:
+      register-db: { condition: service_healthy }
     mem_limit: 64m
     healthcheck: *healthcheck
     restart: unless-stopped
@@ -291,7 +294,6 @@ services:
 
 volumes:
   nats-auth:
-  catalog-data:
   staff-data:
   sales-data:
   register-db-data:

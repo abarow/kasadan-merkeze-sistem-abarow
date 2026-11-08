@@ -6,7 +6,6 @@ package grpcserver_test
 import (
 	"bytes"
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,8 +17,9 @@ import (
 
 	"abarow.com/pkg/grpctest"
 	"abarow.com/pkg/menu"
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/core/catalog/internal/adapters/in/grpcserver"
-	"abarow.com/services/core/catalog/internal/adapters/out/sqlite"
+	"abarow.com/services/core/catalog/internal/adapters/out/postgres"
 	"abarow.com/services/core/catalog/internal/app"
 	"abarow.com/services/core/catalog/internal/domain"
 )
@@ -32,7 +32,7 @@ var pngSum = func() string { _, sum, _ := menu.CheckImage(png); return sum }()
 func start(t *testing.T) catalogv1.CatalogServiceClient {
 	t.Helper()
 	ctx := context.Background()
-	st, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "catalog.db"))
+	st, err := postgres.Open(ctx, pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}
