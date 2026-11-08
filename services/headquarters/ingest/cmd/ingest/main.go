@@ -26,6 +26,7 @@ import (
 	"github.com/nats-io/nats.go/jetstream"
 
 	"abarow.com/pkg/delivery"
+	"abarow.com/pkg/leader"
 	"abarow.com/pkg/natsio"
 	"abarow.com/pkg/nodes"
 	"abarow.com/pkg/outbox"
@@ -81,14 +82,6 @@ func main() {
 		}
 
 		svc := app.NewService(natsstream.New(js), db, stores)
-		// The service starts even while NATS is down; the headquarters stream is
-		// set up once NATS comes, and the consumer waits for the stream too.
-		go func() {
-			if err := svc.SetupStream(ctx, log); err != nil && ctx.Err() == nil {
-				log.Error("could not set up the headquarters stream", "err", err)
-			}
-		}()
-		go natsconsumer.New(js, svc, log, natsconsumer.WithSequences(db)).Run(ctx)
 		// Receipts: they are written to the outbox in the same transaction the event is processed into the database; the store
 		// does not delete an old event without seeing the receipt (pkg/delivery). They need not be instant;
 		// while NATS is down the receipts wait in the outbox.
@@ -97,15 +90,29 @@ func main() {
 			return err
 		}
 		receiptCfg := delivery.ReceiptConfig("", "", receiptAge)
-		go outbox.NewRelay(db, natsio.NewPublisher(js, &receiptCfg), time.Second, log).Run(ctx)
-		go svc.PublishLinks(ctx, log)
-		// Retention (docs/decisions/RETENTION.md): the sales ledger is never removed; the
-		// published receipts, the old given receipts and the raw event content are.
-		go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
-			{Name: "receipt outbox", Keep: keep.Outbox, Clean: db.PruneOutbox},
-			{Name: "given receipts", Keep: keep.Receipts, Clean: db.PruneReceipts},
-			{Name: "event content", Keep: keep.EventPayload, Clean: db.PruneEventPayloads},
-		}}.Run(ctx)
+		// The events are read in order by one copy: at headquarters on three machines every
+		// machine runs ingest, the copy holding the lock works (pkg/leader). The connection
+		// state (HTTP) is served by every copy.
+		work := leader.All(
+			// The service starts even while NATS is down; the headquarters stream is
+			// set up once NATS comes, and the consumer waits for the stream too.
+			func(ctx context.Context) {
+				if err := svc.SetupStream(ctx, log); err != nil && ctx.Err() == nil {
+					log.Error("could not set up the headquarters stream", "err", err)
+				}
+			},
+			natsconsumer.New(js, svc, log, natsconsumer.WithSequences(db)).Run,
+			outbox.NewRelay(db, natsio.NewPublisher(js, &receiptCfg), time.Second, log).Run,
+			func(ctx context.Context) { svc.PublishLinks(ctx, log) },
+			// Retention (docs/decisions/RETENTION.md): the sales ledger is never removed; the
+			// published receipts, the old given receipts and the raw event content are.
+			retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+				{Name: "receipt outbox", Keep: keep.Outbox, Clean: db.PruneOutbox},
+				{Name: "given receipts", Keep: keep.Receipts, Clean: db.PruneReceipts},
+				{Name: "event content", Keep: keep.EventPayload, Clean: db.PruneEventPayloads},
+			}}.Run,
+		)
+		go leader.Leader{DB: db, Key: leader.Key("ingest"), Name: "ingest", Log: log}.Run(ctx, work)
 		return service.ServeHTTP(ctx, log, service.HTTPConfig{
 			Handler:    httpapi.New(svc),
 			Addr:       service.Env("ABAROW_INGEST_ADDR", ":8080"),

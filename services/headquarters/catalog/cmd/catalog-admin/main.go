@@ -28,6 +28,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"abarow.com/pkg/leader"
 	"abarow.com/pkg/menu"
 	"abarow.com/pkg/money"
 	"abarow.com/pkg/outbox"
@@ -117,18 +118,29 @@ func main() {
 		// published in order once NATS comes.
 		// On the store server (ABAROW_CATALOG_STREAM=shared) report sets up the stream.
 		pub := natspub.New(js)
-		if service.Env("ABAROW_CATALOG_STREAM", "") == "shared" {
+		shared := service.Env("ABAROW_CATALOG_STREAM", "") == "shared"
+		if shared {
 			pub = natspub.Shared(js)
 		}
-		go outbox.NewRelay(db, pub, time.Second, log).Run(ctx)
 		// Retention (docs/decisions/RETENTION.md): the published outbox messages go.
 		keep, err := retention.ConfigFromEnv(os.Getenv)
 		if err != nil {
 			return err
 		}
-		go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
-			{Name: "outbox", Keep: keep.Outbox, Clean: db.PruneOutbox},
-		}}.Run(ctx)
+		work := leader.All(
+			outbox.NewRelay(db, pub, time.Second, log).Run,
+			retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+				{Name: "outbox", Keep: keep.Outbox, Clean: db.PruneOutbox},
+			}}.Run,
+		)
+		if shared {
+			// The store server is one machine.
+			go work(ctx)
+		} else {
+			// At headquarters on three machines one copy publishes the outbox (pkg/leader);
+			// the screen's requests are served by every copy.
+			go leader.Leader{DB: db, Key: leader.Key("catalog-admin"), Name: "catalog-admin", Log: log}.Run(ctx, work)
+		}
 
 		// Roles with write permission: administrator and catalog at headquarters; the store manager
 		// in the back house (ABAROW_CATALOG_WRITERS=manager).

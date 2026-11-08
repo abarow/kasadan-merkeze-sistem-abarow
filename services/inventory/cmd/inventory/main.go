@@ -15,6 +15,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -25,6 +26,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
+	"abarow.com/pkg/leader"
 	"abarow.com/pkg/natsio"
 	"abarow.com/pkg/nodes"
 	"abarow.com/pkg/outbox"
@@ -47,10 +49,16 @@ type backend struct {
 		Close() error
 		Ping(context.Context) error
 		PruneOutbox(ctx context.Context, before time.Time) (int64, error)
+		Conn(ctx context.Context) (*sql.Conn, error)
 	}
 	svc *app.Service
-	// start starts the consumers specific to the scope.
-	start func(ctx context.Context, js jetstream.JetStream, log *slog.Logger) error
+	// headquarters: at headquarters on three machines one copy reads the consumers and
+	// publishes the outbox (pkg/leader).
+	headquarters bool
+	// start prepares the scope at start (every copy).
+	start func(ctx context.Context) error
+	// consumers are the consumers specific to the scope.
+	consumers func(js jetstream.JetStream, log *slog.Logger) []func(ctx context.Context)
 	// publisher is the outbox publisher of the scope (the stream depends on the scope).
 	publisher func(js jetstream.JetStream) *natsio.Publisher
 }
@@ -102,19 +110,26 @@ func main() {
 		if err != nil {
 			return err
 		}
-		if err := b.start(ctx, js, log); err != nil {
+		if err := b.start(ctx); err != nil {
 			return err
 		}
-		// Movements are recorded even while NATS is down; they wait in the outbox.
-		go outbox.NewRelay(b.store, b.publisher(js), time.Second, log).Run(ctx)
 		// Retention (docs/decisions/RETENTION.md): the published outbox messages go.
 		keep, err := retention.ConfigFromEnv(os.Getenv)
 		if err != nil {
 			return err
 		}
-		go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
-			{Name: "outbox", Keep: keep.Outbox, Clean: b.store.PruneOutbox},
-		}}.Run(ctx)
+		work := leader.All(append(b.consumers(js, log),
+			// Movements are recorded even while NATS is down; they wait in the outbox.
+			outbox.NewRelay(b.store, b.publisher(js), time.Second, log).Run,
+			retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+				{Name: "outbox", Keep: keep.Outbox, Clean: b.store.PruneOutbox},
+			}}.Run)...)
+		if b.headquarters {
+			go leader.Leader{DB: b.store, Key: leader.Key("inventory"), Name: "inventory", Log: log}.Run(ctx, work)
+		} else {
+			// The store server is one machine.
+			go work(ctx)
+		}
 
 		return service.ServeHTTP(ctx, log, service.HTTPConfig{
 			Handler:    httpapi.New(b.svc),
@@ -145,14 +160,11 @@ func headquarters(ctx context.Context, dsn string, newID func() string) (backend
 	}
 	svc := app.NewService(store, eventproto.Encoder{NewID: newID, Now: time.Now},
 		app.Config{Here: app.Warehouse, Headquarters: true, Stores: stores}, newID, time.Now)
-	return backend{store: store, svc: svc,
-		start: func(ctx context.Context, js jetstream.JetStream, log *slog.Logger) error {
-			if err := svc.PublishLocations(ctx); err != nil {
-				return err
-			}
-			go natsconsumer.Movements(js, svc, log).Run(ctx)
-			go natsconsumer.Catalog(js, svc, log).Run(ctx)
-			return nil
+	return backend{store: store, svc: svc, headquarters: true,
+		// Every copy publishes the place list at start: the stream keeps only the last one.
+		start: svc.PublishLocations,
+		consumers: func(js jetstream.JetStream, log *slog.Logger) []func(ctx context.Context) {
+			return []func(ctx context.Context){natsconsumer.Movements(js, svc, log).Run, natsconsumer.Catalog(js, svc, log).Run}
 		},
 		publisher: natspub.New}, nil
 }
@@ -168,17 +180,17 @@ func shop(ctx context.Context, dsn, storeID string, newID func() string) (backen
 	svc := app.NewService(store, eventproto.Encoder{StoreID: storeID, NewID: newID, Now: time.Now},
 		app.Config{Here: storeID, Locations: store}, newID, time.Now)
 	return backend{store: store, svc: svc,
-		start: func(ctx context.Context, js jetstream.JetStream, log *slog.Logger) error {
-			go natsconsumer.Sales(js, svc, log).Run(ctx)
+		start: func(context.Context) error { return nil },
+		consumers: func(js jetstream.JetStream, log *slog.Logger) []func(ctx context.Context) {
+			jobs := []func(ctx context.Context){natsconsumer.Sales(js, svc, log).Run}
 			// In a store connected to headquarters the products come from headquarters' catalog
 			// (in an unconnected one they are learned by name from the sale lines);
 			// transfers and the places that can be sent to come down from headquarters
 			// (ABAROW_CATALOG_SOURCE: headquarters' JetStream domain).
 			if source := os.Getenv("ABAROW_CATALOG_SOURCE"); source != "" {
-				go natsconsumer.Catalog(js, svc, log).Run(ctx)
-				go natsconsumer.Transfers(js, svc, source, storeID, log).Run(ctx)
+				jobs = append(jobs, natsconsumer.Catalog(js, svc, log).Run, natsconsumer.Transfers(js, svc, source, storeID, log).Run)
 			}
-			return nil
+			return jobs
 		},
 		publisher: natspub.NewShop}, nil
 }

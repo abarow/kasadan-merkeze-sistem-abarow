@@ -100,6 +100,10 @@ func (s *Store) Close() error { return s.db.Close() }
 // Ping checks that the database is reachable.
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
+// Conn gives a connection of the pool; at headquarters pkg/leader holds the lock of the
+// copy that works on it.
+func (s *Store) Conn(ctx context.Context) (*sql.Conn, error) { return s.db.Conn(ctx) }
+
 func (s *Store) inTx(ctx context.Context, fn func(*sql.Tx) error) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

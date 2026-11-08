@@ -87,6 +87,10 @@ func (s *Store) Close() error { return s.db.Close() }
 // Ping checks that the database is reachable.
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
 
+// Conn gives a connection of the pool; at headquarters pkg/leader holds the lock of the
+// copy that works on it.
+func (s *Store) Conn(ctx context.Context) (*sql.Conn, error) { return s.db.Conn(ctx) }
+
 const productColumns = `code, name, unit, tax_rate, quick_key, discontinued, updated_by, updated_at, version,
 	category, menu_order, station, option_groups, image_sha256, image_type`
 
