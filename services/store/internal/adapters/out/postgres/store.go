@@ -125,9 +125,16 @@ func (s *Store) SaveShift(ctx context.Context, sh ledger.Shift) error {
 	return ledgerdb.Postgres.SaveShift(ctx, s.db, sh)
 }
 
-// Report is the sales ledger's report.
+// Report is the sales ledger's report. Its queries read one snapshot: a sale arriving
+// meanwhile cannot make the sales total and the payment total differ. A read-only
+// transaction does not hold up the sales being recorded.
 func (s *Store) Report(ctx context.Context, f ledger.Filter) (ledger.Report, error) {
-	return ledgerdb.Postgres.Report(ctx, s.db, f)
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return ledger.Report{}, err
+	}
+	defer tx.Rollback() // read only
+	return ledgerdb.Postgres.Report(ctx, tx, f)
 }
 
 // Activity returns, per register, the number of sales that have come, the last receipt and the missing receipt
