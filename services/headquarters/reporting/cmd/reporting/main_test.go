@@ -8,13 +8,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib" // the "pgx" driver
 )
 
 func TestUserCommand(t *testing.T) {
@@ -33,12 +33,13 @@ func TestUserCommand(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer admin.ExecContext(ctx, "DROP DATABASE "+name+" WITH (FORCE)")
-	cfg, err := pgx.ParseConfig(dsn)
+	// The address of the test database, in the form the install writes (postgres://...).
+	u, err := url.Parse(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Database = name
-	t.Setenv("ABAROW_DATABASE_URL", stdlib.RegisterConnConfig(cfg))
+	u.Path = "/" + name
+	t.Setenv("ABAROW_DATABASE_URL", u.String())
 
 	run := func(stdin string, args ...string) (string, error) {
 		var out bytes.Buffer

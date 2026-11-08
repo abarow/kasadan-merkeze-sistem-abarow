@@ -20,7 +20,8 @@ import (
 	"io/fs"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib" // the "pgx" driver for database/sql
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
 	"abarow.com/pkg/ledger"
@@ -57,31 +58,42 @@ var (
 	_ app.Users     = (*personneldb.Store)(nil)
 )
 
-// Open connects to the database and applies reporting's migrations.
+// ContractSearchPath is the search_path of reporting's queries: the data of ingest and
+// catalog-admin is read through their contract views (ingest_v1, catalog_v1; the views
+// have the tables' names, docs/REVIEW.md B1), reporting's own tables are in public. An
+// older ingest without the views falls through to its tables in public.
+const ContractSearchPath = "ingest_v1, catalog_v1, public"
+
+// Open connects to the database and applies reporting's migrations. dsn is a
+// connection string (postgres://... or key=value).
 func Open(ctx context.Context, dsn string) (*Store, error) {
-	db, err := sql.Open("pgx", dsn)
+	cfg, err := pgx.ParseConfig(dsn)
 	if err != nil {
 		return nil, err
 	}
-	// The connection allowance is limited (max_connections 20 on the store server).
-	pgpool.Limit(db, pgpool.Report)
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
+	// The migrations run with the default search_path: reporting's tables are created
+	// in public, never in an owner's contract schema.
+	mig := stdlib.OpenDB(*cfg)
+	defer mig.Close()
+	if err := mig.PingContext(ctx); err != nil {
 		return nil, err
 	}
 	fsys, err := fs.Sub(migrations, "migrations")
 	if err != nil {
-		db.Close()
 		return nil, err
 	}
-	p, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithTableName(VersionTable))
+	p, err := goose.NewProvider(goose.DialectPostgres, mig, fsys, goose.WithTableName(VersionTable))
 	if err == nil {
 		_, err = p.Up(ctx)
 	}
 	if err != nil {
-		db.Close()
 		return nil, fmt.Errorf("%w: %w", ErrMigration, err)
 	}
+	q := cfg.Copy()
+	q.RuntimeParams["search_path"] = ContractSearchPath
+	db := stdlib.OpenDB(*q)
+	// The connection allowance is limited (max_connections 20 on the store server).
+	pgpool.Limit(db, pgpool.Report)
 	return &Store{db: db}, nil
 }
 

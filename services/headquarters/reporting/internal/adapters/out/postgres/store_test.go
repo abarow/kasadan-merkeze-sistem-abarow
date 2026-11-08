@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"reflect"
 	"slices"
@@ -56,11 +57,14 @@ func testStore(t *testing.T) *Store {
 		t.Fatal(err)
 	}
 	cfg.Database = name
-	connStr := stdlib.RegisterConnConfig(cfg)
-	db, err := sql.Open("pgx", connStr)
+	db := stdlib.OpenDB(*cfg)
+	// Open takes a connection string: the test database's address.
+	u, err := url.Parse(dsn)
 	if err != nil {
 		t.Fatal(err)
 	}
+	u.Path = "/" + name
+	connStr := u.String()
 	p, err := goose.NewProvider(goose.DialectPostgres, db, os.DirFS(ingestMigrations))
 	if err == nil {
 		_, err = p.Up(ctx)
@@ -70,6 +74,11 @@ func testStore(t *testing.T) *Store {
 		if err == nil {
 			_, err = p.Up(ctx)
 		}
+	}
+	if err == nil {
+		// The owners' tables leave public (the contract views follow them): a reporting
+		// query that reads a table of ingest or catalog-admin without its view fails.
+		err = ownTables(ctx, db)
 	}
 	db.Close()
 	if err != nil {
@@ -81,13 +90,39 @@ func testStore(t *testing.T) *Store {
 	}
 	t.Cleanup(func() {
 		store.Close()
-		stdlib.UnregisterConnConfig(connStr)
 		if _, err := admin.ExecContext(ctx, "DROP DATABASE "+name+" WITH (FORCE)"); err != nil {
 			t.Errorf("test veritabanı silinemedi: %v", err)
 		}
 		admin.Close()
 	})
 	return store
+}
+
+// ownTables moves every table in public to the owners schema.
+func ownTables(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `SELECT tablename FROM pg_tables WHERE schemaname = 'public'`)
+	if err != nil {
+		return err
+	}
+	var tables []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			rows.Close()
+			return err
+		}
+		tables = append(tables, n)
+	}
+	rows.Close()
+	if _, err := db.ExecContext(ctx, `CREATE SCHEMA owners`); err != nil {
+		return err
+	}
+	for _, n := range tables {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE public.`+n+` SET SCHEMA owners`); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func exec(t *testing.T, s *Store, query string, args ...any) {
