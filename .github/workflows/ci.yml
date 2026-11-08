@@ -24,7 +24,7 @@ jobs:
   go:
     name: Go (gofmt, build, vet, test)
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     services:
       # The headquarters tests (ingest) run against a real PostgreSQL.
       postgres:
@@ -50,6 +50,8 @@ jobs:
       - run: bash scripts/check.sh
       - name: Base backup, point-in-time restore and weekly maintenance (Docker)
         run: bash scripts/pitr-test.sh
+      - name: Headquarters database on three machines, failover (Docker)
+        run: bash scripts/ha-db-test.sh
 
   contracts:
     name: Contracts and copyright headers

@@ -35,7 +35,7 @@ Amaç: bir makine ya da bir servis giderse merkez dakikalar içinde, mümkünse 
 - **Test:** CI'daki Docker simülasyonu tek makinelidir. Küme ve yük devri için ayrı bir test düzeneği gerekir.
 - **Gerekli mi:** satış kaybolmadığı için kesintinin bedeli gecikmedir. Birkaç saatlik merkez kesintisi kabul ediliyorsa birinci seviye yeterli olabilir.
 
-## Önerilen sıra
+## Önerilen sıra (12.11.2026; yerini aşağıdaki "Uygulama sırası" aldı)
 
 1. NATS 3 düğüm (en az risk, en büyük kazanç: olay kabulü durmaz).
 2. PostgreSQL replikası ve elle yük devri komutu, tatbikat betiği.
@@ -48,16 +48,19 @@ Mehmet ERGULCU: ikinci seviye yapılacak, yük devri **otomatik** (seçenek B).
 
 - **Üç makine.** Otomatik yük devrinde kimin birincil olacağına çoğunluk karar verir (etcd). İki makineyle bir makine gidince çoğunluk kalmaz; bölünmüş beyni önlemek için en az üç gerekir. İki makine aynı anda giderse kalan makine yazmayı durdurur: iki ayrı satış defteri oluşmasındansa gecikme seçilir (satışlar mağazada bekler).
 - **Senkron replikasyon.** `ingest`, olayı PostgreSQL'e yazdıktan sonra mağazaya makbuz gönderir; makbuzu alan mağaza kendi kopyasını siler. Replikasyon asenkron olsaydı birincil, commit'ten hemen sonra ve replikaya göndermeden çökerse olay yeni birincilde olmazdı, mağazadaki kopya da silinmiş olurdu: yasal kayıt kaybı. Bu yüzden commit en az bir replikaya yazılmadan tamamlanmaz (Patroni `synchronous_mode_strict`). Bedeli: iki replika birden giderse yazma durur.
-- **Veritabanı adresi.** Servisler üç makinenin adresini bilir ve yazılabilir olanı bağlantı ayarıyla bulur (`target_session_attrs=read-write`); araya ayrı bir yönlendirici (HAProxy) girmez.
+- **Veritabanı adresi: her makinede HAProxy** (Mehmet ERGULCU, 13.11.2026). Servisler tek adres bilir: kendi makinelerindeki HAProxy. HAProxy her 2 saniyede Patroni'ye sorar (`GET /primary` yalnız birincilde 200 döner) ve bağlantıyı birincile gönderir; birincil değişince eskisine açık bağlantıları keser, servis eski makinede asılı kalmaz. Her makinenin kendi HAProxy'si olduğu için HAProxy tek arıza noktası değildir: makine giderse HAProxy'si de o makinenin servisleriyle birlikte gider.
 - **`ingest` tek okuyucu.** Her makinede bir `ingest` çalışır; birincil veritabanında danışma kilidini (advisory lock) alan okur, diğerleri bekler. Kilidi tutan süreç ya da bağlantısı giderse kilit kendiliğinden düşer.
-- **Ekran adresi.** Her makinede Caddy; tek adres sanal IP ile (keepalived) verilir.
+- **Ekran ve mağaza adresi.** Her makinede Caddy; üç makine aynı yerel ağdaysa ekran ve mağazaların NATS bağlantısı tek adresle, sanal IP ile (keepalived) verilir. Makineler ayrı veri merkezlerindeyse sanal IP çalışmaz; o zaman üç kayıtlı tek DNS adı ya da mağazada üç adres (`natsauth -leaf` virgüllü) kullanılır.
 
 ### Uygulama sırası
 
 1. **NATS kümesi (13.11.2026'da yapıldı):** `natsauth -routes` ve `-domain`; düğümler arası karşılıklı TLS (ortak CA); merkezin stream'leri `ABAROW_NATS_REPLICAS=3` ile üç kopya; mağazanın leaf bağlantısı üç adresi bilir (`-leaf` virgüllü). Test: üç düğüm ve bir mağaza; stream'in lideri kapatılırken olaylar kayıpsız ve tekrarsız geliyor (`tools/natsauth/cluster_test.go`).
-2. PostgreSQL: Patroni ve etcd, senkron replika; servislerin çok adresli bağlantısı; Docker'da yük devri testi.
+2. **PostgreSQL (13.11.2026'da yapıldı):** Patroni 4.1 ve etcd 3.6, senkron ve katı (strict) replika, her makinede HAProxy (`deploy/container/patroni.Containerfile`, `deploy/compose/ha-db.yaml`). İmaj tek makineli merkezle aynı PostgreSQL'dir (postgres:18-alpine). Veritabanı ayarları (`reporting pgtune`) küme kurulurken ortak ayara yazılır; sonraki değişiklik `patronictl edit-config` ile yapılır. Docker testi (`scripts/ha-db-test.sh`, CI'da):
+   - Servis gibi HAProxy üzerinden yazılırken birincil öldürülüyor: senkron replika devralıyor, yazmalar en çok ~32 sn duruyor (Patroni'nin lider süresi 30 sn), onaylanan 2.499 ve 2.509 yazmanın (iki deneme) hiçbiri kaybolmuyor. Eski birincil dönünce replika olarak katılıyor.
+   - İki replika durdurulunca birincil yazmayı tamamlamıyor; replikalar dönünce yazmalar sürüyor.
+   - Bilinen davranış: replika beklenirken iptal edilen bir yazma (bağlantı kopması, zaman aşımı) birincilde yerel olarak kalabilir ve replikalar dönünce onlara da gider. İstemci bunu hata olarak görür; `ingest` olayı yeniden işler ve var olan olayı atlar, makbuz yalnızca başarılı commit'ten sonra gider.
 3. `ingest` danışma kilidi; servislerin her makinede çalışması; Caddy ve keepalived.
-4. Kurulum betiği: ilk makinede anahtarların ve CA'nın dışa aktarılması, diğer makinelerde içe alınması; mağaza ekleme üç makinede.
+4. Kurulum betiği: ilk makinede anahtarların ve CA'nın dışa aktarılması, diğer makinelerde içe alınması; mağaza ekleme üç makinede. Makineler arası etcd, Patroni ve PostgreSQL trafiği TLS ile (Docker testinde şifresiz); Patroni ve HAProxy için Quadlet birimleri; yedek ve bakım betiklerinin birincile göre çalışması.
 5. Tatbikat: üç makineli Docker düzeneğinde her parçanın sırayla kapatılması.
 
 Bu adımlar bitene kadar kurulum betiği tek makinelidir.
