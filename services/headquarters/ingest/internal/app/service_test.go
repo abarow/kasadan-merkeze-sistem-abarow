@@ -57,6 +57,15 @@ func (f *fakeStore) Record(_ context.Context, e domain.Event, body any) (bool, e
 	return true, nil
 }
 
+func (f *fakeStore) RecordBatch(ctx context.Context, items []Item) error {
+	for _, it := range items {
+		if _, err := f.Record(ctx, it.Event, it.Body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (f *fakeStore) Activity(context.Context) (map[string]domain.Activity, error) {
 	return f.activity, nil
 }

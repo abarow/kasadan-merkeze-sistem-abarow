@@ -36,6 +36,16 @@ func (t Tracker) Record(ctx context.Context, store, register, producer string, s
 		return err
 	}
 	defer tx.Rollback()
+	if err := t.RecordTx(ctx, tx, store, register, producer, seq); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// RecordTx is Record inside the caller's transaction (tx is a *sql.Tx): the number is
+// written together with the event's record (ingest writes a batch of events in one
+// transaction).
+func (t Tracker) RecordTx(ctx context.Context, tx sqldialect.DB, store, register, producer string, seq int64) error {
 	q := t.Dialect.Q
 
 	// The most common case: the number comes right after the last range.
@@ -59,7 +69,7 @@ func (t Tracker) Record(ctx context.Context, store, register, producer string, s
 				return err
 			}
 		}
-		return tx.Commit()
+		return nil
 	}
 
 	// Is it already inside a range (a repeat)?
@@ -68,7 +78,7 @@ func (t Tracker) Record(ctx context.Context, store, register, producer string, s
 		store, register, producer, seq, seq).Scan(&one)
 	switch {
 	case err == nil:
-		return tx.Commit()
+		return nil
 	case err != sql.ErrNoRows:
 		return err
 	}
@@ -87,7 +97,7 @@ func (t Tracker) Record(ctx context.Context, store, register, producer string, s
 		store, register, producer, seq, next); err != nil {
 		return err
 	}
-	return tx.Commit()
+	return nil
 }
 
 // Gaps returns the missing number ranges by register, sender and number.

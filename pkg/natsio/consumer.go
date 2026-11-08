@@ -34,7 +34,14 @@ type Consumer struct {
 	// belongs to someone else).
 	Ensure func(ctx context.Context) error
 	Handle func(ctx context.Context, msg jetstream.Msg) error
-	Log    *slog.Logger
+	// HandleBatch, if not nil, takes the messages already waiting, in order and at most
+	// Batch of them, at once (for example in one database transaction). nil acknowledges
+	// them all; on an error every message goes to Handle one by one, as if there were no
+	// batch: the fate of each message stays Handle's. No message waits for a batch to fill.
+	HandleBatch func(ctx context.Context, msgs []jetstream.Msg) error
+	// Batch is the largest batch (DefaultBatch if zero).
+	Batch int
+	Log   *slog.Logger
 
 	// failing is whether we are in an outage in which the messages cannot be processed: the outage
 	// is written to the log once. Since the messages are processed in order no lock
@@ -45,6 +52,9 @@ type Consumer struct {
 // RetryDelay is the retry interval of a message that cannot be processed and of a consumer
 // that cannot be set up.
 const RetryDelay = 2 * time.Second
+
+// DefaultBatch is the largest batch of HandleBatch if Batch is not given.
+const DefaultBatch = 100
 
 type rejected struct{ err error }
 
@@ -119,7 +129,32 @@ func (c *Consumer) consume(ctx context.Context) error {
 		return err
 	}
 	lost := make(chan error, 1)
-	cc, err := cons.Consume(func(msg jetstream.Msg) { c.process(ctx, msg) },
+	handle := func(msg jetstream.Msg) { c.process(ctx, msg) }
+	if c.HandleBatch != nil {
+		// The messages pass through a queue to a single worker that takes what is
+		// waiting as a batch; the order stays. A message left in the queue when reading
+		// stops is not acknowledged and comes again.
+		size := c.Batch
+		if size <= 0 {
+			size = DefaultBatch
+		}
+		queue, stop, done := make(chan jetstream.Msg, size), make(chan struct{}), make(chan struct{})
+		go func() {
+			c.drain(ctx, queue, stop, size)
+			close(done)
+		}()
+		defer func() {
+			close(stop)
+			<-done
+		}()
+		handle = func(msg jetstream.Msg) {
+			select {
+			case queue <- msg:
+			case <-stop:
+			}
+		}
+	}
+	cc, err := cons.Consume(handle,
 		jetstream.ConsumeErrHandler(func(_ jetstream.ConsumeContext, err error) {
 			if errors.Is(err, jetstream.ErrConsumerDeleted) || errors.Is(err, jetstream.ErrConsumerNotFound) ||
 				errors.Is(err, jetstream.ErrNoHeartbeat) {
@@ -145,6 +180,48 @@ func (c *Consumer) consume(ctx context.Context) error {
 	case <-cc.Closed():
 	}
 	return nil
+}
+
+// drain takes the messages from the queue: the first one, and the ones already waiting
+// behind it up to size.
+func (c *Consumer) drain(ctx context.Context, queue <-chan jetstream.Msg, stop <-chan struct{}, size int) {
+	for {
+		var msgs []jetstream.Msg
+		select {
+		case m := <-queue:
+			msgs = append(msgs, m)
+		case <-stop:
+			return
+		}
+	waiting:
+		for len(msgs) < size {
+			select {
+			case m := <-queue:
+				msgs = append(msgs, m)
+			default:
+				break waiting
+			}
+		}
+		c.processBatch(ctx, msgs)
+	}
+}
+
+func (c *Consumer) processBatch(ctx context.Context, msgs []jetstream.Msg) {
+	if len(msgs) > 1 {
+		if err := c.HandleBatch(ctx, msgs); err == nil {
+			if c.failing {
+				c.Log.Info(c.What + " is being reprocessed")
+				c.failing = false
+			}
+			for _, m := range msgs {
+				_ = m.Ack()
+			}
+			return
+		}
+	}
+	for _, m := range msgs {
+		c.process(ctx, m)
+	}
 }
 
 func (c *Consumer) process(ctx context.Context, msg jetstream.Msg) {

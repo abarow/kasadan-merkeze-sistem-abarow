@@ -71,3 +71,62 @@ func TestIsReject(t *testing.T) {
 		t.Error("an error not made with Reject counted as rejected")
 	}
 }
+
+// A batch that is written is acknowledged as a whole; a batch that fails goes to Handle
+// one by one, which decides about each message.
+func TestProcessBatch(t *testing.T) {
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	var handled int
+	c := &Consumer{What: "test", Log: quiet,
+		Handle: func(_ context.Context, msg jetstream.Msg) error {
+			handled++
+			if handled == 2 {
+				return Reject(errors.New("incomplete"))
+			}
+			return nil
+		},
+		HandleBatch: func(context.Context, []jetstream.Msg) error { return nil }}
+	ok := []*fakeMsg{{}, {}, {}}
+	c.processBatch(context.Background(), []jetstream.Msg{ok[0], ok[1], ok[2]})
+	for i, m := range ok {
+		if m.outcome != "ack" {
+			t.Errorf("written batch, message %d: %s", i, m.outcome)
+		}
+	}
+	if handled != 0 {
+		t.Errorf("Handle ran %d times for a written batch", handled)
+	}
+
+	c.HandleBatch = func(context.Context, []jetstream.Msg) error { return errors.New("one is invalid") }
+	failed := []*fakeMsg{{}, {}, {}}
+	c.processBatch(context.Background(), []jetstream.Msg{failed[0], failed[1], failed[2]})
+	if got := []string{failed[0].outcome, failed[1].outcome, failed[2].outcome}; got[0] != "ack" || got[1] != "term" || got[2] != "ack" {
+		t.Errorf("failed batch, one by one: %v; ack term ack expected", got)
+	}
+	// A single message does not go through the batch.
+	c.HandleBatch = func(context.Context, []jetstream.Msg) error { t.Error("a batch of one"); return nil }
+	single := &fakeMsg{}
+	c.processBatch(context.Background(), []jetstream.Msg{single})
+	if single.outcome != "ack" {
+		t.Errorf("single message: %s", single.outcome)
+	}
+}
+
+// drain takes what is already waiting as one batch and does not wait for more.
+func TestDrain(t *testing.T) {
+	var sizes []int
+	c := &Consumer{What: "test", Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Handle:      func(context.Context, jetstream.Msg) error { sizes = append(sizes, 1); return nil },
+		HandleBatch: func(_ context.Context, msgs []jetstream.Msg) error { sizes = append(sizes, len(msgs)); return nil }}
+	queue, stop, done := make(chan jetstream.Msg, 10), make(chan struct{}), make(chan struct{})
+	for range 7 {
+		queue <- &fakeMsg{}
+	}
+	go func() { c.drain(context.Background(), queue, stop, 5); close(done) }()
+	time.Sleep(100 * time.Millisecond)
+	close(stop)
+	<-done
+	if fmt.Sprint(sizes) != "[5 2]" {
+		t.Errorf("batches %v; [5 2] expected", sizes)
+	}
+}

@@ -107,8 +107,36 @@ func New(js jetstream.JetStream, svc *app.Service, log *slog.Logger, opts ...Opt
 				return err
 			}
 			return track(ctx, msg, in.Event)
+		},
+		// The events already waiting are written in one transaction (docs/REVIEW.md P2).
+		// Anything out of the ordinary (an event that cannot be read, a store id that
+		// differs, an invalid event, a database error) sends the batch to Handle one by
+		// one, which decides about each event as before.
+		HandleBatch: func(ctx context.Context, msgs []jetstream.Msg) error {
+			items := make([]app.Item, 0, len(msgs))
+			for _, msg := range msgs {
+				stored := time.Now()
+				if md, err := msg.Metadata(); err == nil {
+					stored = md.Timestamp
+				}
+				in, err := Parse(msg.Subject(), msg.Headers(), msg.Data(), stored)
+				if err != nil || in.ClaimedStore != "" {
+					return errOneByOne
+				}
+				it := app.Item{Event: in.Event, Body: in.Body}
+				if o.seqs != nil && in.Event.RegisterID != "" {
+					if producer, seq, ok := sequence.FromHeaders(msg.Headers()); ok {
+						it.Producer, it.Seq = producer, seq
+					}
+				}
+				items = append(items, it)
+			}
+			return svc.RecordBatch(ctx, items)
 		}}
 }
+
+// errOneByOne sends a batch to the one-by-one handling.
+var errOneByOne = errors.New("the batch is handled one by one")
 
 // Incoming is an event coming from the headquarters stream.
 type Incoming struct {

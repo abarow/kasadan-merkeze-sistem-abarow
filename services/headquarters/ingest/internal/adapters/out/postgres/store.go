@@ -96,7 +96,38 @@ func (s *Store) Record(ctx context.Context, e domain.Event, body any) (bool, err
 		return false, err
 	}
 	defer tx.Rollback() // Commit'ten sonra etkisiz
+	fresh, err := s.record(ctx, tx, e, body)
+	if err != nil {
+		return false, err
+	}
+	return fresh, tx.Commit()
+}
 
+// RecordBatch writes the events and their sequence numbers in a single transaction:
+// one commit for the batch instead of two for every event (docs/REVIEW.md P2). If one
+// of them cannot be written nothing is written; the caller then writes them one by one.
+func (s *Store) RecordBatch(ctx context.Context, items []app.Item) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	seqs := s.Sequences()
+	for _, it := range items {
+		if _, err := s.record(ctx, tx, it.Event, it.Body); err != nil {
+			return fmt.Errorf("event %q: %w", it.Event.ID, err)
+		}
+		if it.Producer != "" {
+			if err := seqs.RecordTx(ctx, tx, it.Event.StoreID, it.Event.RegisterID, it.Producer, it.Seq); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// record is Record inside the transaction.
+func (s *Store) record(ctx context.Context, tx *sql.Tx, e domain.Event, body any) (bool, error) {
 	payload := e.Payload
 	if payload == nil {
 		payload = []byte{}
@@ -116,7 +147,7 @@ func (s *Store) Record(ctx context.Context, e domain.Event, body any) (bool, err
 		if err := s.issue(ctx, tx, e); err != nil {
 			return false, err
 		}
-		return false, tx.Commit()
+		return false, nil
 	}
 
 	newSale := false
@@ -150,7 +181,7 @@ func (s *Store) Record(ctx context.Context, e domain.Event, body any) (bool, err
 	if err := s.issue(ctx, tx, e); err != nil {
 		return false, err
 	}
-	return true, tx.Commit()
+	return true, nil
 }
 
 // issue gives the receipt that the event has been processed into the database and writes the receipt

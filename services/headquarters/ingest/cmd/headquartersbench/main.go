@@ -43,6 +43,7 @@ import (
 	"abarow.com/pkg/ledger"
 	"abarow.com/pkg/ledger/ledgerdb"
 	"abarow.com/services/headquarters/ingest/internal/adapters/out/postgres"
+	"abarow.com/services/headquarters/ingest/internal/app"
 	"abarow.com/services/headquarters/ingest/internal/domain"
 )
 
@@ -56,6 +57,7 @@ func main() {
 	rate := flag.Float64("rate", 0.2, "kasa başına saniyedeki satış (gerçek yoğun saat: 0,03–0,1)")
 	screens := flag.Int("screens", -1, "açık ekran sayısı; -1: mağaza sayısının beşte biri + 1")
 	skipSeed := flag.Bool("skip-seed", false, "veriyi yükleme (zaten yüklü)")
+	batch := flag.Int("batch", 1, "the most waiting sales written in one transaction (ingest's consumer: 100)")
 	flag.Parse()
 	if *dsn == "" {
 		fmt.Fprintln(os.Stderr, "headquartersbench: -dsn is required")
@@ -64,7 +66,7 @@ func main() {
 	if *screens < 0 {
 		*screens = *stores/5 + 1
 	}
-	cfg := config{stores: *stores, perStore: *perStore, days: *days, perDay: *perDay, duration: *duration, rate: *rate, screens: *screens}
+	cfg := config{stores: *stores, perStore: *perStore, days: *days, perDay: *perDay, duration: *duration, rate: *rate, screens: *screens, batch: max(*batch, 1)}
 	res, err := run(context.Background(), *dsn, cfg, *skipSeed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "headquartersbench:", err)
@@ -80,6 +82,8 @@ type config struct {
 	duration                       time.Duration
 	rate                           float64
 	screens                        int
+	// batch is the most waiting sales written in one transaction (RecordBatch).
+	batch int
 }
 
 type result struct {
@@ -221,16 +225,32 @@ func run(ctx context.Context, dsn string, c config, skipSeed bool) (*result, err
 			}(s, r)
 		}
 	}
-	write := func(a arrival) error {
+	item := func(a arrival) app.Item {
 		n := next([2]int{a.store, a.r})
 		now := time.Now()
 		sale := newSale(a.store, a.r, n, now)
 		e := domain.Event{ID: fmt.Sprintf("be-%s-%s-%d-%d", sale.StoreID, sale.RegisterID, n, now.UnixNano()), Subject: "sale.completed.v1",
 			StoreID: sale.StoreID, RegisterID: sale.RegisterID, OccurredAt: now, ContentType: "application/protobuf", Payload: make([]byte, 300)}
-		if _, err := ingest.Record(ctx, e, sale); err != nil {
+		return app.Item{Event: e, Body: sale, Producer: "sales", Seq: n}
+	}
+	write := func(a arrival) error {
+		it := item(a)
+		if _, err := ingest.Record(ctx, it.Event, it.Body); err != nil {
 			return err
 		}
-		return ingest.RecordSequence(ctx, sale.StoreID, sale.RegisterID, "sales", n)
+		return ingest.RecordSequence(ctx, it.Event.StoreID, it.Event.RegisterID, it.Producer, it.Seq)
+	}
+	// writeAll writes the arrivals one by one or, with -batch, in one transaction
+	// (as ingest's consumer does with the events already waiting).
+	writeAll := func(as []arrival) error {
+		if len(as) == 1 {
+			return write(as[0])
+		}
+		items := make([]app.Item, len(as))
+		for i, a := range as {
+			items[i] = item(a)
+		}
+		return ingest.RecordBatch(ctx, items)
 	}
 	wg.Add(1)
 	go func() {
@@ -243,9 +263,21 @@ func run(ctx context.Context, dsn string, c config, skipSeed bool) (*result, err
 				if q := len(queue) + 1; q > maxQueue {
 					maxQueue = q
 				}
-				err := write(a)
-				ing.add(time.Since(a.at), err)
-				processed++
+				as := []arrival{a}
+			waiting:
+				for len(as) < c.batch {
+					select {
+					case b := <-queue:
+						as = append(as, b)
+					default:
+						break waiting
+					}
+				}
+				err := writeAll(as)
+				for _, b := range as {
+					ing.add(time.Since(b.at), err)
+				}
+				processed += len(as)
 			}
 		}
 	}()
@@ -315,10 +347,14 @@ func run(ctx context.Context, dsn string, c config, skipSeed bool) (*result, err
 	capEnd := time.Now().Add(5 * time.Second)
 	n := 0
 	for time.Now().Before(capEnd) {
-		if write(arrival{store: 1 + n%c.stores, r: 1 + n%c.perStore}) != nil {
+		as := make([]arrival, c.batch)
+		for i := range as {
+			as[i] = arrival{store: 1 + (n+i)%c.stores, r: 1 + (n+i)%c.perStore}
+		}
+		if writeAll(as) != nil {
 			break
 		}
-		n++
+		n += len(as)
 	}
 	res.Capacity = math.Round(float64(n)/5*10) / 10
 

@@ -30,6 +30,7 @@ func (s stream) Sources(context.Context) (map[string]domain.Source, error) {
 type store struct{ activity map[string]domain.Activity }
 
 func (store) Record(context.Context, domain.Event, any) (bool, error) { return true, nil }
+func (store) RecordBatch(context.Context, []app.Item) error           { return nil }
 func (s store) Activity(context.Context) (map[string]domain.Activity, error) {
 	return s.activity, nil
 }

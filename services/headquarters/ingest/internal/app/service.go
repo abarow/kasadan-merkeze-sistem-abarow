@@ -33,6 +33,9 @@ type Store interface {
 	// (the same id) it writes nothing and returns false: events come at least once,
 	// the record is neither missing nor duplicated.
 	Record(ctx context.Context, e domain.Event, body any) (bool, error)
+	// RecordBatch writes the events (with their sequence numbers) in a single
+	// transaction; if one cannot be written none is written.
+	RecordBatch(ctx context.Context, items []Item) error
 	// Activity is the summary of the events that have come, by store id.
 	Activity(ctx context.Context) (map[string]domain.Activity, error)
 	// SaveLinks writes the stores' connection state; it deletes the state of the
@@ -88,40 +91,69 @@ func (s *Service) SetupStream(ctx context.Context, log *slog.Logger) error {
 // Record records the event coming from a store; the second value says whether the event is new.
 // It returns domain.ErrInvalidEvent if the event or its body is incomplete.
 func (s *Service) Record(ctx context.Context, e domain.Event, body any) (bool, error) {
+	if err := validate(e, body); err != nil {
+		return false, err
+	}
+	return s.store.Record(ctx, e, body)
+}
+
+// Item is an event of a batch with its body and, if it carries one, the sender's
+// sequence number of it (Producer is empty if not).
+type Item struct {
+	Event    domain.Event
+	Body     any
+	Producer string
+	Seq      int64
+}
+
+// RecordBatch records the events in a single transaction (docs/REVIEW.md P2). An
+// invalid event fails the whole batch with domain.ErrInvalidEvent: the caller then
+// records them one by one (Record), so that only that one is rejected.
+func (s *Service) RecordBatch(ctx context.Context, items []Item) error {
+	for _, it := range items {
+		if err := validate(it.Event, it.Body); err != nil {
+			return err
+		}
+	}
+	return s.store.RecordBatch(ctx, items)
+}
+
+// validate returns domain.ErrInvalidEvent if the event or its body is incomplete.
+func validate(e domain.Event, body any) error {
 	if err := e.Validate(); err != nil {
-		return false, fmt.Errorf("olay %q: %w", e.ID, err)
+		return fmt.Errorf("olay %q: %w", e.ID, err)
 	}
 	switch b := body.(type) {
 	case domain.Sale:
 		if err := domain.InStore(b.StoreID, b.Validate()); err != nil {
-			return false, fmt.Errorf("sale %q: %w", b.ID, err)
+			return fmt.Errorf("sale %q: %w", b.ID, err)
 		}
 	case domain.Void:
 		if err := domain.InStore(b.StoreID, b.Validate()); err != nil {
-			return false, fmt.Errorf("iptal %q: %w", b.SaleID, err)
+			return fmt.Errorf("iptal %q: %w", b.SaleID, err)
 		}
 	case domain.Unfinished:
 		if err := domain.InStore(b.StoreID, b.Validate()); err != nil {
-			return false, fmt.Errorf("sale whose receipt could not be issued %q: %w", b.SaleID, err)
+			return fmt.Errorf("sale whose receipt could not be issued %q: %w", b.SaleID, err)
 		}
 	case domain.Shift:
 		if err := domain.InStore(b.StoreID, b.Validate()); err != nil {
-			return false, fmt.Errorf("vardiya %s/%s/%d: %w", b.StoreID, b.RegisterID, b.ID, err)
+			return fmt.Errorf("vardiya %s/%s/%d: %w", b.StoreID, b.RegisterID, b.ID, err)
 		}
 	case domain.StorePrices:
 		if err := b.Validate(); err != nil {
-			return false, fmt.Errorf("store price %s/%s: %w", b.StoreID, b.ProductID, err)
+			return fmt.Errorf("store price %s/%s: %w", b.StoreID, b.ProductID, err)
 		}
 	case domain.Cashier:
 		if err := b.Validate(); err != nil {
-			return false, fmt.Errorf("kasiyer %s/%s: %w", b.StoreID, b.CashierID, err)
+			return fmt.Errorf("kasiyer %s/%s: %w", b.StoreID, b.CashierID, err)
 		}
 	case nil:
 		// Unknown event kind: it is stored only in its raw form.
 	default:
-		return false, fmt.Errorf("unknown event body %T", body)
+		return fmt.Errorf("unknown event body %T", body)
 	}
-	return s.store.Record(ctx, e, body)
+	return nil
 }
 
 // Stores is the state of the stores (in the order of stores.json).

@@ -40,6 +40,15 @@ func (m *memStore) Record(_ context.Context, e domain.Event, _ any) (bool, error
 	return true, nil
 }
 
+func (m *memStore) RecordBatch(ctx context.Context, items []app.Item) error {
+	for _, it := range items {
+		if _, err := m.Record(ctx, it.Event, it.Body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *memStore) counts() (unique, delivered int) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
