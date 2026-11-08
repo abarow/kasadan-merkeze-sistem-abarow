@@ -41,10 +41,16 @@ Bulgular aşağıda yazıldıkları gibi duruyor; yapılanlar bu tabloda izleniy
 | D4 | Çözüldü (12.11.2026) | CI, temel committe var olan bir migration dosyası değişirse başarısız oluyor (`scripts/check-migrations.sh`). |
 | D5 | Çözüldü (12.11.2026) | `staff` şemasında dört indeks (`00002_fk_indexes.sql`). |
 | D6 | Çözüldü (12.11.2026) | `plan_cache_mode` sunucu ayarı değil, yalnız rapor işleminde `SET LOCAL`. |
+| P2 | Çözüldü (12.11.2026) | `ingest`, bekleyen olayları (en çok 100) tek veritabanı işleminde yazıyor, onayı commit'ten sonra gönderiyor. Bir sorun olursa olayları eskisi gibi tek tek işliyor. 50 mağazada, aynı ağda ölçülen kapasite: tek tek 102–190, toplu 260–280 satış/sn ([PERFORMANCE.md](PERFORMANCE.md)). İncelemedeki 44–60 satış/sn, Windows'tan port üzerinden yapılan ölçümdendi. Birden fazla `ingest` örneği (yatay ölçek) yapılmadı; bkz. M3 planı. |
 | P3 | Çözüldü (12.11.2026) | Merkezde ham olay içeriği 90 gün sonra boşaltılıyor (D1). |
 | P5 | Ölçüldü, değişmedi (12.11.2026) | `hash_mem_multiplier = 1` ile yarım `/dev/shm` yük altında raporların yarısına yakınında hata verdi ([PERFORMANCE.md](PERFORMANCE.md)); 24 × `work_mem` pay korunuyor. |
 | M1 | Kısmen çözüldü (12.11.2026) | Her servis sağlık portunda `/metrics` (HTTP ve gRPC sayı ve süreleri, Go belleği; Prometheus kütüphanesi yerine küçük bir yazıcı, `pkg/metrics`). İstek kimliği HTTP'den gRPC'ye taşınıyor, hatalı istek bu kimlikle günlüğe yazılıyor; olay işleme hatası olay kimliğiyle yazılıyor. OpenTelemetry izi ve bir metrik toplayıcının kurulumu yok. |
 | M4 | Çözüldü (12.11.2026) | Her servis `/version` ucunda derlendiği sürümü ve Go sürümünü söylüyor. |
+| B3 | Bilinçli olarak bırakıldı | Ortak `pkg` modülü tek sürümle kalıyor. Her değişiklikte bütün servisler CI'da aynı anda derlenip test ediliyor (`go.work`, `scripts/check.sh`); servislerin ayrı güncellenebilmesini protobuf sözleşmesi, olay sürümleri ve veritabanı görünümleri (B1) sağlıyor, Go paket sürümü değil. |
+| D7 | Çözüldü (12.11.2026) | `staff` şemasındaki zaman sütunları `TIMESTAMPTZ` (`00004_timestamptz.sql`); eski metin değerleri aynı anı koruyor (testli). |
+| M3 | Plan yazıldı, karar bekliyor (12.11.2026) | [HA-HEADQUARTERS.md](decisions/HA-HEADQUARTERS.md): üç makine, NATS kümesi, PostgreSQL replikası; yük devri elle mi otomatik mi kararı gerekiyor. Birinci seviye (anlık kurtarma, D2) yapıldı. |
+| D8 | Yöntem yazıldı (12.11.2026) | Aynı birimde yeni sürüm klasörüne döküm ve geri yükleme, eski arşivin kenara alınması, eski kümenin geri dönüş için kalması ([deploy/quadlet/README.md](../deploy/quadlet/README.md)). Betik ve test PostgreSQL 19 imajı yayımlanınca yazılacak. |
+| P4 | Ölçüm planı yazıldı (12.11.2026) | [PERFORMANCE.md](PERFORMANCE.md) "Ölçülmeyenler: ölçüm planı"; ölçümler yapılmadı. |
 | B4 | Bırakıldı | Quadlet dosyalarında sağlık durumu yeniden başlatma tetiklemiyor; ortak veritabanı container'ı durunca servisler bağlantı hatası verip veritabanı gelince sürüyor. Quadlet dosyaları CI'da `quadlet -dryrun` ile doğrulanıyor. |
 
 ---

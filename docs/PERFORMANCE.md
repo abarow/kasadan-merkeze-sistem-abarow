@@ -435,3 +435,25 @@ Yalnızca `sale_lines` anahtarının kapsayıcı olduğu, taze veride doğrulama
 
 Yukarıdaki "Paralel sorgu" tablosu ve eski merkez tabloları bu iki düzeltmeden önce ölçülmüştür. Tek kullanıcı süresi uygulama yolundan, her biri 3–4 çalıştırmanın medyanıdır. Yük altındaki süreler 11 ekranın aynı anda rapor istediği durumdur, 3 sn hedefinin altında değildir.
 
+## Merkez kaydı: toplu yazma (12.11.2026)
+
+[REVIEW.md](REVIEW.md) P2. `ingest` bekleyen olayları tek veritabanı işleminde yazıyor; önceden her olay iki commit'le (olay ve sıra numarası) yazılıyordu. 50 mağaza, 900 bin satış, kasa başına saniyede 0,2 satış (toplam 20/sn) ve 11 rapor ekranı; araç veritabanıyla aynı Docker ağında; sıra: tek tek, toplu, tek tek, toplu.
+
+| | Kapasite (satış/sn) | Kayıt p50 / p95 | Aylık rapor p50 |
+|---|---|---|---|
+| Tek tek (`-batch 1`) | 102 / 190 | 10,1 / 19,6 ms; 6,4 / 11,0 ms | 5,9 / 4,4 sn |
+| Toplu (`-batch 100`) | 260 / 280 | 7,9 / 14,2 ms; 6,5 / 12,1 ms | 4,9 / 5,0 sn |
+
+Kapasite, kuyruk dolu tutularak 5 saniyede yazılabilen satış sayısıdır. Tek tek yazmada iki tur arasındaki fark büyüktür; ilk tur soğuk önbellekle başlamış olabilir. Normal yükte kuyruk 2–3 olayda kaldığı için gruplar küçüktür ve gecikme farkı azdır. Kazanç, yoğun anda ve bağlantı dönüşünde biriken olaylar işlenirken ortaya çıkar.
+
+## Ölçülmeyenler: ölçüm planı (12.11.2026)
+
+[REVIEW.md](REVIEW.md) P4. Aşağıdakiler henüz ölçülmedi; her biri için yöntem:
+
+| Konu | Neden önemli | Yöntem | Sonuç ölçütü |
+|---|---|---|---|
+| Aylarca çalışmış kasa ve merkez | Ölçümler hep taze veride yapıldı; şişkinlik, indeks büyümesi ve temizliğin etkisi bilinmiyor | 180 günlük satış tohumlanır (`-days 180`), temizlik ve haftalık bakım çalıştırılır, ardından aynı yük senaryosu | Bellek zirvesi, disk, aylık rapor süresi ve kayıt p95'inin taze veriye göre farkı |
+| Chromium kiosk ve işletim sistemi belleği | Kasa toplamı (≈141 MiB) yalnızca servisleri kapsıyor | Hedef RAM'deki bir kasa cihazında ya da aynı RAM'li sanal makinede, ekran açıkken satış senaryosu; `free` ve `smem` ile süreç başına bellek | Önerilen kasa RAM'inin (`docs/HARDWARE.md`) altında kalıyor mu |
+| ARM64 düşük güçlü işlemci | Kasa için ucuz donanım seçeneği | Aynı imajların arm64 derlemesi; kasa senaryoları ve mağaza raporu ölçümü | Satış kapatma ve rapor sürelerinin x86 ile oranı |
+| Elektrik kesintisi | Kasada PostgreSQL'in toparlanması ve fiş numarası sürekliliği | Sanal makinede satış sırasında güç kesme (ör. `virsh destroy`), 20 tekrar | Toparlanma süresi; fiş ve olay numaralarında boşluk ya da tekrar olmaması; yarım satışın doğru durumu |
+

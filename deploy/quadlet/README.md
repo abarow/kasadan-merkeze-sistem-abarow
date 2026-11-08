@@ -383,6 +383,19 @@ Rapor: `journalctl --user -u abarow-dbmaint` (`abarow` kullanıcısıyla). Ayrı
 
 Sürüm `/version` ucundadır. Her HTTP isteği bir istek kimliği alır (`X-Request-ID`; gelen kimlik korunur) ve gRPC çağrılarıyla taşınır. 5xx dönen istek ve iç hata veren çağrı bu kimlikle günlüğe yazılır; bir hatanın kasada hangi servislerden geçtiği `journalctl --user | grep <kimlik>` ile izlenir. Katmanlar arasında bağlantıyı olay kimliği (`ce-id`) sağlar: işlenemeyen olay bu kimlikle günlüğe yazılır.
 
+## PostgreSQL ana sürüm yükseltmesi
+
+Veritabanı imajının ana sürümü (18) birim dosyalarında sabittir; onaylanan güncellemeler yalnızca 18.x yamalarını getirir. Bir sonraki ana sürüm (19) verinin yeni bir biçimde yazılmasını ister. Bunun için henüz betik yok: PostgreSQL 19 imajı yayımlanınca betik ve CI testi yazılacak. Yöntem:
+
+1. Şimdiki hal yedeklenir (`pg_dump`). Kasada önce olay kuyruğunun boşalması beklenir: üst katmana gitmemiş olay kalmasın.
+2. Servisler durdurulur; 18 container'ından `pg_dumpall` alınır.
+3. **Eski WAL arşivi kenara alınır.** Arşiv birimin kökündedir (`/var/lib/postgresql`). Yeni küme WAL dosyalarını en baştan numaralar; aynı adlı eski dosya yerinde kalırsa arşivleme takılır ve WAL diski doldurur.
+4. Birim değişmez. 18 imajı veriyi `/var/lib/postgresql/18/docker`'da tutar. 19 imajı `/var/lib/postgresql/19/docker`'ı boş bulur ve yeni bir küme kurar; döküm buna yüklenir.
+5. 18 klasörü silinmez. Sorun çıkarsa birim dosyası 18 imajına geri alınır ve eski küme olduğu gibi açılır.
+6. Yükseltmeden sonra yeni bir fiziksel yedek alınır (`abarow-basebackup`). Eski fiziksel yedekler ve kenara alınan arşiv yalnızca 18'e geri dönüş içindir.
+
+Kasada veri küçüktür (saniyeler). Mağaza sunucusunda dakikalar, büyük bir merkezde saatler sürebilir; bu süre önceden verinin bir kopyası üzerinde ölçülmelidir.
+
 ## Başlangıç verisi
 
 `~/abarow/seed/catalog.json` ve `cashiers.json` işletmenin kendi dosyalarıdır. `catalog.json`'da ürünün `unit_price_kurus`'u baştan beri geçerli fiyattır. İleri tarihli fiyat `prices` ile verilir; o anda kasada kendiliğinden geçer, internet kesikken de: `"prices": [{"unit_price_kurus": 1650, "from": "2026-11-02T00:00:00+03:00"}]`. `deploy/compose/seed` altındaki dosyalar yalnızca denemedir; özellikle **deneme PIN'leri gerçek kurulumda kullanılmamalıdır**. Merkeze bağlı mağazada katalog merkezden (merkez "Ürünler"), kasiyerler operasyon ekranından yönetilir; kasadaki dosyalar ilk kurulum ve operasyonsuz kasa içindir.
