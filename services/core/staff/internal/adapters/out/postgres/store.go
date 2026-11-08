@@ -1,9 +1,9 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Package sqlite is the app.Store adapter that keeps the periods and the report records
-// in SQLite.
-package sqlite
+// Package postgres is the app.Store adapter that keeps the periods and the report records
+// in PostgreSQL.
+package postgres
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"fmt"
 	"time"
 
-	"abarow.com/pkg/sqlitedb"
+	"abarow.com/pkg/pgdb"
 	"abarow.com/services/core/staff/internal/app"
 	"abarow.com/services/core/staff/internal/domain"
 )
@@ -27,7 +27,7 @@ var migrations embed.FS
 // boundaries are compared in SQL).
 const timeLayout = "2006-01-02T15:04:05.000000000Z07:00"
 
-// Store, app.Store'u SQLite ile uygular.
+// Store implements app.Store with PostgreSQL.
 type Store struct {
 	db *sql.DB
 }
@@ -35,8 +35,8 @@ type Store struct {
 var _ app.Store = (*Store)(nil)
 
 // Open opens the database and applies the migrations.
-func Open(ctx context.Context, path string) (*Store, error) {
-	db, err := sqlitedb.Open(ctx, path, migrations)
+func Open(ctx context.Context, dsn string) (*Store, error) {
+	db, err := pgdb.Open(ctx, dsn, "staff", migrations)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (s *Store) SaveCompleted(ctx context.Context, sale domain.CompletedSale) er
 		}
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO completed_sales (sale_id, z_no, receipt_no, total, tax_total, change_amount, taxes, payments, occurred_at, cashier_id, shift_id)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (sale_id) DO NOTHING`,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) ON CONFLICT (sale_id) DO NOTHING`,
 			sale.SaleID, p.ZNo, sale.ReceiptNo, sale.Total, sale.TaxTotal, sale.Change, string(taxes), string(payments), formatTime(sale.At),
 			sale.CashierID, shift)
 		return err
@@ -87,7 +87,7 @@ func (s *Store) SaveVoided(ctx context.Context, v domain.VoidedSale) error {
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO voided_sales (sale_id, z_no, total, occurred_at, cashier_id, shift_id) VALUES (?, ?, ?, ?, ?, ?)
+			INSERT INTO voided_sales (sale_id, z_no, total, occurred_at, cashier_id, shift_id) VALUES ($1, $2, $3, $4, $5, $6)
 			ON CONFLICT (sale_id) DO NOTHING`, v.SaleID, p.ZNo, v.Total, formatTime(v.At), v.CashierID, shift)
 		return err
 	})
@@ -111,10 +111,10 @@ func (s *Store) ClosePeriod(ctx context.Context, now time.Time) (domain.Period, 
 			return err
 		}
 		p.ClosedAt = now
-		if _, err := tx.ExecContext(ctx, `UPDATE periods SET closed_at = ? WHERE z_no = ?`, formatTime(now), p.ZNo); err != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE periods SET closed_at = $1 WHERE z_no = $2`, formatTime(now), p.ZNo); err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO periods (opened_at) VALUES (?)`, formatTime(now))
+		_, err = tx.ExecContext(ctx, `INSERT INTO periods (opened_at) VALUES ($1)`, formatTime(now))
 		return err
 	})
 	return p, err
@@ -128,7 +128,7 @@ func (s *Store) Facts(ctx context.Context, zNo int64) ([]domain.CompletedSale, [
 func (s *Store) facts(ctx context.Context, column string, value int64) ([]domain.CompletedSale, []domain.VoidedSale, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT sale_id, cashier_id, receipt_no, total, tax_total, change_amount, taxes, payments, occurred_at
-		FROM completed_sales WHERE `+column+` = ? ORDER BY receipt_no`, value)
+		FROM completed_sales WHERE `+column+` = $1 ORDER BY receipt_no`, value)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -155,7 +155,7 @@ func (s *Store) facts(ctx context.Context, column string, value int64) ([]domain
 		return nil, nil, err
 	}
 
-	rows, err = s.db.QueryContext(ctx, `SELECT sale_id, cashier_id, total, occurred_at FROM voided_sales WHERE `+column+` = ?`, value)
+	rows, err = s.db.QueryContext(ctx, `SELECT sale_id, cashier_id, total, occurred_at FROM voided_sales WHERE `+column+` = $1`, value)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -179,7 +179,7 @@ func (s *Store) Period(ctx context.Context, zNo int64) (domain.Period, error) {
 	p := domain.Period{ZNo: zNo}
 	var opened string
 	var closed sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT opened_at, closed_at FROM periods WHERE z_no = ?`, zNo).Scan(&opened, &closed)
+	err := s.db.QueryRowContext(ctx, `SELECT opened_at, closed_at FROM periods WHERE z_no = $1`, zNo).Scan(&opened, &closed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, domain.ErrUnknownPeriod
 	}
@@ -201,11 +201,7 @@ func openPeriod(ctx context.Context, tx *sql.Tx, now time.Time) (domain.Period, 
 	var opened string
 	err := tx.QueryRowContext(ctx, `SELECT z_no, opened_at FROM periods WHERE closed_at IS NULL`).Scan(&p.ZNo, &opened)
 	if errors.Is(err, sql.ErrNoRows) {
-		res, err := tx.ExecContext(ctx, `INSERT INTO periods (opened_at) VALUES (?)`, formatTime(now))
-		if err != nil {
-			return p, err
-		}
-		p.ZNo, err = res.LastInsertId()
+		err := tx.QueryRowContext(ctx, `INSERT INTO periods (opened_at) VALUES ($1) RETURNING z_no`, formatTime(now)).Scan(&p.ZNo)
 		p.OpenedAt = now.UTC()
 		return p, err
 	}

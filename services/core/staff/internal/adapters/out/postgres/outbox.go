@@ -1,7 +1,7 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 )
 
 // outboxTable is the outbox table of the events (its SQL is in pkg/outbox).
-var outboxTable = outbox.Table{Name: "outbox", Dialect: sqldialect.SQLite, Store: true, Register: true}
+var outboxTable = outbox.Table{Name: "outbox", Dialect: sqldialect.Postgres, Store: true, Register: true}
 
 // Store keeps staff's events (shift) in the outbox too; the relay passes them on to the
 // message path.

@@ -61,6 +61,7 @@ services:
       args: { MODULE: services/core/staff, PKG: ./cmd/staff }
     image: ghcr.io/abarow/abarow-staff:dev
     environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
       ABAROW_NATS_URL: nats://nats:4222
       ABAROW_NATS_NKEY: /run/nats/nats.nk
       ABAROW_SALES_ADDR: sales:9000
@@ -76,12 +77,12 @@ services:
       ABAROW_CLEAN_INTERVAL: ${ABAROW_CLEAN_INTERVAL:-}
       GOMEMLIMIT: 48MiB
     volumes:
-      - staff-data:/data
       - ./seed:/seed:ro
       - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: staff } }
     mem_limit: 64m
     healthcheck: *healthcheck
     depends_on:
+      register-db: { condition: service_healthy }
       nats: { condition: service_healthy }
     restart: unless-stopped
 
@@ -129,6 +130,7 @@ services:
       args: { MODULE: services/core/sales, PKG: ./cmd/sales }
     image: ghcr.io/abarow/abarow-sales:dev
     environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
       ABAROW_STORE_ID: store-1
       ABAROW_REGISTER_ID: ${ABAROW_REGISTER_ID:-register-1}
       ABAROW_PAYMENT_ADDR: payment:9000
@@ -141,12 +143,12 @@ services:
       ABAROW_CLEAN_INTERVAL: ${ABAROW_CLEAN_INTERVAL:-}
       GOMEMLIMIT: 96MiB
     volumes:
-      - sales-data:/data
       - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: sales } }
     mem_limit: 128m
     ports: ["127.0.0.1:${ABAROW_SALES_PORT:-9000}:9000"]
     healthcheck: *healthcheck
     depends_on:
+      register-db: { condition: service_healthy }
       payment: { condition: service_healthy }
       fiscal: { condition: service_healthy }
       nats: { condition: service_healthy }
@@ -294,7 +296,5 @@ services:
 
 volumes:
   nats-auth:
-  staff-data:
-  sales-data:
   register-db-data:
   nats-data:

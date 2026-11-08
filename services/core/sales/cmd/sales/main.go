@@ -25,7 +25,7 @@ import (
 	"abarow.com/services/core/sales/internal/adapters/out/fiscalgrpc"
 	"abarow.com/services/core/sales/internal/adapters/out/natspub"
 	"abarow.com/services/core/sales/internal/adapters/out/paymentgrpc"
-	"abarow.com/services/core/sales/internal/adapters/out/sqlite"
+	"abarow.com/services/core/sales/internal/adapters/out/postgres"
 	"abarow.com/services/core/sales/internal/app"
 )
 
@@ -41,7 +41,11 @@ func main() {
 			return err
 		}
 
-		store, err := sqlite.Open(ctx, service.Env("ABAROW_SALES_DB", "/data/sales.db"))
+		dsn, err := service.MustEnv("ABAROW_DATABASE_URL")
+		if err != nil {
+			return err
+		}
+		store, err := postgres.Open(ctx, dsn)
 		if err != nil {
 			return err
 		}

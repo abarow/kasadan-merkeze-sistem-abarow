@@ -6,6 +6,8 @@ Description=abarow sales
 # Wants (not Requires): while the dependency is updated/restarted this
 # service does not stop, it renews the connection itself. After + Notify=healthy makes the start
 # wait for the dependency to be healthy.
+Wants=abarow-register-db.service
+After=abarow-register-db.service
 Wants=abarow-payment.service
 After=abarow-payment.service
 Wants=abarow-fiscal.service
@@ -26,7 +28,7 @@ Environment=ABAROW_FISCAL_ADDR=abarow-fiscal:9000
 Environment=ABAROW_NATS_URL=nats://abarow-nats:4222
 Environment=ABAROW_NATS_NKEY=/run/secrets/nats.nk
 Environment=GOMEMLIMIT=96MiB
-Volume=abarow-sales-data:/data
+Secret=abarow-register-db-url,type=env,target=ABAROW_DATABASE_URL
 # NATS identity (secret key; only this container reads it).
 Secret=abarow-nats-sales,type=mount,target=/run/secrets/nats.nk,uid=65532,mode=0400
 HealthCmd=["/service", "healthcheck"]

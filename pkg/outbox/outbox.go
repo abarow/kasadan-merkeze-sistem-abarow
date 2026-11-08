@@ -85,8 +85,8 @@ func NewRelay(store Store, pub Publisher, interval time.Duration, log *slog.Logg
 // Sequenced adds the outbox sequence number (seq) and the outbox's name (producer) to
 // every published message; if the receiver sees a missing number in between headquarters
 // understands it (pkg/sequence). It is used only on an outbox whose numbers are given
-// without gaps: SQLite AUTOINCREMENT does not consume a number in a rolled-back transaction;
-// PostgreSQL BIGSERIAL does, and it would raise a false alarm.
+// without gaps: a counter row is rolled back with its transaction (the register schemas);
+// a BIGSERIAL sequence consumes the number and would raise a false alarm.
 func (r *Relay) Sequenced(producer string) *Relay {
 	r.producer = producer
 	return r

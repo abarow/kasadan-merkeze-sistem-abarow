@@ -1,17 +1,17 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
 	"encoding/json"
 	"errors"
-	"path/filepath"
 	"reflect"
 	"testing"
 
 	"abarow.com/pkg/money"
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/core/sales/internal/app"
 	"abarow.com/services/core/sales/internal/app/apptest"
 	"abarow.com/services/core/sales/internal/domain"
@@ -19,7 +19,7 @@ import (
 
 func openStore(t *testing.T) (*Store, string) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "sales.db")
+	path := pgdbtest.URL(t)
 	s, err := Open(context.Background(), path)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
@@ -202,7 +202,7 @@ func TestOutboxPendingAndMarkPublished(t *testing.T) {
 	}
 }
 
-// TestCheckoutWritesSaleAndOutboxTogether runs the service with real SQLite.
+// TestCheckoutWritesSaleAndOutboxTogether runs the service with real PostgreSQL.
 func TestCheckoutWritesSaleAndOutboxTogether(t *testing.T) {
 	st, _ := openStore(t)
 	ctx := context.Background()

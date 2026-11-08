@@ -1,7 +1,7 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
@@ -19,7 +19,7 @@ func (s *Store) Cashier(ctx context.Context, id string) (*domain.Cashier, error)
 	var c domain.Cashier
 	var locked sql.NullString
 	err := s.db.QueryRowContext(ctx, `
-		SELECT id, name, role, pin_hash, failed_attempts, locked_until, disabled, origin FROM cashiers WHERE id = ?`, id).
+		SELECT id, name, role, pin_hash, failed_attempts, locked_until, disabled, origin FROM cashiers WHERE id = $1`, id).
 		Scan(&c.ID, &c.Name, &c.Role, &c.PINHash, &c.FailedAttempts, &locked, &c.Disabled, &c.Origin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrUnknownCashier
@@ -58,7 +58,7 @@ func (s *Store) SaveCashier(ctx context.Context, c domain.Cashier) error {
 		origin = domain.FromSeed
 	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO cashiers (id, name, role, pin_hash, failed_attempts, locked_until, disabled, origin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO cashiers (id, name, role, pin_hash, failed_attempts, locked_until, disabled, origin) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (id) DO UPDATE SET
 			name = excluded.name, role = excluded.role, pin_hash = excluded.pin_hash,
 			failed_attempts = excluded.failed_attempts, locked_until = excluded.locked_until,
@@ -68,7 +68,7 @@ func (s *Store) SaveCashier(ctx context.Context, c domain.Cashier) error {
 }
 
 func (s *Store) SaveAttempts(ctx context.Context, c domain.Cashier) error {
-	_, err := s.db.ExecContext(ctx, `UPDATE cashiers SET failed_attempts = ?, locked_until = ? WHERE id = ?`,
+	_, err := s.db.ExecContext(ctx, `UPDATE cashiers SET failed_attempts = $1, locked_until = $2 WHERE id = $3`,
 		c.FailedAttempts, lockedUntil(c), c.ID)
 	return err
 }
@@ -81,25 +81,25 @@ func lockedUntil(c domain.Cashier) sql.NullString {
 }
 
 func (s *Store) DeleteCashierSessions(ctx context.Context, cashierID string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE cashier_id = ?`, cashierID)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE cashier_id = $1`, cashierID)
 	return err
 }
 
 func (s *Store) SaveSession(ctx context.Context, session domain.Session) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO sessions (token_hash, cashier_id, expires_at) VALUES (?, ?, ?)`,
+	_, err := s.db.ExecContext(ctx, `INSERT INTO sessions (token_hash, cashier_id, expires_at) VALUES ($1, $2, $3)`,
 		session.TokenHash, session.CashierID, formatTime(session.ExpiresAt))
 	return err
 }
 
 func (s *Store) DeleteExpiredSessions(ctx context.Context, now time.Time) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= ?`, formatTime(now))
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE expires_at <= $1`, formatTime(now))
 	return err
 }
 
 func (s *Store) Session(ctx context.Context, tokenHash string) (*domain.Session, error) {
 	session := domain.Session{TokenHash: tokenHash}
 	var expires string
-	err := s.db.QueryRowContext(ctx, `SELECT cashier_id, expires_at FROM sessions WHERE token_hash = ?`, tokenHash).
+	err := s.db.QueryRowContext(ctx, `SELECT cashier_id, expires_at FROM sessions WHERE token_hash = $1`, tokenHash).
 		Scan(&session.CashierID, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, domain.ErrInvalidSession
@@ -115,7 +115,7 @@ func (s *Store) Session(ctx context.Context, tokenHash string) (*domain.Session,
 
 func (s *Store) SaveApproval(ctx context.Context, a domain.Approval) error {
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO approvals (token_hash, manager_id, action, requested_by, expires_at) VALUES (?, ?, ?, ?, ?)`,
+		INSERT INTO approvals (token_hash, manager_id, action, requested_by, expires_at) VALUES ($1, $2, $3, $4, $5)`,
 		a.TokenHash, a.ManagerID, a.Action, a.RequestedBy, formatTime(a.ExpiresAt))
 	return err
 }
@@ -123,8 +123,8 @@ func (s *Store) SaveApproval(ctx context.Context, a domain.Approval) error {
 func (s *Store) UseApproval(ctx context.Context, tokenHash string, action domain.Action, now time.Time) (string, error) {
 	var managerID string
 	err := s.db.QueryRowContext(ctx, `
-		UPDATE approvals SET used_at = ?
-		WHERE token_hash = ? AND action = ? AND used_at IS NULL AND expires_at > ?
+		UPDATE approvals SET used_at = $1
+		WHERE token_hash = $2 AND action = $3 AND used_at IS NULL AND expires_at > $4
 		RETURNING manager_id`, formatTime(now), tokenHash, action, formatTime(now)).Scan(&managerID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", domain.ErrInvalidApproval
@@ -133,6 +133,6 @@ func (s *Store) UseApproval(ctx context.Context, tokenHash string, action domain
 }
 
 func (s *Store) DeleteSession(ctx context.Context, tokenHash string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token_hash = ?`, tokenHash)
+	_, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE token_hash = $1`, tokenHash)
 	return err
 }

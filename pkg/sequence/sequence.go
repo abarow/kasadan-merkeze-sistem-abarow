@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 // Package sequence is lost-event detection with event sequence numbers. The register (and every
-// sender outbox) gives a sequential number (SQLite AUTOINCREMENT, which does not consume a number in a
+// sender outbox) gives a sequential number (a counter row, which does not consume a number in a
 // rolled-back transaction) when it makes an event ready to send; the number and the
 // outbox's name travel in the event's headers (ce-sequence, ce-producer).
 // The receiver (the store server, then headquarters) records the number of every event; if a

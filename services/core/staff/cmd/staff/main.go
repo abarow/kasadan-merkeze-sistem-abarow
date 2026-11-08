@@ -32,15 +32,19 @@ import (
 	"abarow.com/services/core/staff/internal/adapters/out/eventproto"
 	"abarow.com/services/core/staff/internal/adapters/out/natsbacklog"
 	"abarow.com/services/core/staff/internal/adapters/out/natspub"
+	"abarow.com/services/core/staff/internal/adapters/out/postgres"
 	"abarow.com/services/core/staff/internal/adapters/out/salesclient"
-	"abarow.com/services/core/staff/internal/adapters/out/sqlite"
 	"abarow.com/services/core/staff/internal/app"
 )
 
 func main() {
 	healthAddr := service.Env("ABAROW_STAFF_HEALTH_ADDR", ":8081")
 	service.Main("staff", healthAddr, func(ctx context.Context, log *slog.Logger) error {
-		store, err := sqlite.Open(ctx, service.Env("ABAROW_STAFF_DB", "/data/staff.db"))
+		dsn, err := service.MustEnv("ABAROW_DATABASE_URL")
+		if err != nil {
+			return err
+		}
+		store, err := postgres.Open(ctx, dsn)
 		if err != nil {
 			return err
 		}

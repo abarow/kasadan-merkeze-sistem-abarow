@@ -1,7 +1,7 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"abarow.com/pkg/sqldialect"
 )
 
-var deliveryStore = deliverydb.Store{Dialect: sqldialect.SQLite}
+var deliveryStore = deliverydb.Store{Dialect: sqldialect.Postgres}
 
 // SaveReceived writes the receipt given by the store server next to the event (a receipt
 // that comes a second time is ignored).

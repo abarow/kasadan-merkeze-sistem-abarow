@@ -7,7 +7,6 @@ import (
 	"context"
 	"log/slog"
 	"net"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -19,15 +18,16 @@ import (
 
 	salesv1 "abarow.com/gen/com/abarow/sales/v1"
 
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/core/sales/internal/adapters/in/grpcserver"
-	"abarow.com/services/core/sales/internal/adapters/out/sqlite"
+	"abarow.com/services/core/sales/internal/adapters/out/postgres"
 	"abarow.com/services/core/sales/internal/app"
 	"abarow.com/services/core/sales/internal/app/apptest"
 )
 
 func start(t *testing.T, fiscal *apptest.Fiscal) salesv1.SalesServiceClient {
 	t.Helper()
-	st, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "sales.db"))
+	st, err := postgres.Open(context.Background(), pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

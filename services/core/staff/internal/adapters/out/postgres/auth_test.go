@@ -1,17 +1,17 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
 
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/core/staff/internal/adapters/out/bcrypthasher"
 	"abarow.com/services/core/staff/internal/app"
 	"abarow.com/services/core/staff/internal/domain"
@@ -20,7 +20,7 @@ import (
 func newAuth(t *testing.T) (*app.Auth, *Store, *time.Time) {
 	t.Helper()
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "staff.db"))
+	st, err := Open(ctx, pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

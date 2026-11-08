@@ -1,21 +1,21 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"abarow.com/pkg/delivery"
+	"abarow.com/pkg/pgdb/pgdbtest"
 )
 
 // The store server's receipt is written next to the event; the cleaner queries it.
 func TestReceived(t *testing.T) {
 	ctx := context.Background()
-	s, err := Open(ctx, filepath.Join(t.TempDir(), "t.db"))
+	s, err := Open(ctx, pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

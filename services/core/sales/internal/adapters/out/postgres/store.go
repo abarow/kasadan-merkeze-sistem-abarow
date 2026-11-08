@@ -1,8 +1,8 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Package sqlite is the app.Repository adapter that keeps the sales in SQLite.
-package sqlite
+// Package postgres is the app.Repository adapter that keeps the sales in PostgreSQL.
+package postgres
 
 import (
 	"context"
@@ -13,21 +13,19 @@ import (
 	"time"
 
 	"abarow.com/pkg/outbox"
+	"abarow.com/pkg/pgdb"
 	"abarow.com/pkg/sqldialect"
-	"abarow.com/pkg/sqlitedb"
 	"abarow.com/services/core/sales/internal/app"
 	"abarow.com/services/core/sales/internal/domain"
 )
 
 // outboxTable is the outbox table of the events (its SQL is in pkg/outbox).
-var outboxTable = outbox.Table{Name: "outbox", Dialect: sqldialect.SQLite, Store: true, Register: true}
+var outboxTable = outbox.Table{Name: "outbox", Dialect: sqldialect.Postgres, Store: true, Register: true}
 
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-const timeLayout = time.RFC3339Nano
-
-// Store, app.Repository'yi SQLite ile uygular.
+// Store implements app.Repository with PostgreSQL.
 type Store struct {
 	db *sql.DB
 }
@@ -35,8 +33,8 @@ type Store struct {
 var _ app.Repository = (*Store)(nil)
 
 // Open opens the database and applies the migrations.
-func Open(ctx context.Context, path string) (*Store, error) {
-	db, err := sqlitedb.Open(ctx, path, migrations)
+func Open(ctx context.Context, dsn string) (*Store, error) {
+	db, err := pgdb.Open(ctx, dsn, "sales", migrations)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +54,7 @@ func (s *Store) Get(ctx context.Context, id domain.SaleID) (*domain.Sale, error)
 
 // InTx runs fn in a single transaction.
 func (s *Store) ByStatus(ctx context.Context, status domain.Status, limit int) ([]*domain.Sale, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id FROM sales WHERE status = ? ORDER BY created_at DESC, id DESC LIMIT ?`, status, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM sales WHERE status = $1 ORDER BY created_at DESC, id DESC LIMIT $2`, status, limit)
 	if err != nil {
 		return nil, fmt.Errorf("satışlar okunamadı: %w", err)
 	}
@@ -114,7 +112,7 @@ func (t *tx) Save(ctx context.Context, sale *domain.Sale) error {
 	snap := sale.Snapshot()
 	_, err := t.tx.ExecContext(ctx, `
 		INSERT INTO sales (id, register_id, cashier_id, status, receipt_no, fiscal_no, created_at, paid_at, voided_at, refunded)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (id) DO UPDATE SET
 			status = excluded.status,
 			receipt_no = excluded.receipt_no,
@@ -130,24 +128,24 @@ func (t *tx) Save(ctx context.Context, sale *domain.Sale) error {
 
 	// The lines and payments are rewritten at every save; since there are few of them in
 	// a sale this is fast enough.
-	if _, err := t.tx.ExecContext(ctx, `DELETE FROM sale_lines WHERE sale_id = ?`, snap.ID); err != nil {
+	if _, err := t.tx.ExecContext(ctx, `DELETE FROM sale_lines WHERE sale_id = $1`, snap.ID); err != nil {
 		return err
 	}
 	for i, l := range snap.Lines {
 		_, err := t.tx.ExecContext(ctx, `
 			INSERT INTO sale_lines (sale_id, line_no, product_id, barcode, name, qty, unit_price, tax_rate)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 			snap.ID, i+1, l.ProductID, l.Barcode, l.Name, l.Qty, l.UnitPrice, l.TaxRate)
 		if err != nil {
 			return fmt.Errorf("satış satırı yazılamadı: %w", err)
 		}
 	}
-	if _, err := t.tx.ExecContext(ctx, `DELETE FROM sale_payments WHERE sale_id = ?`, snap.ID); err != nil {
+	if _, err := t.tx.ExecContext(ctx, `DELETE FROM sale_payments WHERE sale_id = $1`, snap.ID); err != nil {
 		return err
 	}
 	for i, p := range snap.Payments {
 		_, err := t.tx.ExecContext(ctx, `
-			INSERT INTO sale_payments (sale_id, payment_no, method, amount, ref, collect) VALUES (?, ?, ?, ?, ?, ?)`,
+			INSERT INTO sale_payments (sale_id, payment_no, method, amount, ref, collect) VALUES ($1, $2, $3, $4, $5, $6)`,
 			snap.ID, i+1, p.Method, p.Amount, p.Ref, p.Collect)
 		if err != nil {
 			return fmt.Errorf("ödeme yazılamadı: %w", err)
@@ -194,15 +192,15 @@ type querier interface {
 
 func getSale(ctx context.Context, q querier, id domain.SaleID) (*domain.Sale, error) {
 	var (
-		snap                       domain.Snapshot
-		receiptNo                  sql.NullInt64
-		fiscalNo, paidAt, voidedAt sql.NullString
-		createdAt                  string
+		snap             domain.Snapshot
+		receiptNo        sql.NullInt64
+		fiscalNo         sql.NullString
+		paidAt, voidedAt sql.NullTime
 	)
 	err := q.QueryRowContext(ctx, `
 		SELECT id, register_id, cashier_id, status, receipt_no, fiscal_no, created_at, paid_at, voided_at, refunded
-		FROM sales WHERE id = ?`, id).
-		Scan(&snap.ID, &snap.RegisterID, &snap.CashierID, &snap.Status, &receiptNo, &fiscalNo, &createdAt, &paidAt, &voidedAt, &snap.Refunded)
+		FROM sales WHERE id = $1`, id).
+		Scan(&snap.ID, &snap.RegisterID, &snap.CashierID, &snap.Status, &receiptNo, &fiscalNo, &snap.CreatedAt, &paidAt, &voidedAt, &snap.Refunded)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, app.ErrNotFound
 	}
@@ -211,14 +209,12 @@ func getSale(ctx context.Context, q querier, id domain.SaleID) (*domain.Sale, er
 	}
 	snap.ReceiptNo = receiptNo.Int64
 	snap.FiscalNo = fiscalNo.String
-	if snap.CreatedAt, err = parseTime(createdAt); err != nil {
-		return nil, err
+	snap.CreatedAt = snap.CreatedAt.UTC()
+	if paidAt.Valid {
+		snap.PaidAt = paidAt.Time.UTC()
 	}
-	if snap.PaidAt, err = parseNullTime(paidAt); err != nil {
-		return nil, err
-	}
-	if snap.VoidedAt, err = parseNullTime(voidedAt); err != nil {
-		return nil, err
+	if voidedAt.Valid {
+		snap.VoidedAt = voidedAt.Time.UTC()
 	}
 
 	if snap.Lines, err = queryLines(ctx, q, id); err != nil {
@@ -233,7 +229,7 @@ func getSale(ctx context.Context, q querier, id domain.SaleID) (*domain.Sale, er
 func queryLines(ctx context.Context, q querier, id domain.SaleID) ([]domain.Line, error) {
 	rows, err := q.QueryContext(ctx, `
 		SELECT product_id, barcode, name, qty, unit_price, tax_rate
-		FROM sale_lines WHERE sale_id = ? ORDER BY line_no`, id)
+		FROM sale_lines WHERE sale_id = $1 ORDER BY line_no`, id)
 	if err != nil {
 		return nil, fmt.Errorf("satış satırları okunamadı: %w", err)
 	}
@@ -251,7 +247,7 @@ func queryLines(ctx context.Context, q querier, id domain.SaleID) ([]domain.Line
 
 func queryPayments(ctx context.Context, q querier, id domain.SaleID) ([]domain.Payment, error) {
 	rows, err := q.QueryContext(ctx, `
-		SELECT method, amount, ref, collect FROM sale_payments WHERE sale_id = ? ORDER BY payment_no`, id)
+		SELECT method, amount, ref, collect FROM sale_payments WHERE sale_id = $1 ORDER BY payment_no`, id)
 	if err != nil {
 		return nil, fmt.Errorf("ödemeler okunamadı: %w", err)
 	}
@@ -267,28 +263,13 @@ func queryPayments(ctx context.Context, q querier, id domain.SaleID) ([]domain.P
 	return payments, rows.Err()
 }
 
-func formatTime(t time.Time) string { return t.UTC().Format(timeLayout) }
+func formatTime(t time.Time) time.Time { return t.UTC().Truncate(time.Microsecond) }
 
-func parseTime(s string) (time.Time, error) {
-	t, err := time.Parse(timeLayout, s)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("zaman çözülemedi %q: %w", s, err)
-	}
-	return t, nil
-}
-
-func nullTime(t time.Time) sql.NullString {
+func nullTime(t time.Time) sql.NullTime {
 	if t.IsZero() {
-		return sql.NullString{}
+		return sql.NullTime{}
 	}
-	return sql.NullString{String: formatTime(t), Valid: true}
-}
-
-func parseNullTime(s sql.NullString) (time.Time, error) {
-	if !s.Valid {
-		return time.Time{}, nil
-	}
-	return parseTime(s.String)
+	return sql.NullTime{Time: formatTime(t), Valid: true}
 }
 
 func nullInt(n int64) sql.NullInt64 { return sql.NullInt64{Int64: n, Valid: n != 0} }

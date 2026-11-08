@@ -6,15 +6,15 @@ CREATE TABLE sales (
     id          TEXT PRIMARY KEY,
     register_id TEXT NOT NULL,
     status      TEXT NOT NULL CHECK (status IN ('open', 'charged', 'paid', 'voided')),
-    receipt_no  INTEGER UNIQUE,
+    receipt_no  BIGINT UNIQUE,
     fiscal_no   TEXT,
-    created_at  TEXT NOT NULL,
-    paid_at     TEXT,
-    voided_at   TEXT,
+    created_at  TIMESTAMPTZ NOT NULL,
+    paid_at     TIMESTAMPTZ,
+    voided_at   TIMESTAMPTZ,
     cashier_id  TEXT NOT NULL DEFAULT '',
     -- Sales cancelled with their payment refunded because the payment was taken
     -- but the fiscal record could not be made (status 'voided').
-    refunded    INTEGER NOT NULL DEFAULT 0
+    refunded    BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 CREATE TABLE sale_lines (
@@ -23,9 +23,9 @@ CREATE TABLE sale_lines (
     product_id TEXT    NOT NULL,
     barcode    TEXT    NOT NULL,
     name       TEXT    NOT NULL,
-    qty        INTEGER NOT NULL,
-    unit_price INTEGER NOT NULL,
-    tax_rate   INTEGER NOT NULL,
+    qty        BIGINT  NOT NULL,
+    unit_price BIGINT  NOT NULL,
+    tax_rate   BIGINT  NOT NULL,
     PRIMARY KEY (sale_id, line_no)
 );
 
@@ -33,30 +33,40 @@ CREATE TABLE sale_payments (
     sale_id    TEXT    NOT NULL REFERENCES sales (id) ON DELETE CASCADE,
     payment_no INTEGER NOT NULL,
     method     TEXT    NOT NULL,
-    amount     INTEGER NOT NULL,
+    amount     BIGINT  NOT NULL,
     ref        TEXT    NOT NULL DEFAULT '',
-    collect    INTEGER NOT NULL DEFAULT 0,
+    collect    BOOLEAN NOT NULL DEFAULT FALSE,
     PRIMARY KEY (sale_id, payment_no)
 );
 
--- The receipt number that increases per register; a single-row counter.
+-- The receipt number that increases per register; a single-row counter. Being a row, it
+-- is rolled back with the sale's transaction: a receipt number is never skipped.
 CREATE TABLE receipt_counter (
     id      INTEGER PRIMARY KEY CHECK (id = 1),
-    last_no INTEGER NOT NULL
+    last_no BIGINT  NOT NULL
 );
 INSERT INTO receipt_counter (id, last_no) VALUES (1, 0);
 
 -- Events written in the same transaction as the sale that the relay will pass on to NATS.
+-- seq comes from a counter row and not a sequence: a sequence consumes a number in a
+-- rolled-back transaction, and the receiver reports a gap in the numbers as a lost event (pkg/sequence).
+CREATE TABLE outbox_counter (
+    id       INTEGER PRIMARY KEY CHECK (id = 1),
+    last_seq BIGINT  NOT NULL
+);
+INSERT INTO outbox_counter (id, last_seq) VALUES (1, 0);
+CREATE FUNCTION outbox_next_seq() RETURNS BIGINT LANGUAGE sql AS 'UPDATE outbox_counter SET last_seq = last_seq + 1 WHERE id = 1 RETURNING last_seq';
+
 CREATE TABLE outbox (
-    seq          INTEGER PRIMARY KEY AUTOINCREMENT,
+    seq          BIGINT PRIMARY KEY DEFAULT outbox_next_seq(),
     id           TEXT NOT NULL UNIQUE,
     type         TEXT NOT NULL,
     subject      TEXT NOT NULL,
     store_id     TEXT NOT NULL,
     register_id  TEXT NOT NULL,
-    payload      BLOB NOT NULL,
-    occurred_at  TEXT NOT NULL,
-    published_at TEXT,
+    payload      BYTEA NOT NULL,
+    occurred_at  TIMESTAMPTZ NOT NULL,
+    published_at TIMESTAMPTZ,
     -- The event's content type: new events are protobuf, earlier records JSON.
     content_type TEXT NOT NULL DEFAULT 'application/json'
 );
@@ -68,13 +78,15 @@ CREATE INDEX outbox_unpublished ON outbox (seq) WHERE published_at IS NULL;
 CREATE TABLE delivery_received (
     event_id    TEXT PRIMARY KEY,
     receipt_id  TEXT NOT NULL UNIQUE,
-    issued_at   TEXT NOT NULL,
-    received_at TEXT NOT NULL
+    issued_at   TIMESTAMPTZ NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL
 );
 
 -- +goose Down
 DROP TABLE delivery_received;
 DROP TABLE outbox;
+DROP FUNCTION outbox_next_seq();
+DROP TABLE outbox_counter;
 DROP TABLE receipt_counter;
 DROP TABLE sale_payments;
 DROP TABLE sale_lines;

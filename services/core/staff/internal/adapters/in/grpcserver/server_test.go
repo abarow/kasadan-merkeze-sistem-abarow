@@ -5,7 +5,6 @@ package grpcserver_test
 
 import (
 	"context"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -18,9 +17,10 @@ import (
 	staffv1 "abarow.com/gen/com/abarow/staff/v1"
 
 	"abarow.com/pkg/grpctest"
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/core/staff/internal/adapters/in/grpcserver"
 	"abarow.com/services/core/staff/internal/adapters/out/bcrypthasher"
-	"abarow.com/services/core/staff/internal/adapters/out/sqlite"
+	"abarow.com/services/core/staff/internal/adapters/out/postgres"
 	"abarow.com/services/core/staff/internal/app"
 	"abarow.com/services/core/staff/internal/domain"
 )
@@ -49,7 +49,7 @@ type env struct {
 func start(t *testing.T) env {
 	t.Helper()
 	ctx := context.Background()
-	st, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "staff.db"))
+	st, err := postgres.Open(ctx, pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

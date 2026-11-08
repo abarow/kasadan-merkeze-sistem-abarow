@@ -6,6 +6,8 @@ Description=abarow cashier, shift and end of day
 # Wants (not Requires): while the dependency is updated/restarted this
 # service does not stop, it renews the connection itself. After + Notify=healthy makes the start
 # wait for the dependency to be healthy.
+Wants=abarow-register-db.service
+After=abarow-register-db.service
 Wants=abarow-nats.service
 After=abarow-nats.service
 Wants=abarow-sales.service
@@ -28,7 +30,7 @@ Environment=ABAROW_STAFF_SEED=/seed/cashiers.json
 Environment=ABAROW_STORE_ID=store-1
 Environment=ABAROW_REGISTER_ID=register-1
 Environment=GOMEMLIMIT=48MiB
-Volume=abarow-staff-data:/data
+Secret=abarow-register-db-url,type=env,target=ABAROW_DATABASE_URL
 # Starting data (not test data, the business's own file).
 Volume=%h/abarow/seed:/seed:ro,Z
 # NATS identity (secret key; only this container reads it).

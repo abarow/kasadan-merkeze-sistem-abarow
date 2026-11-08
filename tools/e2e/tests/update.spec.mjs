@@ -541,6 +541,7 @@ test.describe.serial('Güncelleme merkezi: kayıt ve onay', () => {
     await expect(nav.getByRole('button', { name: 'Güncelleme', exact: true })).toHaveCount(0)
     await expect(nav.getByRole('button', { name: 'Kullanıcılar', exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: 'Çıkış' }).click()
+    await page.getByLabel('Kullanıcı adı').waitFor()
     // The registration the report person approved must be unchanged: the store server is still approved.
     await headquartersUpdate(page, 'Onaylı')
     await expect(page.getByRole('listitem', { name: ops.device })).toBeVisible()

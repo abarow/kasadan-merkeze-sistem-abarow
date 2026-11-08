@@ -10,7 +10,6 @@ import (
 	"io"
 	"log/slog"
 	"net/url"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -22,8 +21,9 @@ import (
 
 	staffv1 "abarow.com/gen/com/abarow/staff/v1"
 
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/core/staff/internal/adapters/out/bcrypthasher"
-	"abarow.com/services/core/staff/internal/adapters/out/sqlite"
+	"abarow.com/services/core/staff/internal/adapters/out/postgres"
 	"abarow.com/services/core/staff/internal/app"
 	"abarow.com/services/core/staff/internal/domain"
 )
@@ -126,7 +126,7 @@ func TestRun(t *testing.T) {
 	publish("config.cashier.bozuk", []byte("bozuk"))
 	publish("config.price.1", []byte("mağaza fiyatı"))
 
-	st, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "staff.db"))
+	st, err := postgres.Open(ctx, pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

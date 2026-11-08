@@ -1,7 +1,7 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
@@ -25,12 +25,9 @@ func (s *Store) CreateShift(ctx context.Context, sh domain.Shift, announce func(
 		if !errors.Is(err, domain.ErrNoShift) {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO shifts (cashier_id, opened_at, opening_cash) VALUES (?, ?, ?)`,
-			sh.CashierID, formatTime(sh.OpenedAt), sh.OpeningCash)
-		if err != nil {
-			return err
-		}
-		if sh.ID, err = res.LastInsertId(); err != nil || announce == nil {
+		err = tx.QueryRowContext(ctx, `INSERT INTO shifts (cashier_id, opened_at, opening_cash) VALUES ($1, $2, $3) RETURNING id`,
+			sh.CashierID, formatTime(sh.OpenedAt), sh.OpeningCash).Scan(&sh.ID)
+		if err != nil || announce == nil {
 			return err
 		}
 		m, err := announce(sh)
@@ -55,7 +52,7 @@ func (s *Store) CurrentShift(ctx context.Context) (domain.Shift, error) {
 func (s *Store) CloseShift(ctx context.Context, sh domain.Shift, msg *outbox.Message) error {
 	return s.inTx(ctx, func(tx *sql.Tx) error {
 		res, err := tx.ExecContext(ctx, `
-			UPDATE shifts SET closed_at = ?, counted_cash = ?, closed_by = ? WHERE id = ? AND closed_at IS NULL`,
+			UPDATE shifts SET closed_at = $1, counted_cash = $2, closed_by = $3 WHERE id = $4 AND closed_at IS NULL`,
 			formatTime(sh.ClosedAt), sh.CountedCash, sh.ClosedBy, sh.ID)
 		if err != nil {
 			return err
@@ -77,27 +74,22 @@ func (s *Store) ShiftFacts(ctx context.Context, shiftID int64) ([]domain.Complet
 func (s *Store) AddCashMovement(ctx context.Context, m domain.CashMovement) (domain.CashMovement, error) {
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
 		var open bool
-		err := tx.QueryRowContext(ctx, `SELECT closed_at IS NULL FROM shifts WHERE id = ?`, m.ShiftID).Scan(&open)
+		err := tx.QueryRowContext(ctx, `SELECT closed_at IS NULL FROM shifts WHERE id = $1`, m.ShiftID).Scan(&open)
 		if errors.Is(err, sql.ErrNoRows) || (err == nil && !open) {
 			return domain.ErrNoShift
 		}
 		if err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO cash_movements (shift_id, kind, amount, note, cashier_id, at) VALUES (?, ?, ?, ?, ?, ?)`,
-			m.ShiftID, m.Kind, m.Amount, m.Note, m.By, formatTime(m.At))
-		if err != nil {
-			return err
-		}
-		m.ID, err = res.LastInsertId()
-		return err
+		return tx.QueryRowContext(ctx, `INSERT INTO cash_movements (shift_id, kind, amount, note, cashier_id, at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+			m.ShiftID, m.Kind, m.Amount, m.Note, m.By, formatTime(m.At)).Scan(&m.ID)
 	})
 	return m, err
 }
 
 func (s *Store) CashMovements(ctx context.Context, shiftID int64) ([]domain.CashMovement, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, shift_id, kind, amount, note, cashier_id, at FROM cash_movements WHERE shift_id = ? ORDER BY id`, shiftID)
+		SELECT id, shift_id, kind, amount, note, cashier_id, at FROM cash_movements WHERE shift_id = $1 ORDER BY id`, shiftID)
 	if err != nil {
 		return nil, err
 	}
@@ -120,27 +112,22 @@ func (s *Store) CashMovements(ctx context.Context, shiftID int64) ([]domain.Cash
 func (s *Store) AddDrawerOpen(ctx context.Context, d domain.DrawerOpen) (domain.DrawerOpen, error) {
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
 		var open bool
-		err := tx.QueryRowContext(ctx, `SELECT closed_at IS NULL FROM shifts WHERE id = ?`, d.ShiftID).Scan(&open)
+		err := tx.QueryRowContext(ctx, `SELECT closed_at IS NULL FROM shifts WHERE id = $1`, d.ShiftID).Scan(&open)
 		if errors.Is(err, sql.ErrNoRows) || (err == nil && !open) {
 			return domain.ErrNoShift
 		}
 		if err != nil {
 			return err
 		}
-		res, err := tx.ExecContext(ctx, `INSERT INTO drawer_opens (shift_id, opened_by, requested_by, reason, at) VALUES (?, ?, ?, ?, ?)`,
-			d.ShiftID, d.By, d.RequestedBy, d.Reason, formatTime(d.At))
-		if err != nil {
-			return err
-		}
-		d.ID, err = res.LastInsertId()
-		return err
+		return tx.QueryRowContext(ctx, `INSERT INTO drawer_opens (shift_id, opened_by, requested_by, reason, at) VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+			d.ShiftID, d.By, d.RequestedBy, d.Reason, formatTime(d.At)).Scan(&d.ID)
 	})
 	return d, err
 }
 
 func (s *Store) DrawerOpens(ctx context.Context, shiftID int64) ([]domain.DrawerOpen, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT id, shift_id, opened_by, requested_by, reason, at FROM drawer_opens WHERE shift_id = ? ORDER BY id`, shiftID)
+		SELECT id, shift_id, opened_by, requested_by, reason, at FROM drawer_opens WHERE shift_id = $1 ORDER BY id`, shiftID)
 	if err != nil {
 		return nil, err
 	}
@@ -185,7 +172,7 @@ func scanShift(row scanner) (domain.Shift, error) {
 }
 
 func (s *Store) Shift(ctx context.Context, id int64) (domain.Shift, error) {
-	sh, err := scanShift(s.db.QueryRowContext(ctx, `SELECT `+shiftColumns+` WHERE s.id = ?`, id))
+	sh, err := scanShift(s.db.QueryRowContext(ctx, `SELECT `+shiftColumns+` WHERE s.id = $1`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return sh, domain.ErrUnknownShift
 	}
@@ -194,7 +181,7 @@ func (s *Store) Shift(ctx context.Context, id int64) (domain.Shift, error) {
 
 func (s *Store) ClosedShifts(ctx context.Context, cashierID string, limit int) ([]domain.Shift, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+shiftColumns+`
-		WHERE s.closed_at IS NOT NULL AND (? = '' OR s.cashier_id = ?) ORDER BY s.id DESC LIMIT ?`, cashierID, cashierID, limit)
+		WHERE s.closed_at IS NOT NULL AND ($1 = '' OR s.cashier_id = $2) ORDER BY s.id DESC LIMIT $3`, cashierID, cashierID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +216,7 @@ func shiftAt(ctx context.Context, tx *sql.Tx, cashierID string, at time.Time) (s
 	t := formatTime(at)
 	err := tx.QueryRowContext(ctx, `
 		SELECT id FROM shifts
-		WHERE cashier_id = ? AND opened_at <= ? AND (closed_at IS NULL OR closed_at > ?)
+		WHERE cashier_id = $1 AND opened_at <= $2 AND (closed_at IS NULL OR closed_at > $3)
 		ORDER BY id DESC LIMIT 1`, cashierID, t, t).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return id, nil
