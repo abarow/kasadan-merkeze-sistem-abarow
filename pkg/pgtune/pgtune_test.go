@@ -4,6 +4,7 @@
 package pgtune
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -33,32 +34,57 @@ func TestDerived(t *testing.T) {
 // The memory limit is 2 × shared_buffers + 128 MB (a multiple of 64): at least
 // shared_buffers of room is left for the page cache. effective_cache_size does not exceed the limit.
 func TestMemoryLimitFormula(t *testing.T) {
-	for n, want := range map[int]int{1: 256, 4: 256, 5: 320, 10: 384, 20: 512, 50: 640, 1000: 640} {
+	for n, want := range map[int]int{1: 256, 4: 256, 5: 320, 9: 384, 10: 512, 20: 768, 49: 896, 50: 896, 1000: 896} {
 		s := ForStore(n)
 		if s.MemoryLimitMB != want {
 			t.Errorf("%d registers: memory limit %d, want %d", n, s.MemoryLimitMB, want)
 		}
-		if s.EffectiveCacheSizeMB != s.MemoryLimitMB-144 || s.EffectiveCacheSizeMB >= s.MemoryLimitMB {
+		inLimit := 0
+		if s.ParallelWorkers > 0 {
+			inLimit = s.ShmMB // /dev/shm is not page cache
+		}
+		if s.EffectiveCacheSizeMB != s.MemoryLimitMB-inLimit-144 || s.EffectiveCacheSizeMB >= s.MemoryLimitMB {
 			t.Errorf("%d registers: effective_cache_size %d, limit %d", n, s.EffectiveCacheSizeMB, s.MemoryLimitMB)
 		}
 	}
 }
 
-// work_mem grows in steps with the number of registers; parallel query is not opened at any
-// number of registers (it did not fit in /dev/shm, see the package comment).
-func TestWorkMemTiersAndNoParallel(t *testing.T) {
+// work_mem grows in steps with the number of registers; parallel query opens at 10 registers
+// and takes more workers at 50, with a /dev/shm that fits it (see the package comment).
+func TestWorkMemTiersAndParallel(t *testing.T) {
 	for n, want := range map[int]int{0: 4, 4: 4, 5: 8, 16: 8, 17: 16, 50: 16} {
 		if got := ForStore(n).WorkMemMB; got != want {
 			t.Errorf("%d kasa: work_mem %d, istenen %d", n, got, want)
 		}
 	}
-	for _, n := range []int{1, 16, 17, 50, 1000} {
-		args := ForStore(n).Args()
-		for _, want := range []string{"-c max_parallel_workers_per_gather=0", "-c max_parallel_workers=0"} {
-			if !strings.Contains(args, want) {
-				t.Errorf("%d registers: no %q: %s", n, want, args)
+	for _, n := range []int{1, 4, 9} {
+		s := ForStore(n)
+		for _, want := range []string{"-c max_parallel_workers_per_gather=0", "-c max_parallel_workers=0", "-c max_worker_processes=4"} {
+			if !strings.Contains(s.Args(), want) {
+				t.Errorf("%d registers: no %q: %s", n, want, s.Args())
 			}
 		}
+		if s.ShmMB != DefaultShmMB {
+			t.Errorf("%d registers: /dev/shm %d", n, s.ShmMB)
+		}
+	}
+	for _, c := range []struct{ n, workers, shm int }{{10, 2, 128}, {16, 2, 128}, {17, 2, 256}, {49, 2, 256}, {50, 4, 256}, {1000, 4, 256}} {
+		s := ForStore(c.n)
+		for _, want := range []string{
+			fmt.Sprintf("-c max_parallel_workers_per_gather=%d", c.workers),
+			fmt.Sprintf("-c max_parallel_workers=%d", c.workers),
+			fmt.Sprintf("-c max_worker_processes=%d", 4+c.workers),
+		} {
+			if !strings.Contains(s.Args(), want) {
+				t.Errorf("%d registers: no %q: %s", c.n, want, s.Args())
+			}
+		}
+		if s.ShmMB != c.shm {
+			t.Errorf("%d registers: /dev/shm %d, want %d", c.n, s.ShmMB, c.shm)
+		}
+	}
+	if got := ForHeadquarters(100).ShmMB; got != 512 {
+		t.Errorf("headquarters, 100 registers: /dev/shm %d", got)
 	}
 }
 
@@ -134,9 +160,10 @@ func TestForHeadquarters(t *testing.T) {
 	if s.SharedBuffersMB != 64 || s.MaxConnections != 30 || s.WorkMemMB != 4 || s.MemoryLimitMB != 256 {
 		t.Errorf("2 kasa: %+v", s)
 	}
-	// 50 stores × 2 registers = 100 registers: 64 + 8 × 96 = 832 MB of buffers; memory 2 × 832 + 128 = 1792 MB.
+	// 50 stores × 2 registers = 100 registers: 64 + 8 × 96 = 832 MB of buffers; memory 2 × 832 + 128 = 1792 MB
+	// and 512 MB of /dev/shm for parallel query.
 	s = ForHeadquarters(100)
-	if s.SharedBuffersMB != 832 || s.MemoryLimitMB != 1792 || s.WorkMemMB != 32 || s.MaxWalSizeMB != 1600 || s.MaintenanceWorkMemMB != 128 {
+	if s.SharedBuffersMB != 832 || s.MemoryLimitMB != 2304 || s.WorkMemMB != 32 || s.MaxWalSizeMB != 1600 || s.MaintenanceWorkMemMB != 128 {
 		t.Errorf("100 kasa: %+v", s)
 	}
 	if got := ForHeadquarters(100000).SharedBuffersMB; got != MaxHeadquartersSharedBuffersMB {

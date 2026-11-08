@@ -18,6 +18,7 @@
 #   RATE         sales per second per register (default 0.5)
 #   PGTUNE_ARGS  these postgres flags instead of pgtune ("-c a=b ...")
 #   PGTUNE_MEM   this container memory (MB) instead of pgtune
+#   PGTUNE_SHM   this /dev/shm size (MB) with PGTUNE_ARGS (default 64)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
@@ -31,25 +32,27 @@ if command -v cygpath >/dev/null; then out=$(cygpath -m "$(cd "$out" && pwd)"); 
 name=abarow-bench-db
 port=25432
 
-docker rm -f "$name" >/dev/null 2>&1 || true
+docker rm -fv "$name" >/dev/null 2>&1 || true
 if [ -z "${PGTUNE_ARGS:-}" ]; then
 	tune=$(cd services/store && go run ./cmd/report pgtune --registers "$n")
 	args=$(printf '%s\n' "$tune" | sed -n 's/^ARGS=//p')
 	mem=$(printf '%s\n' "$tune" | sed -n 's/^MEMORY_MB=//p')
+	shm=$(printf '%s\n' "$tune" | sed -n 's/^SHM_MB=//p')
 else
 	args=$PGTUNE_ARGS
 	mem=${PGTUNE_MEM:?PGTUNE_MEM must be given with PGTUNE_ARGS}
+	shm=${PGTUNE_SHM:-64}
 fi
 echo "==> $n registers ($label): memory ${mem}m; postgres $args"
 
 # shellcheck disable=SC2086 # the flags are separated by spaces
-docker run -d --name "$name" --memory="${mem}m" -p "127.0.0.1:$port:5432" \
+docker run -d --name "$name" --memory="${mem}m" --shm-size="${shm}m" -p "127.0.0.1:$port:5432" \
 	-e POSTGRES_PASSWORD=bench -e POSTGRES_DB=abarow -e POSTGRES_USER=abarow \
 	postgres:18-alpine postgres $args >/dev/null
 sampler=
 cleanup() {
 	[ -z "$sampler" ] || kill "$sampler" 2>/dev/null || true
-	docker rm -f "$name" >/dev/null 2>&1 || true
+	docker rm -fv "$name" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 for _ in $(seq 1 60); do

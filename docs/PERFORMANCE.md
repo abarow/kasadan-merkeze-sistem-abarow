@@ -333,17 +333,17 @@ Gerekçe ve okuma:
 
 ### Merkez ayar tablosu (`pgtune.ForHeadquarters`; mağaza × 2 kasa)
 
-| Mağaza | Container belleği | shared_buffers | work_mem | effective_cache_size | max_wal_size | maintenance_work_mem | max_connections |
-|---|---|---|---|---|---|---|---|
-| 1 | 256 MB | 64 MB | 4 MB | 88 MB | 256 MB | 16 MB | 30 |
-| 2 | 256 MB | 64 MB | 4 MB | 88 MB | 256 MB | 16 MB | 30 |
-| 5 | 384 MB | 112 MB | 8 MB | 216 MB | 256 MB | 28 MB | 30 |
-| 10 | 512 MB | 192 MB | 16 MB | 344 MB | 320 MB | 48 MB | 30 |
-| 25 | 1024 MB | 432 MB | 32 MB | 856 MB | 800 MB | 108 MB | 30 |
-| 50 | 1792 MB | 832 MB | 32 MB | 1624 MB | 1600 MB | 128 MB | 30 |
-| 100 | 2176 MB | 1024 MB | 32 MB | 2008 MB | 3200 MB | 128 MB | 30 |
+| Mağaza | Container belleği | shared_buffers | work_mem | effective_cache_size | max_wal_size | maintenance_work_mem | max_connections | Paralel işçi | /dev/shm |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | 256 MB | 64 MB | 4 MB | 88 MB | 256 MB | 16 MB | 30 | 0 | 64 MB |
+| 2 | 256 MB | 64 MB | 4 MB | 88 MB | 256 MB | 16 MB | 30 | 0 | 64 MB |
+| 5 | 512 MB | 112 MB | 8 MB | 216 MB | 256 MB | 28 MB | 30 | 2 | 128 MB |
+| 10 | 768 MB | 192 MB | 16 MB | 344 MB | 320 MB | 48 MB | 30 | 2 | 256 MB |
+| 25 | 1536 MB | 432 MB | 32 MB | 856 MB | 800 MB | 108 MB | 30 | 4 | 512 MB |
+| 50 | 2304 MB | 832 MB | 32 MB | 1624 MB | 1600 MB | 128 MB | 30 | 4 | 512 MB |
+| 100 | 2688 MB | 1024 MB | 32 MB | 2008 MB | 3200 MB | 128 MB | 30 | 4 | 512 MB |
 
-Ölçülenler 1, 2, 5, 10 ve 50 mağazadır; 25 ve 100 formülün ara/üst değeridir. Paralel sorgu kapalıdır (operasyon ölçümündeki `/dev/shm` hatası nedeniyle).
+Ölçülenler 1, 2, 5, 10 ve 50 mağazadır; 25 ve 100 formülün ara/üst değeridir. Kasa sayısı 10'dan azsa paralel sorgu kapalıdır; açıkken `/dev/shm` payı container belleğine eklenir ("Paralel sorgu" bölümü).
 
 
 ## Aylık rapor için indeks çalışması (07–08.11.2026)
@@ -391,3 +391,28 @@ Yalnızca `sale_lines` anahtarının kapsayıcı olduğu, taze veride doğrulama
 - **Ödemeler ve KDV anahtarlarını kapsayıcı yapmak:** kazanç yok. Bu tablolar küçük olduğundan planlayıcı karma birleştirme + tam tarama seçiyor (iç içe döngü zorlanınca 352 → 241 ve 709 → 266 ms, yani toplam ~0,55 sn kazanç var), ama bunu ayar ya da sorgu yeniden yazımı olmadan sağlamak mümkün olmadı.
 - **Alt tablolara `paid_at` kopyası** en iyi sonucu verir (toplam 728 ms; ödemeler 16, KDV 36 ms), ama yazma yolunu (`SaveSale`), iki şemayı ve geçmiş veri için bir doldurma `UPDATE`'ini değiştirir: 1,19 milyon satışta doldurma ~6 dakika sürdü ve tabloları iki katına şişirdi. Ayrı bir karar olarak bırakıldı.
 - **50 kasa / çok yıllık veri ölçülmedi:** bu çalışma 10 kasa ve 13 ay ile sınırlıdır; büyüme doğrusal beklenir.
+
+## Paralel sorgu (08.11.2026)
+
+> Geliştirici bilgisayarında (Docker Desktop, 16 CPU); sayılar sıralama ve oran için güvenilirdir, mağaza donanımı için garanti değildir.
+
+**Kural:** 10 kasanın altında kapalı, 10–49 kasada 2 işçi, 50 kasa ve üstünde 4 işçi. İşçi üst sınırı veritabanının toplamıdır, açık rapor ekranları bütün çekirdekleri alamaz. `/dev/shm` = 16 × `work_mem` ve bu pay container belleğine eklenir.
+
+**Tek kullanıcı, yük yok (50 mağaza, 900 bin satış, SQL süresi):** aylık rapor 6,3 → 3,2 sn. Ödemeler 823 → 323 ms, KDV 1185 → 349 ms, ürün sıralaması 2455 → 712 ms. Satışlar sorgusu (1,8 sn, 900 bin satır döner) paralelleşmiyor. RAM'i 1792'den 4096 MB'a çıkarmak süreyi değiştirmedi (6,3 → 6,1 sn). `work_mem` 256 MB'ta planlayıcı ürün sıralamasında paralel planı bırakıyor (712 → 2355 ms), bu yüzden `work_mem` artırılmadı.
+
+**Yük altında (50 mağaza, 20 satış/sn, 11 ekran; araç veritabanıyla aynı Docker ağında, 2 tur):**
+
+| Ayar | Aylık p50 | Ürün sıralaması p50 | Kayıt işleme p50 | Kayıt işleme p95 | Kuyruk en çok | Hata |
+|---|---|---|---|---|---|---|
+| Kapalı | 12,4–13,2 sn | 13,7–14,7 sn | 13–14 ms | 426–758 ms | 42–50 | 0 |
+| 2 işçi (512 MB `/dev/shm`) | 13,4–14,0 sn | 12,9–14,7 sn | 14–15 ms | 567–632 ms | 27–43 | 0 |
+| 4 işçi (512 MB `/dev/shm`) | 11,6–12,0 sn | 12,2–13,5 sn | 19–21 ms | 539–1180 ms | 34–40 | 0 |
+
+**Bulgular:**
+
+- Paralel sorgu raporu tek kullanıcıda yaklaşık 2 kat hızlandırır; 11 ekranın aynı anda rapor istediği yükte kazanç küçüktür (~%8).
+- **Ölçüm düzeneği uyarısı:** araç Windows'ta çalışıp veritabanına Docker'ın yayınlanmış portundan bağlanınca paralel sorguda kayıt p50 9–12 sn, p95 12–23 sn, kuyruk 250–470 çıktı. Araç veritabanıyla aynı Docker ağına alınınca bu kayboldu (yukarıdaki tablo); örneklemede yazan bağlantı veritabanında neredeyse hiç beklemiyordu. Bu bölümden önceki merkez tablolarının kayıt işleme sütunları aynı Windows düzeneğiyle ölçülmüştür; 50 mağazadaki p50/p95 değerleri gerçek kurulumdan yüksek olabilir.
+- **`/dev/shm`:** 50 mağazada 2 işçi ve 256 MB (8 × `work_mem`) ile aylık ve ürün özetleri 7–10 kez "could not resize shared memory segment" hatası verdi; 512 MB (16 × `work_mem`) ile hata çıkmadı.
+- **10 kasa ve 10 mağaza (2 işçi, 2 tur, Windows düzeneği):** rapor ve kayıt süreleri ölçüm gürültüsü içinde aynı (mağaza sunucusu aylık 778–787 → 742–895 ms; merkez aylık 1,68–1,86 → 1,55–1,70 sn; kayıt p95 değişmedi); 64–128 MB `/dev/shm` ile hata yok. Bu kademede yük yokken ölçüm yapılmadı.
+- **Mağaza sunucusu 50 kasa (4 işçi, 1 tur, Windows düzeneği):** aylık 6,8 → 6,0 sn, ürün sıralaması 8,6 → 8,0 sn, kayıt p95 217 → 373 ms, kuyruk 11 → 27.
+- Bellek tavanı da değişti: 50 kasa mağaza sunucusu 640 → 896 MB, 50 mağaza merkez 1792 → 2304 MB. Bu bölümden önceki tablolar paralel sorgu ve bu bellek değerleri öncesinde ölçülmüştür.

@@ -442,6 +442,7 @@ tune=$(as podman run --rm --network none -v "$config:/config:ro,Z" "ghcr.io/abar
 	die "could not compute the database settings (reporting pgtune)"
 db_memory=$(printf '%s\n' "$tune" | sed -n 's/^MEMORY_MB=//p')
 db_flags=$(printf '%s\n' "$tune" | sed -n 's/^ARGS=//p')
+db_shm=$(printf '%s\n' "$tune" | sed -n 's/^SHM_MB=//p')
 [ -n "$db_memory" ] && [ -n "$db_flags" ] || die "could not read the database settings: $tune"
 tune_before=$( (cat "$db_dropin/tune.conf" 2>/dev/null || true) | sha256sum)
 as mkdir -p "$db_dropin"
@@ -450,7 +451,7 @@ as tee "$db_dropin/tune.conf" >/dev/null <<EOF
 # of connected stores (reporting pgtune; pkg/pgtune.ForHeadquarters). Rewritten when a store is added or removed.
 [Container]
 Exec=postgres $db_flags
-PodmanArgs=--memory=${db_memory}m
+PodmanArgs=--memory=${db_memory}m --shm-size=${db_shm:-64}m
 EOF
 tune_changed=false
 [ "$tune_before" = "$( (cat "$db_dropin/tune.conf" 2>/dev/null || true) | sha256sum)" ] || tune_changed=true

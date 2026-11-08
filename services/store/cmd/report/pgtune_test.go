@@ -20,7 +20,7 @@ func TestPgtuneCommandRegistersFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	if len(lines) != 2 || lines[0] != "MEMORY_MB=256" ||
+	if len(lines) != 3 || lines[0] != "MEMORY_MB=256" || lines[2] != "SHM_MB=64" ||
 		!strings.HasPrefix(lines[1], "ARGS=-c shared_buffers=64MB -c max_connections=20 -c work_mem=4MB ") {
 		t.Errorf("output:\n%s", out.String())
 	}
@@ -29,7 +29,7 @@ func TestPgtuneCommandRegistersFlag(t *testing.T) {
 	if err := pgtuneCommand([]string{"--registers", "12"}, &out); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "shared_buffers=128MB") || !strings.Contains(out.String(), "MEMORY_MB=384") {
+	if !strings.Contains(out.String(), "shared_buffers=128MB") || !strings.Contains(out.String(), "MEMORY_MB=512") {
 		t.Errorf("12 kasa:\n%s", out.String())
 	}
 }

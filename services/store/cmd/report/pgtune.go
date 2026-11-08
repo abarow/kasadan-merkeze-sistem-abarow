@@ -19,8 +19,8 @@ import (
 //
 //	report pgtune [--registers N | --registers-file registers.json]
 //
-// The output is two lines: MEMORY_MB=<container memory limit> and
-// ARGS=<the -c flags to give to postgres>.
+// The output is three lines: MEMORY_MB=<container memory limit>,
+// ARGS=<the -c flags to give to postgres> and SHM_MB=<size of /dev/shm>.
 func pgtuneCommand(args []string, out io.Writer) error {
 	fs := flag.NewFlagSet("pgtune", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -38,6 +38,6 @@ func pgtuneCommand(args []string, out io.Writer) error {
 		n = len(regs)
 	}
 	s := pgtune.ForStore(n)
-	_, err := fmt.Fprintf(out, "MEMORY_MB=%d\nARGS=%s\n", s.MemoryLimitMB, s.Args())
+	_, err := fmt.Fprintf(out, "MEMORY_MB=%d\nARGS=%s\nSHM_MB=%d\n", s.MemoryLimitMB, s.Args(), s.ShmMB)
 	return err
 }

@@ -33,10 +33,12 @@
 //     set aside accordingly.
 //   - maintenance_work_mem = shared_buffers / 4 (at most 64 MB), wal_buffers =
 //     shared_buffers / 32 (1–16 MB).
-//   - Parallel query is off: in the 50-register measurement, opening 2 workers per query
-//     the workers did not fit in the container's 64 MB /dev/shm area ("could not resize
-//     shared memory segment"; the month and product summaries gave errors) and the
-//     record processing latency got worse (p95 680 → 1109 ms).
+//   - Parallel query is off below 10 registers: a small store's machine has few cores and its
+//     reports are already short. From 10 registers the period summaries use 2 workers, from 50
+//     registers 4 (the database machine of that size is expected to be a strong one).
+//   - Parallel hash joins live in /dev/shm; with Docker's 64 MB default the workers failed
+//     ("could not resize shared memory segment"). ShmMB is sized from that measurement and added
+//     to the memory limit, because /dev/shm is charged to the container.
 package pgtune
 
 import (
@@ -70,6 +72,19 @@ const (
 	overheadMB = 48
 	// roundMB is the step the container memory limit is rounded to.
 	roundMB = 64
+	// ParallelMinRegisters is the number of registers from which parallel query is on,
+	// with ParallelWorkers workers.
+	ParallelMinRegisters = 10
+	// ParallelWorkers is both the workers of one query and the total workers of the
+	// database, so that several open report screens cannot take every core from the
+	// sales being recorded.
+	ParallelWorkers = 2
+	// ParallelManyRegisters is the number of registers from which ParallelManyWorkers are used.
+	ParallelManyRegisters = 50
+	// ParallelManyWorkers is ParallelWorkers for the largest installations.
+	ParallelManyWorkers = 4
+	// DefaultShmMB is the container's /dev/shm size while parallel query is off.
+	DefaultShmMB = 64
 )
 
 // Settings are the PostgreSQL settings (memory in MB).
@@ -84,6 +99,10 @@ type Settings struct {
 	MaxWalSizeMB         int
 	// MemoryLimitMB is the recommended memory limit for the database container.
 	MemoryLimitMB int
+	// ParallelWorkers is the number of parallel query workers; 0 is off.
+	ParallelWorkers int
+	// ShmMB is the size of the container's /dev/shm.
+	ShmMB int
 }
 
 // ForStore computes the settings of a store (store server) with registers registers.
@@ -139,6 +158,13 @@ func compute(registers int, p profile) Settings {
 	if p.bigWorkMem > 16 && registers > 40 {
 		wm = p.bigWorkMem
 	}
+	parallel, shm, shmInLimit := workers(registers), DefaultShmMB, 0
+	if parallel > 0 {
+		// Several report screens run at once, each with its own parallel hash joins. Measured
+		// at 50 stores: 8 × work_mem (256 MB) ran out with 2 workers, 16 × work_mem did not.
+		shm = 16 * wm
+		shmInLimit = shm
+	}
 	return Settings{
 		SharedBuffersMB:      shared,
 		MaxConnections:       p.maxConns,
@@ -148,7 +174,9 @@ func compute(registers int, p profile) Settings {
 		EffectiveCacheSizeMB: limit - overhead,
 		MinWalSizeMB:         32,
 		MaxWalSizeMB:         max(256, 16*registers),
-		MemoryLimitMB:        limit,
+		MemoryLimitMB:        roundUp(limit+shmInLimit, roundMB),
+		ParallelWorkers:      parallel,
+		ShmMB:                shm,
 	}
 }
 
@@ -161,6 +189,17 @@ func workMem(registers int) int {
 		return 2 * WorkMemMB
 	}
 	return 4 * WorkMemMB
+}
+
+// workers is the number of parallel query workers by the number of registers.
+func workers(registers int) int {
+	switch {
+	case registers >= ParallelManyRegisters:
+		return ParallelManyWorkers
+	case registers >= ParallelMinRegisters:
+		return ParallelWorkers
+	}
+	return 0
 }
 
 func roundUp(n, step int) int { return (n + step - 1) / step * step }
@@ -182,9 +221,9 @@ func (s Settings) Flags() []string {
 		{"max_wal_size", mb(s.MaxWalSizeMB)},
 		{"checkpoint_completion_target", "0.9"},
 		{"autovacuum_max_workers", "2"},
-		{"max_worker_processes", "4"},
-		{"max_parallel_workers", "0"},
-		{"max_parallel_workers_per_gather", "0"},
+		{"max_worker_processes", fmt.Sprint(4 + s.ParallelWorkers)},
+		{"max_parallel_workers", fmt.Sprint(s.ParallelWorkers)},
+		{"max_parallel_workers_per_gather", fmt.Sprint(s.ParallelWorkers)},
 		{"max_parallel_maintenance_workers", "0"},
 	}
 	out := make([]string, 0, 2*len(kv))

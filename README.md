@@ -24,7 +24,7 @@ Kasanın 9 servisi birlikte **boşta ≈68 MiB** bellek kullanır, ağır yük a
 |---|---|---|
 | Yalnız kasa | **192 MB** | 544 MB |
 | Tek makinede 1 kasa + operasyon | **576 MB** | 1088 MB |
-| Operasyon makinesi, 50 kasalı mağaza | 768 MB | 928 MB |
+| Operasyon makinesi, 50 kasalı mağaza | 1024 MB | 1184 MB |
 
 Bu sayılar yalnızca abarow'un kendi container'larıdır; işletim sistemi ve kasadaki Chromium kiosk ayrıca bellek ister (ikisi ölçülmedi, kasa için 4 GB hedeflenir). Asgari değer, yük altında ölçülen en yüksek kullanımın %40 üstüdür.
 
