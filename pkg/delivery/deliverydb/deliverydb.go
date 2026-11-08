@@ -91,3 +91,28 @@ func (s Store) Received(ctx context.Context, db sqldialect.DB, eventIDs []string
 	}
 	return out, rows.Err()
 }
+
+// PruneIssued removes at most limit given receipts older than before and returns how many it
+// removed. A given receipt answers an event that comes again while it is still in the
+// sender's stream; an older event that comes again gets a new receipt id, which the sender
+// takes the same way.
+func (s Store) PruneIssued(ctx context.Context, db sqldialect.DB, before time.Time, limit int) (int64, error) {
+	return s.prune(ctx, db, "delivery_issued", "issued_at", before, limit)
+}
+
+// PruneReceived removes at most limit received receipts older than before and returns how
+// many it removed. The stream cleaner needs a receipt until it has deleted the event
+// (retention.Config.CheckReceipts).
+func (s Store) PruneReceived(ctx context.Context, db sqldialect.DB, before time.Time, limit int) (int64, error) {
+	return s.prune(ctx, db, "delivery_received", "received_at", before, limit)
+}
+
+func (s Store) prune(ctx context.Context, db sqldialect.DB, table, column string, before time.Time, limit int) (int64, error) {
+	// The receipt ids are UUIDv7, ordered by time: along their index the old rows come first.
+	res, err := db.ExecContext(ctx, s.Dialect.Q(`DELETE FROM `+table+` WHERE event_id IN (SELECT event_id FROM `+table+
+		` WHERE `+column+` < ? ORDER BY receipt_id LIMIT ?)`), s.Dialect.Time(before), limit)
+	if err != nil {
+		return 0, fmt.Errorf("receipts could not be pruned: %w", err)
+	}
+	return res.RowsAffected()
+}

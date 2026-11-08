@@ -22,6 +22,7 @@ import (
 	"abarow.com/pkg/money"
 	"abarow.com/pkg/outbox"
 	"abarow.com/pkg/pgpool"
+	"abarow.com/pkg/retention"
 	"abarow.com/pkg/sqldialect"
 	"abarow.com/pkg/stock"
 	"abarow.com/pkg/text"
@@ -335,6 +336,13 @@ func (s *Store) MarkPublished(ctx context.Context, seq int64, at time.Time) erro
 // CountPending counts the unpublished events.
 func (s *Store) CountPending(ctx context.Context) (int64, error) {
 	return s.outbox().CountPending(ctx, s.db)
+}
+
+// PruneOutbox removes the events published before the given moment (pkg/retention).
+func (s *Store) PruneOutbox(ctx context.Context, before time.Time) (int64, error) {
+	return retention.Batches(ctx, 5000, func(ctx context.Context, limit int) (int64, error) {
+		return s.outbox().Prune(ctx, s.db, before, limit)
+	})
 }
 
 // SetLocations writes the places a transfer can be sent to (the last state is valid;

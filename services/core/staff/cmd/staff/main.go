@@ -23,6 +23,7 @@ import (
 
 	"abarow.com/pkg/delivery"
 	"abarow.com/pkg/outbox"
+	"abarow.com/pkg/retention"
 	"abarow.com/pkg/service"
 	"abarow.com/services/core/staff/internal/adapters/in/grpcserver"
 	"abarow.com/services/core/staff/internal/adapters/in/natscashiers"
@@ -37,11 +38,27 @@ import (
 	"abarow.com/services/core/staff/internal/app"
 )
 
+// cleanMaxAge is the least time an event stays in the shift stream after its receipt
+// (ABAROW_CLEAN_MAX_AGE changes it).
+const cleanMaxAge = 30 * 24 * time.Hour
+
 func main() {
 	healthAddr := service.Env("ABAROW_STAFF_HEALTH_ADDR", ":8081")
 	service.Main("staff", healthAddr, func(ctx context.Context, log *slog.Logger) error {
 		dsn, err := service.MustEnv("ABAROW_DATABASE_URL")
 		if err != nil {
+			return err
+		}
+		receiptSource := os.Getenv("ABAROW_RECEIPT_SOURCE")
+		keep, err := retention.ConfigFromEnv(os.Getenv)
+		if err != nil {
+			return err
+		}
+		clean, err := delivery.CleanConfigFromEnv(os.Getenv, cleanMaxAge)
+		if err != nil {
+			return err
+		}
+		if err := keep.CheckReceipts(clean.MaxAge); err != nil {
 			return err
 		}
 		store, err := postgres.Open(ctx, dsn)
@@ -157,10 +174,19 @@ func main() {
 				return err
 			}
 			if err := (delivery.Sender{
-				JS: js, Owner: registerID, Source: os.Getenv("ABAROW_RECEIPT_SOURCE"), Stream: natspub.StreamName,
-				Durable: "staff-receipts", Save: store.SaveReceived, Received: store.Received, DefaultMaxAge: 30 * 24 * time.Hour,
+				JS: js, Owner: registerID, Source: receiptSource, Stream: natspub.StreamName,
+				Durable: "staff-receipts", Save: store.SaveReceived, Received: store.Received, DefaultMaxAge: cleanMaxAge,
 			}).Start(ctx, os.Getenv, log); err != nil {
 				return err
+			}
+			// Retention (docs/decisions/RETENTION.md): the details of old days go once the
+			// store server confirmed the shift events; without a store server nothing goes.
+			if receiptSource != "" {
+				go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+					{Name: "outbox", Keep: keep.Outbox, Clean: store.PruneOutbox},
+					{Name: "day details", Keep: keep.Register, Clean: store.PruneDays},
+					{Name: "received receipts", Keep: keep.Receipts, Clean: store.PruneReceipts},
+				}}.Run(ctx)
 			}
 		} else {
 			log.Warn("ABAROW_STORE_ID and ABAROW_REGISTER_ID are missing: shift events are not published (it opens when the install script is run again)")

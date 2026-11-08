@@ -29,6 +29,7 @@ import (
 	"abarow.com/pkg/natsio"
 	"abarow.com/pkg/nodes"
 	"abarow.com/pkg/outbox"
+	"abarow.com/pkg/retention"
 	"abarow.com/pkg/service"
 	"abarow.com/services/headquarters/ingest/internal/adapters/in/httpapi"
 	"abarow.com/services/headquarters/ingest/internal/adapters/in/natsconsumer"
@@ -56,6 +57,10 @@ func main() {
 		// The connected stores (written by natsauth -add-store). When the list changes the service
 		// is restarted.
 		stores, err := nodes.Load(service.Env("ABAROW_STORES", "/config/stores.json"))
+		if err != nil {
+			return err
+		}
+		keep, err := retention.ConfigFromEnv(os.Getenv)
 		if err != nil {
 			return err
 		}
@@ -94,6 +99,13 @@ func main() {
 		receiptCfg := delivery.ReceiptConfig("", "", receiptAge)
 		go outbox.NewRelay(db, natsio.NewPublisher(js, &receiptCfg), time.Second, log).Run(ctx)
 		go svc.PublishLinks(ctx, log)
+		// Retention (docs/decisions/RETENTION.md): the sales ledger is never removed; the
+		// published receipts, the old given receipts and the raw event content are.
+		go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+			{Name: "receipt outbox", Keep: keep.Outbox, Clean: db.PruneOutbox},
+			{Name: "given receipts", Keep: keep.Receipts, Clean: db.PruneReceipts},
+			{Name: "event content", Keep: keep.EventPayload, Clean: db.PruneEventPayloads},
+		}}.Run(ctx)
 		return service.ServeHTTP(ctx, log, service.HTTPConfig{
 			Handler:    httpapi.New(svc),
 			Addr:       service.Env("ABAROW_INGEST_ADDR", ":8080"),

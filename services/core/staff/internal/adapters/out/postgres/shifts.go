@@ -149,7 +149,8 @@ func (s *Store) DrawerOpens(ctx context.Context, shiftID int64) ([]domain.Drawer
 
 // shiftColumns are the columns of the SELECT that reads the shift with the cashier's name
 // (in the same order as scanShift).
-const shiftColumns = `s.id, s.cashier_id, c.name, s.opened_at, s.closed_at, s.opening_cash, s.counted_cash, s.closed_by
+const shiftColumns = `s.id, s.cashier_id, c.name, s.opened_at, s.closed_at, s.opening_cash, s.counted_cash, s.closed_by,
+	s.details_removed_at IS NOT NULL
 	FROM shifts s JOIN cashiers c ON c.id = s.cashier_id`
 
 type scanner interface{ Scan(dest ...any) error }
@@ -158,7 +159,8 @@ func scanShift(row scanner) (domain.Shift, error) {
 	var sh domain.Shift
 	var opened string
 	var closed sql.NullString
-	if err := row.Scan(&sh.ID, &sh.CashierID, &sh.CashierName, &opened, &closed, &sh.OpeningCash, &sh.CountedCash, &sh.ClosedBy); err != nil {
+	if err := row.Scan(&sh.ID, &sh.CashierID, &sh.CashierName, &opened, &closed, &sh.OpeningCash, &sh.CountedCash, &sh.ClosedBy,
+		&sh.DetailsRemoved); err != nil {
 		return sh, err
 	}
 	var err error

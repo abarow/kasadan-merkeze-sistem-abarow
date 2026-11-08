@@ -19,6 +19,7 @@ import (
 	salesv1 "abarow.com/gen/com/abarow/sales/v1"
 
 	"abarow.com/pkg/delivery"
+	"abarow.com/pkg/retention"
 	"abarow.com/pkg/service"
 	"abarow.com/services/core/sales/internal/adapters/in/grpcserver"
 	"abarow.com/services/core/sales/internal/adapters/out/eventproto"
@@ -28,6 +29,10 @@ import (
 	"abarow.com/services/core/sales/internal/adapters/out/postgres"
 	"abarow.com/services/core/sales/internal/app"
 )
+
+// cleanMaxAge is the least time an event stays in the register stream after its receipt
+// (ABAROW_CLEAN_MAX_AGE changes it).
+const cleanMaxAge = 30 * 24 * time.Hour
 
 func main() {
 	healthAddr := service.Env("ABAROW_SALES_HEALTH_ADDR", ":8081")
@@ -43,6 +48,18 @@ func main() {
 
 		dsn, err := service.MustEnv("ABAROW_DATABASE_URL")
 		if err != nil {
+			return err
+		}
+		receiptSource := os.Getenv("ABAROW_RECEIPT_SOURCE")
+		keep, err := retention.ConfigFromEnv(os.Getenv)
+		if err != nil {
+			return err
+		}
+		clean, err := delivery.CleanConfigFromEnv(os.Getenv, cleanMaxAge)
+		if err != nil {
+			return err
+		}
+		if err := keep.CheckReceipts(clean.MaxAge); err != nil {
 			return err
 		}
 		store, err := postgres.Open(ctx, dsn)
@@ -107,8 +124,8 @@ func main() {
 			return err
 		}
 		if err := (delivery.Sender{
-			JS: js, Owner: registerID, Source: os.Getenv("ABAROW_RECEIPT_SOURCE"), Stream: natspub.StreamName,
-			Durable: "sales-receipts", Save: store.SaveReceived, Received: store.Received, DefaultMaxAge: 30 * 24 * time.Hour,
+			JS: js, Owner: registerID, Source: receiptSource, Stream: natspub.StreamName,
+			Durable: "sales-receipts", Save: store.SaveReceived, Received: store.Received, DefaultMaxAge: cleanMaxAge,
 		}).Start(ctx, os.Getenv, log); err != nil {
 			return err
 		}
@@ -122,6 +139,17 @@ func main() {
 			relay.Run(ctx)
 			close(relayDone)
 		}()
+
+		// Retention (docs/decisions/RETENTION.md): the register removes what the store server
+		// confirmed with a receipt. Without a store server nothing is confirmed and nothing
+		// is removed: the register's copy is the only one.
+		if receiptSource != "" {
+			go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+				{Name: "outbox", Keep: keep.Outbox, Clean: store.PruneOutbox},
+				{Name: "sales", Keep: keep.Register, Clean: store.PruneSales},
+				{Name: "received receipts", Keep: keep.Receipts, Clean: store.PruneReceipts},
+			}}.Run(ctx)
+		}
 
 		srv := service.NewGRPCServer()
 		salesv1.RegisterSalesServiceServer(srv, grpcserver.New(svc, relay))

@@ -71,6 +71,7 @@ import (
 	"abarow.com/pkg/natsio"
 	"abarow.com/pkg/nodes"
 	"abarow.com/pkg/outbox"
+	"abarow.com/pkg/retention"
 	"abarow.com/pkg/service"
 	"abarow.com/services/store/internal/adapters/in/httpapi"
 	"abarow.com/services/store/internal/adapters/in/natsconsumer"
@@ -204,6 +205,9 @@ func main() {
 		if err := setupReceipts(ctx, js, reports, storeID, os.Getenv("ABAROW_CATALOG_SOURCE"), log); err != nil {
 			return err
 		}
+		if err := startRetention(ctx, reports, log); err != nil {
+			return err
+		}
 		var cashiers *app.Cashiers
 		if storeID != "" {
 			cashiers = app.NewCashiers(reports.People(), cashierproto.Encoder{StoreID: storeID, NewID: newID})
@@ -310,8 +314,33 @@ func setupReceipts(ctx context.Context, js jetstream.JetStream, reports *postgre
 	go outbox.NewRelay(reports.Receipts(), natsio.NewPublisher(js, &cfg), time.Second, log).Run(ctx)
 	return delivery.Sender{
 		JS: js, Owner: storeID, Source: source, Stream: natsstore.StreamName, Durable: "receipts",
-		Save: reports.SaveReceived, Received: reports.Received, DefaultMaxAge: 90 * 24 * time.Hour,
+		Save: reports.SaveReceived, Received: reports.Received, DefaultMaxAge: cleanMaxAge,
 	}.Start(ctx, os.Getenv, log)
+}
+
+// cleanMaxAge is the least time an event stays in the store stream after headquarters'
+// receipt (ABAROW_CLEAN_MAX_AGE changes it).
+const cleanMaxAge = 90 * 24 * time.Hour
+
+// startRetention removes the published outbox messages and the old receipts at intervals
+// (docs/decisions/RETENTION.md). The sales ledger of the store is never removed.
+func startRetention(ctx context.Context, reports *postgres.Store, log *slog.Logger) error {
+	keep, err := retention.ConfigFromEnv(os.Getenv)
+	if err != nil {
+		return err
+	}
+	clean, err := delivery.CleanConfigFromEnv(os.Getenv, cleanMaxAge)
+	if err != nil {
+		return err
+	}
+	if err := keep.CheckReceipts(clean.MaxAge); err != nil {
+		return err
+	}
+	go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+		{Name: "outbox", Keep: keep.Outbox, Clean: reports.PruneOutbox},
+		{Name: "receipts", Keep: keep.Receipts, Clean: reports.PruneReceipts},
+	}}.Run(ctx)
+	return nil
 }
 
 // hashPassword reads the first line on standard input as the store password

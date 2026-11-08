@@ -142,3 +142,42 @@ func TestReceivedRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+func TestPrune(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	for name, d := range databases(t) {
+		t.Run(name, func(t *testing.T) {
+			s := Store{Dialect: d.d}
+			for i := range 5 {
+				at := now.Add(time.Duration(i-5) * 24 * time.Hour) // 5, 4, 3, 2 and 1 days ago
+				id := fmt.Sprintf("e%d", i)
+				if _, err := s.Issue(ctx, d.db, "m", "S", id, func() string { return "r" + id }, at); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := s.SaveReceived(ctx, d.db, delivery.Receipt{EventID: id, ReceiptID: "r" + id, At: at}, at); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := now.Add(-2*24*time.Hour - time.Minute) // older than 2 days: e0, e1, e2
+			if n, err := s.PruneIssued(ctx, d.db, before, 2); err != nil || n != 2 {
+				t.Fatalf("PruneIssued (limit 2) = %d, %v", n, err)
+			}
+			if n, err := s.PruneIssued(ctx, d.db, before, 10); err != nil || n != 1 {
+				t.Fatalf("PruneIssued = %d, %v; the third old receipt was expected", n, err)
+			}
+			if n, err := s.PruneReceived(ctx, d.db, before, 10); err != nil || n != 3 {
+				t.Fatalf("PruneReceived = %d, %v", n, err)
+			}
+			got, err := s.Received(ctx, d.db, []string{"e0", "e1", "e2", "e3", "e4"})
+			if err != nil || len(got) != 2 || !got["e3"] || !got["e4"] {
+				t.Fatalf("receipts left = %v, %v; e3 and e4 expected", got, err)
+			}
+			// A newer event that comes again still gets its receipt.
+			again, err := s.Issue(ctx, d.db, "m", "S", "e4", func() string { return "new" }, now)
+			if err != nil || again.New || again.ReceiptID != "re4" {
+				t.Fatalf("Issue after prune = %+v, %v", again, err)
+			}
+		})
+	}
+}

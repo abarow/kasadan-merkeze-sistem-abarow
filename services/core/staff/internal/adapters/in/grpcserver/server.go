@@ -147,7 +147,8 @@ func toStatus(err error) error {
 		code = codes.ResourceExhausted
 	case errors.Is(err, domain.ErrUnknownCashier), errors.Is(err, domain.ErrUnknownShift), errors.Is(err, domain.ErrUnknownPeriod):
 		code = codes.NotFound
-	case errors.As(err, &open), errors.As(err, &unfinished), errors.Is(err, domain.ErrNoShift), errors.Is(err, domain.ErrShiftNotClosed):
+	case errors.As(err, &open), errors.As(err, &unfinished), errors.Is(err, domain.ErrNoShift), errors.Is(err, domain.ErrShiftNotClosed),
+		errors.Is(err, domain.ErrDetailsRemoved):
 		code = codes.FailedPrecondition
 	case errors.Is(err, domain.ErrNotShiftOwner), errors.Is(err, domain.ErrCashOutNotManager),
 		errors.Is(err, domain.ErrCloseDayNotManager), errors.Is(err, domain.ErrNotManager),

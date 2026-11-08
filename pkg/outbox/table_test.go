@@ -130,7 +130,47 @@ func TestTable(t *testing.T) {
 				n, err := tb.CountPending(ctx, db)
 				rest, _ := tb.Pending(ctx, db, 10)
 				if err != nil || n != 1 || len(rest) != 1 || rest[0].ID != "e2" {
-					t.Errorf("işaretledikten sonra: %d %v %+v", n, err, rest)
+					t.Fatalf("işaretledikten sonra: %d %v %+v", n, err, rest)
+				}
+
+				// Prune removes only what was published before the moment; the pending message stays.
+				if n, err := tb.Prune(ctx, db, at.Add(time.Minute), 10); err != nil || n != 1 {
+					t.Fatalf("Prune = %d, %v; e1 expected", n, err)
+				}
+				if left, err := tb.Pending(ctx, db, 10); err != nil || len(left) != 1 || left[0].ID != "e2" {
+					t.Fatalf("pending after Prune: %+v %v", left, err)
+				}
+				// PruneDelivered also waits for the receipt.
+				if err := tb.MarkPublished(ctx, db, rest[0].Seq, at.Add(time.Hour)); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS delivery_received (event_id TEXT PRIMARY KEY)`); err != nil {
+					t.Fatal(err)
+				}
+				if n, err := tb.PruneDelivered(ctx, db, at.Add(2*time.Hour), 10); err != nil || n != 0 {
+					t.Fatalf("PruneDelivered without a receipt = %d, %v", n, err)
+				}
+				if u, err := tb.Undelivered(ctx, db, at.Add(2*time.Hour)); err != nil || !u {
+					t.Fatalf("Undelivered = %v, %v; e2 has no receipt", u, err)
+				}
+				if u, err := tb.Undelivered(ctx, db, at); err != nil || u {
+					t.Fatalf("Undelivered before e2 = %v, %v", u, err)
+				}
+				if _, err := db.ExecContext(ctx, `INSERT INTO delivery_received (event_id) VALUES ('e2')`); err != nil {
+					t.Fatal(err)
+				}
+				if n, err := tb.PruneDelivered(ctx, db, at.Add(2*time.Hour), 10); err != nil || n != 1 {
+					t.Fatalf("PruneDelivered = %d, %v", n, err)
+				}
+				if u, err := tb.Undelivered(ctx, db, at.Add(2*time.Hour)); err != nil || u {
+					t.Fatalf("Undelivered after the receipt = %v, %v", u, err)
+				}
+				var rows int
+				if err := db.QueryRowContext(ctx, "SELECT count(*) FROM "+tb.Name).Scan(&rows); err != nil || rows != 0 {
+					t.Fatalf("rows left = %d, %v", rows, err)
+				}
+				if _, err := db.ExecContext(ctx, `DELETE FROM delivery_received`); err != nil {
+					t.Fatal(err)
 				}
 			})
 		}

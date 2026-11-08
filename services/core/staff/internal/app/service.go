@@ -108,6 +108,10 @@ func (s *Service) DayReport(ctx context.Context, zNo int64) (domain.DayReport, e
 }
 
 func (s *Service) report(ctx context.Context, p domain.Period) (domain.DayReport, error) {
+	if p.DetailsRemoved {
+		// The totals would be zero: an error instead of a wrong report.
+		return domain.DayReport{}, domain.ErrDetailsRemoved
+	}
 	completed, voided, err := s.store.Facts(ctx, p.ZNo)
 	if err != nil {
 		return domain.DayReport{}, err

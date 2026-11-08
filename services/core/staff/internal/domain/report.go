@@ -64,11 +64,19 @@ type VoidedSale struct {
 // ErrUnknownPeriod is returned when there is no period with the requested Z number.
 var ErrUnknownPeriod = errors.New("bu numarada Z raporu yok")
 
+// ErrDetailsRemoved is returned for the report of a period or a shift whose sale details
+// the register removed after the retention time (pkg/retention); the store server
+// holds them.
+var ErrDetailsRemoved = errors.New("bu raporun ayrıntıları saklama süresi dolduğu için kasadan silindi; mağaza sunucusunun raporlarına bakın")
+
 // Period is the period between two Z reports. In the open period ClosedAt is zero.
 type Period struct {
 	ZNo      int64
 	OpenedAt time.Time
 	ClosedAt time.Time
+	// DetailsRemoved says the period's sales were removed from the register; its report
+	// cannot be made again.
+	DetailsRemoved bool
 }
 
 // DayReport is a period's report. The fields follow the layout of GİB's YN ÖKC

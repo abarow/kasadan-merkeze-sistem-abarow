@@ -31,6 +31,7 @@ import (
 	"abarow.com/pkg/menu"
 	"abarow.com/pkg/money"
 	"abarow.com/pkg/outbox"
+	"abarow.com/pkg/retention"
 	"abarow.com/pkg/service"
 	"abarow.com/services/headquarters/catalog/internal/adapters/in/httpapi"
 	"abarow.com/services/headquarters/catalog/internal/adapters/out/eventproto"
@@ -120,6 +121,14 @@ func main() {
 			pub = natspub.Shared(js)
 		}
 		go outbox.NewRelay(db, pub, time.Second, log).Run(ctx)
+		// Retention (docs/decisions/RETENTION.md): the published outbox messages go.
+		keep, err := retention.ConfigFromEnv(os.Getenv)
+		if err != nil {
+			return err
+		}
+		go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+			{Name: "outbox", Keep: keep.Outbox, Clean: db.PruneOutbox},
+		}}.Run(ctx)
 
 		// Roles with write permission: administrator and catalog at headquarters; the store manager
 		// in the back house (ABAROW_CATALOG_WRITERS=manager).

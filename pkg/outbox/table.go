@@ -97,6 +97,44 @@ func (t Table) MarkPublished(ctx context.Context, db sqldialect.DB, seq int64, a
 	return nil
 }
 
+// Prune removes at most limit messages published before the given moment and returns how
+// many it removed. A published message is on the message path, which keeps it until its
+// receipt comes (pkg/delivery); nothing reads the published rows. The numbers come from
+// counters (or a sequence), so removing rows does not change the next number.
+func (t Table) Prune(ctx context.Context, db sqldialect.DB, before time.Time, limit int) (int64, error) {
+	return t.prune(ctx, db, "", before, limit)
+}
+
+// PruneDelivered is Prune for an outbox whose events get receipts: a message is removed
+// only if its receipt is recorded in delivery_received as well. A message left in the
+// table after that is an event the tier above has not confirmed yet.
+func (t Table) PruneDelivered(ctx context.Context, db sqldialect.DB, before time.Time, limit int) (int64, error) {
+	return t.prune(ctx, db, " AND EXISTS (SELECT 1 FROM delivery_received r WHERE r.event_id = "+t.Name+".id)", before, limit)
+}
+
+// Undelivered says whether a message that occurred before the given moment has no receipt
+// recorded in delivery_received yet (published or not). With PruneDelivered every
+// confirmed message leaves the table, so this looks only at the few rows left.
+func (t Table) Undelivered(ctx context.Context, db sqldialect.DB, before time.Time) (bool, error) {
+	var found bool
+	err := db.QueryRowContext(ctx, t.Dialect.Q("SELECT EXISTS (SELECT 1 FROM "+t.Name+" WHERE occurred_at < ?"+
+		" AND NOT EXISTS (SELECT 1 FROM delivery_received r WHERE r.event_id = "+t.Name+".id))"), t.Dialect.Time(before)).Scan(&found)
+	if err != nil {
+		return false, fmt.Errorf("outbox could not be checked: %w", err)
+	}
+	return found, nil
+}
+
+func (t Table) prune(ctx context.Context, db sqldialect.DB, also string, before time.Time, limit int) (int64, error) {
+	// Oldest first along the primary key: the messages were published in seq order.
+	res, err := db.ExecContext(ctx, t.Dialect.Q("DELETE FROM "+t.Name+" WHERE seq IN (SELECT seq FROM "+t.Name+
+		" WHERE published_at < ?"+also+" ORDER BY seq LIMIT ?)"), t.Dialect.Time(before), limit)
+	if err != nil {
+		return 0, fmt.Errorf("outbox could not be pruned: %w", err)
+	}
+	return res.RowsAffected()
+}
+
 // CountPending counts the unpublished messages.
 func (t Table) CountPending(ctx context.Context, db sqldialect.DB) (int64, error) {
 	var n int64

@@ -21,6 +21,27 @@
 | P2 | Performans | Orta | Merkez `ingest` tek işçi; kapasite 44–60 satış/sn |
 | G3–G6, D5–D8, B3–B4, M2–M4, P3–P5 | | Düşük | Aşağıda |
 
+## Çözüm durumu
+
+Bulgular aşağıda yazıldıkları gibi duruyor; yapılanlar bu tabloda izleniyor.
+
+| # | Durum | Ne yapıldı |
+|---|---|---|
+| G1 | Çözüldü (12.11.2026) | Satır başına miktar (100 000), birim fiyat (10 milyon TL), satır (1000) ve ödeme sınırı (`pkg/calc`); satış, market sepeti ve adisyon uyguluyor. gRPC sunucularında panik kurtarma (`pkg/service`). |
+| G2 | Çözüldü (12.11.2026) | `toolchain go1.27.4` bütün modüllerde; imajlar sürüm ve özetle sabit; CI ve terfi akışı aynı sürüm. `govulncheck` CI'da (`scripts/check.sh`). |
+| G3 | Çözüldü (12.11.2026) | Kalan JSON uçlarında 16 KB gövde sınırı. |
+| G4 | Çözüldü (12.11.2026) | Podman istemcisinde bağlantı, başlık ve çağrı zaman aşımları (imaj çekme 30 dakika). |
+| G6 | Çözüldü (12.11.2026) | `staticcheck` bulguları düzeltildi; `staticcheck` CI'da. |
+| G7 | Çözüldü (12.11.2026) | Yorum düzeltildi; kasa satışları artık saklama süresinden sonra siliniyor (D1). |
+| D1 | Çözüldü (12.11.2026) | Saklama süreleri ve temizlik: [RETENTION.md](decisions/RETENTION.md). Satış defteri silinmiyor. |
+| D4 | Çözüldü (12.11.2026) | CI, temel committe var olan bir migration dosyası değişirse başarısız oluyor (`scripts/check-migrations.sh`). |
+| D5 | Çözüldü (12.11.2026) | `staff` şemasında dört indeks (`00002_fk_indexes.sql`). |
+| D6 | Çözüldü (12.11.2026) | `plan_cache_mode` sunucu ayarı değil, yalnız rapor işleminde `SET LOCAL`. |
+| P3 | Çözüldü (12.11.2026) | Merkezde ham olay içeriği 90 gün sonra boşaltılıyor (D1). |
+| P5 | Ölçüldü, değişmedi (12.11.2026) | `hash_mem_multiplier = 1` ile yarım `/dev/shm` yük altında raporların yarısına yakınında hata verdi ([PERFORMANCE.md](PERFORMANCE.md)); 24 × `work_mem` pay korunuyor. |
+| M4 | Çözüldü (12.11.2026) | Her servis `/version` ucunda derlendiği sürümü ve Go sürümünü söylüyor. |
+| B4 | Bırakıldı | Quadlet dosyalarında sağlık durumu yeniden başlatma tetiklemiyor; ortak veritabanı container'ı durunca servisler bağlantı hatası verip veritabanı gelince sürüyor. Quadlet dosyaları CI'da `quadlet -dryrun` ile doğrulanıyor. |
+
 ---
 
 ## 1. Go uzmanı

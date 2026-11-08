@@ -203,6 +203,9 @@ func (s *ShiftService) OpenDrawer(ctx context.Context, byID, requestedBy, reason
 }
 
 func (s *ShiftService) report(ctx context.Context, sh domain.Shift) (domain.ShiftReport, error) {
+	if sh.DetailsRemoved {
+		return domain.ShiftReport{}, domain.ErrDetailsRemoved
+	}
 	completed, voided, err := s.shifts.ShiftFacts(ctx, sh.ID)
 	if err != nil {
 		return domain.ShiftReport{}, err

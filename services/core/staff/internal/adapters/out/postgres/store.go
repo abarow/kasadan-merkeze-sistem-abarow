@@ -179,7 +179,8 @@ func (s *Store) Period(ctx context.Context, zNo int64) (domain.Period, error) {
 	p := domain.Period{ZNo: zNo}
 	var opened string
 	var closed sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT opened_at, closed_at FROM periods WHERE z_no = $1`, zNo).Scan(&opened, &closed)
+	err := s.db.QueryRowContext(ctx, `SELECT opened_at, closed_at, details_removed_at IS NOT NULL FROM periods WHERE z_no = $1`, zNo).
+		Scan(&opened, &closed, &p.DetailsRemoved)
 	if errors.Is(err, sql.ErrNoRows) {
 		return p, domain.ErrUnknownPeriod
 	}

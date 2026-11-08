@@ -28,6 +28,7 @@ import (
 	"abarow.com/pkg/natsio"
 	"abarow.com/pkg/nodes"
 	"abarow.com/pkg/outbox"
+	"abarow.com/pkg/retention"
 	"abarow.com/pkg/service"
 	"abarow.com/pkg/stock"
 	"abarow.com/services/inventory/internal/adapters/in/httpapi"
@@ -45,6 +46,7 @@ type backend struct {
 		outbox.Store
 		Close() error
 		Ping(context.Context) error
+		PruneOutbox(ctx context.Context, before time.Time) (int64, error)
 	}
 	svc *app.Service
 	// start starts the consumers specific to the scope.
@@ -105,6 +107,14 @@ func main() {
 		}
 		// Movements are recorded even while NATS is down; they wait in the outbox.
 		go outbox.NewRelay(b.store, b.publisher(js), time.Second, log).Run(ctx)
+		// Retention (docs/decisions/RETENTION.md): the published outbox messages go.
+		keep, err := retention.ConfigFromEnv(os.Getenv)
+		if err != nil {
+			return err
+		}
+		go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+			{Name: "outbox", Keep: keep.Outbox, Clean: b.store.PruneOutbox},
+		}}.Run(ctx)
 
 		return service.ServeHTTP(ctx, log, service.HTTPConfig{
 			Handler:    httpapi.New(b.svc),

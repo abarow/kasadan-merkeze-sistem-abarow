@@ -22,6 +22,7 @@ import (
 
 	"abarow.com/pkg/outbox"
 	"abarow.com/pkg/pgpool"
+	"abarow.com/pkg/retention"
 	"abarow.com/pkg/sqldialect"
 	"abarow.com/pkg/text"
 	"abarow.com/services/headquarters/catalog/internal/app"
@@ -372,6 +373,13 @@ func (s *Store) MarkPublished(ctx context.Context, seq int64, at time.Time) erro
 // CountPending counts the unpublished messages.
 func (s *Store) CountPending(ctx context.Context) (int64, error) {
 	return outboxTable.CountPending(ctx, s.db)
+}
+
+// PruneOutbox removes the messages published before the given moment (pkg/retention).
+func (s *Store) PruneOutbox(ctx context.Context, before time.Time) (int64, error) {
+	return retention.Batches(ctx, 5000, func(ctx context.Context, limit int) (int64, error) {
+		return outboxTable.Prune(ctx, s.db, before, limit)
+	})
 }
 
 // inTx runs fn in a transaction; it turns unique-key violations into

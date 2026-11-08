@@ -56,6 +56,9 @@ type Shift struct {
 	CountedCash money.Money
 	// ClosedBy is the cashier who closed the shift (the owner or a manager).
 	ClosedBy string
+	// DetailsRemoved says the shift's sales and cash movements were removed from the
+	// register after the retention time; its report cannot be made again.
+	DetailsRemoved bool
 }
 
 // NewShift starts the cashier's shift with the opening cash.
