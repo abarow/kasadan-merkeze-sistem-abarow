@@ -18,6 +18,10 @@
 #
 # It runs on the machine as the abarow user (abarow-dbmaint.service) through the
 # database container's own socket. CONTAINER (podman) is the container tool.
+#
+# At headquarters on three machines every machine runs it on its own database. A replica is
+# read-only: there only the archive is checked (every machine archives the WAL,
+# archive_mode=always); the reindex, the statements and the tables are on the primary.
 set -eu
 db=${1:?database container}
 tool=${CONTAINER:-podman}
@@ -25,25 +29,33 @@ min_mb=${ABAROW_REINDEX_MIN_MB:-8}
 case "$min_mb" in '' | *[!0-9]*) echo "ABAROW_REINDEX_MIN_MB must be a number" >&2; exit 1 ;; esac
 sql() { "$tool" exec "$db" psql -U abarow -d abarow -X -q -v ON_ERROR_STOP=1 "$@"; }
 
-sql -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements' -c 'CREATE EXTENSION IF NOT EXISTS pgstattuple'
+primary() {
+	sql -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements' -c 'CREATE EXTENSION IF NOT EXISTS pgstattuple'
 
-for idx in $(sql -tA -c "SELECT format('%I.%I', n.nspname, c.relname)
-	FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_am a ON a.oid = c.relam
-	WHERE c.relkind = 'i' AND a.amname = 'btree' AND n.nspname NOT IN ('pg_catalog', 'information_schema')
-	AND pg_relation_size(c.oid) >= $min_mb * 1024 * 1024 AND (pgstatindex(c.oid)).avg_leaf_density < 50"); do
-	echo "reindex: $idx"
-	sql -c "REINDEX INDEX CONCURRENTLY $idx"
-done
+	for idx in $(sql -tA -c "SELECT format('%I.%I', n.nspname, c.relname)
+		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace JOIN pg_am a ON a.oid = c.relam
+		WHERE c.relkind = 'i' AND a.amname = 'btree' AND n.nspname NOT IN ('pg_catalog', 'information_schema')
+		AND pg_relation_size(c.oid) >= $min_mb * 1024 * 1024 AND (pgstatindex(c.oid)).avg_leaf_density < 50"); do
+		echo "reindex: $idx"
+		sql -c "REINDEX INDEX CONCURRENTLY $idx"
+	done
 
-echo "== the statements that took the most time since the last maintenance"
-sql -c "SELECT round(total_exec_time / 1000) AS total_s, calls, round(mean_exec_time) AS mean_ms,
-	left(regexp_replace(query, '\s+', ' ', 'g'), 100) AS query
-	FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 10"
-sql -tA -c 'SELECT pg_stat_statements_reset()' >/dev/null
-echo "== the largest tables"
-sql -c "SELECT schemaname || '.' || relname AS table, pg_size_pretty(pg_total_relation_size(relid)) AS size,
-	n_live_tup AS live, n_dead_tup AS dead, last_autovacuum::timestamp(0) AS autovacuum
-	FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 15"
+	echo "== the statements that took the most time since the last maintenance"
+	sql -c "SELECT round(total_exec_time / 1000) AS total_s, calls, round(mean_exec_time) AS mean_ms,
+		left(regexp_replace(query, '\s+', ' ', 'g'), 100) AS query
+		FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 10"
+	sql -tA -c 'SELECT pg_stat_statements_reset()' >/dev/null
+	echo "== the largest tables"
+	sql -c "SELECT schemaname || '.' || relname AS table, pg_size_pretty(pg_total_relation_size(relid)) AS size,
+		n_live_tup AS live, n_dead_tup AS dead, last_autovacuum::timestamp(0) AS autovacuum
+		FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 15"
+}
+
+if [ "$(sql -tA -c 'SELECT pg_is_in_recovery()')" = t ]; then
+	echo "== replica: the reindex and the statements are on the primary; only the archive is checked"
+else
+	primary
+fi
 echo "== WAL archive"
 sql -c "SELECT archived_count, last_archived_wal, last_archived_time::timestamp(0), failed_count, last_failed_wal,
 	last_failed_time::timestamp(0) FROM pg_stat_archiver"

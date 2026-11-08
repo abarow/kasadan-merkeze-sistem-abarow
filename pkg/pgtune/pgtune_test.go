@@ -189,6 +189,26 @@ func TestForHeadquarters(t *testing.T) {
 	}
 }
 
+// Headquarters on three machines: the pools of the three machines, Patroni's connections and
+// the reserve fit; memory covers the larger pool; one machine is ForHeadquarters.
+func TestForHeadquartersCluster(t *testing.T) {
+	if ForHeadquartersCluster(100, 1) != ForHeadquarters(100) {
+		t.Error("one machine differs from ForHeadquarters")
+	}
+	for _, n := range []int{0, 10, 100, 400} {
+		s := ForHeadquartersCluster(n, 3)
+		if need := 3*HeadquartersPoolConnections + PatroniConnections + ReservedConnections + 1; s.MaxConnections < need {
+			t.Errorf("%d registers: max_connections %d < %d", n, s.MaxConnections, need)
+		}
+		if need := s.SharedBuffersMB + perConnectionMB*3*HeadquartersPoolConnections + overheadMB; s.MemoryLimitMB < need {
+			t.Errorf("%d registers: memory %d < %d", n, s.MemoryLimitMB, need)
+		}
+		if one := ForHeadquarters(n); s.SharedBuffersMB != one.SharedBuffersMB || s.WorkMemMB != one.WorkMemMB {
+			t.Errorf("%d registers: %+v differs from one machine %+v", n, s, one)
+		}
+	}
+}
+
 // The register's Compose and Quadlet files carry the same values as ForRegister.
 func TestRegisterDeployFiles(t *testing.T) {
 	r := ForRegister()

@@ -142,6 +142,8 @@ postgresql:
       sslrootcert: $tls/ca.pem
   pg_hba:
     - local all all trust
+    # The weekly base backup is read through the socket (deploy/quadlet/backup/basebackup.sh).
+    - local replication all trust
     - hostssl replication replicator all scram-sha-256
     - hostssl all all all scram-sha-256
 EOF

@@ -176,6 +176,26 @@ func ForHeadquarters(registers int) Settings {
 	})
 }
 
+// PatroniConnections are the connections Patroni keeps to its own database on every machine
+// (the heartbeat and the REST API).
+const PatroniConnections = 2
+
+// ForHeadquartersCluster computes the settings of headquarters on several machines
+// (docs/decisions/HA-HEADQUARTERS.md). The services of every machine connect to the primary, so
+// the pools are counted once per machine; Patroni's own connections are added. The other
+// settings are those of ForHeadquarters: every machine can become primary and must carry the
+// same load. One machine is ForHeadquarters.
+func ForHeadquartersCluster(registers, machines int) Settings {
+	if machines <= 1 {
+		return ForHeadquarters(registers)
+	}
+	return compute(max(registers, 0), profile{
+		maxShared: MaxHeadquartersSharedBuffersMB, pool: HeadquartersPoolConnections * machines,
+		maxConns:       HeadquartersMaxConnections + HeadquartersPoolConnections*(machines-1) + PatroniConnections,
+		maxMaintenance: 128, bigWorkMem: 32,
+	})
+}
+
 // profile holds the constants where ForStore and ForHeadquarters diverge.
 type profile struct {
 	maxShared, pool, maxConns, maxMaintenance int

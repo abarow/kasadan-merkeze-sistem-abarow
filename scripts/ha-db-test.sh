@@ -104,6 +104,17 @@ if docker run --rm --network "$network" -e PGPASSWORD="$db_password" -e PGCONNEC
 fi
 echo "service connection, replication: TLS; a connection without TLS is refused"
 
+echo "== 0b. base backup and weekly maintenance on the machines"
+primary=$(leader)
+replica=$(members | awk -F'\t' -v p="$primary" '$1 != p { print $1; exit }')
+mkdir -p "$work/base"
+CONTAINER=docker sh deploy/quadlet/backup/basebackup.sh "$(container "$replica")" "$work/base"
+CONTAINER=docker sh deploy/quadlet/backup/dbmaint.sh "$(container "$primary")" | grep "the largest tables" >/dev/null ||
+	{ echo "the maintenance did not run on the primary" >&2; exit 1; }
+CONTAINER=docker sh deploy/quadlet/backup/dbmaint.sh "$(container "$replica")" | grep "^== replica" >/dev/null ||
+	{ echo "the maintenance on a replica did not skip to the archive check" >&2; exit 1; }
+echo "base backup from the replica $replica; maintenance on the primary $primary and on the replica"
+
 echo "== 1. the primary is killed while writing"
 (cd pkg && CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" go test -c -o "$ABAROW_HA_SECRETS/failover" ./pgdb)
 docker run --rm --network "$network" -v "$(hostpath "$work"):/w" \
