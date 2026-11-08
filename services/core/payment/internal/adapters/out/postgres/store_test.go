@@ -1,23 +1,23 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/core/payment/internal/app"
 	"abarow.com/services/core/payment/internal/domain"
 )
 
 func TestSaveAndGet(t *testing.T) {
 	ctx := context.Background()
-	st, err := Open(ctx, filepath.Join(t.TempDir(), "payment.db"))
+	st, err := Open(ctx, pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

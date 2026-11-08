@@ -494,6 +494,14 @@ if [ -n "$store_url" ]; then
 fi
 before=$( (cat "$auth/nats.conf" 2>/dev/null || true) | sha256sum)
 "${natsauth[@]}" "${args[@]}"
+# The register database password is generated once and kept across re-installs.
+if ! as test -s "$auth/db-password"; then
+	head -c 30 /dev/urandom | base64 -w0 | tr '/+' '_-' | as tee "$auth/db-password" >/dev/null
+	as chmod 0600 "$auth/db-password"
+fi
+db_password=$(as cat "$auth/db-password")
+secret abarow-register-db-password "$auth/db-password"
+printf 'postgres://abarow:%s@abarow-register-db:5432/abarow?sslmode=disable' "$db_password" | as podman secret create --replace abarow-register-db-url - >/dev/null
 secret abarow-nats-conf "$auth/nats.conf"
 secret abarow-nats-sales "$auth/sales/nats.nk"
 secret abarow-nats-staff "$auth/staff/nats.nk"

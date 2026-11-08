@@ -6,7 +6,6 @@ package grpcserver_test
 import (
 	"context"
 	"log/slog"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -18,15 +17,16 @@ import (
 
 	"abarow.com/pkg/grpctest"
 	"abarow.com/pkg/money"
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/core/payment/internal/adapters/in/grpcserver"
-	"abarow.com/services/core/payment/internal/adapters/out/sqlite"
+	"abarow.com/services/core/payment/internal/adapters/out/postgres"
 	"abarow.com/services/core/payment/internal/adapters/out/terminalsim"
 	"abarow.com/services/core/payment/internal/app"
 )
 
 func start(t *testing.T, limit money.Money) paymentv1.PaymentServiceClient {
 	t.Helper()
-	st, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "payment.db"))
+	st, err := postgres.Open(context.Background(), pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

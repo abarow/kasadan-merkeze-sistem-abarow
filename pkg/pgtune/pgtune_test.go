@@ -5,6 +5,7 @@ package pgtune
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 )
@@ -185,5 +186,30 @@ func TestForHeadquarters(t *testing.T) {
 	}
 	if HeadquartersPoolConnections+ReservedConnections+1 > HeadquartersMaxConnections {
 		t.Error("the headquarters connection budget was exceeded")
+	}
+}
+
+// The register's Compose and Quadlet files carry the same values as ForRegister.
+func TestRegisterDeployFiles(t *testing.T) {
+	r := ForRegister()
+	read := func(rel string) string {
+		t.Helper()
+		data, err := os.ReadFile("../../deploy/" + rel)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(data)
+	}
+	if q := read("quadlet/abarow-register-db.container"); !strings.Contains(q, "Exec=postgres "+r.Args()+"\n") ||
+		!strings.Contains(q, fmt.Sprintf("PodmanArgs=--memory=%dm\n", r.MemoryLimitMB)) {
+		t.Errorf("the Quadlet file differs from ForRegister:\n%s", q)
+	}
+	var quoted []string
+	for _, f := range append([]string{"postgres"}, r.Flags()...) {
+		quoted = append(quoted, `"`+f+`"`)
+	}
+	c := read("compose/compose.yaml")
+	if !strings.Contains(c, "command: ["+strings.Join(quoted, ", ")+"]") || !strings.Contains(c, fmt.Sprintf("mem_limit: %dm", r.MemoryLimitMB)) {
+		t.Error("the Compose register-db differs from ForRegister")
 	}
 }

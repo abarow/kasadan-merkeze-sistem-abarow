@@ -3,6 +3,8 @@
 
 [Unit]
 Description=abarow payment (POS simulator)
+Wants=abarow-register-db.service
+After=abarow-register-db.service
 
 [Container]
 ContainerName=abarow-payment
@@ -11,7 +13,7 @@ Image=ghcr.io/abarow/abarow-payment:0.1
 # is applied once approved on the screen (docs/UPDATE.md).
 Network=abarow.network
 Environment=GOMEMLIMIT=48MiB
-Volume=abarow-payment-data:/data
+Secret=abarow-register-db-url,type=env,target=ABAROW_DATABASE_URL
 HealthCmd=["/service", "healthcheck"]
 HealthInterval=5s
 HealthTimeout=3s

@@ -14,7 +14,7 @@ import (
 	"abarow.com/pkg/money"
 	"abarow.com/pkg/service"
 	"abarow.com/services/core/payment/internal/adapters/in/grpcserver"
-	"abarow.com/services/core/payment/internal/adapters/out/sqlite"
+	"abarow.com/services/core/payment/internal/adapters/out/postgres"
 	"abarow.com/services/core/payment/internal/adapters/out/terminalsim"
 	"abarow.com/services/core/payment/internal/app"
 )
@@ -22,7 +22,11 @@ import (
 func main() {
 	healthAddr := service.Env("ABAROW_PAYMENT_HEALTH_ADDR", ":8081")
 	service.Main("payment", healthAddr, func(ctx context.Context, log *slog.Logger) error {
-		store, err := sqlite.Open(ctx, service.Env("ABAROW_PAYMENT_DB", "/data/payment.db"))
+		dsn, err := service.MustEnv("ABAROW_DATABASE_URL")
+		if err != nil {
+			return err
+		}
+		store, err := postgres.Open(ctx, dsn)
 		if err != nil {
 			return err
 		}

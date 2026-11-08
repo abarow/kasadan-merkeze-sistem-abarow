@@ -182,16 +182,36 @@ services:
       nats-auth: { condition: service_completed_successfully }
     restart: unless-stopped
 
+  # The register's database: every service works in its own schema (pkg/pgdb). The
+  # values are pgtune.ForRegister; pkg/pgtune's test checks this file.
+  register-db:
+    image: postgres:18-alpine
+    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=12", "-c", "work_mem=2MB", "-c", "maintenance_work_mem=8MB", "-c", "wal_buffers=1MB", "-c", "effective_cache_size=96MB", "-c", "random_page_cost=1.1", "-c", "plan_cache_mode=force_custom_plan", "-c", "min_wal_size=32MB", "-c", "max_wal_size=128MB", "-c", "checkpoint_completion_target=0.9", "-c", "autovacuum_max_workers=2", "-c", "max_worker_processes=4", "-c", "max_parallel_workers=0", "-c", "max_parallel_workers_per_gather=0", "-c", "max_parallel_maintenance_workers=0"]
+    environment:
+      POSTGRES_DB: abarow
+      POSTGRES_USER: abarow
+      POSTGRES_PASSWORD: ${ABAROW_DB_PASSWORD:-register-test}
+    volumes: [register-db-data:/var/lib/postgresql]
+    mem_limit: 192m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "abarow", "-d", "abarow"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
   payment:
     build:
       <<: *go-build
       args: { MODULE: services/core/payment, PKG: ./cmd/payment }
     image: ghcr.io/abarow/abarow-payment:dev
     environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
       # The POS simulator rejects card charges over 5,000 TL.
       ABAROW_PAYMENT_SIM_LIMIT_KURUS: "500000"
       GOMEMLIMIT: 48MiB
-    volumes: [payment-data:/data]
+    depends_on:
+      register-db: { condition: service_healthy }
     mem_limit: 64m
     healthcheck: *healthcheck
     restart: unless-stopped
@@ -274,5 +294,5 @@ volumes:
   catalog-data:
   staff-data:
   sales-data:
-  payment-data:
+  register-db-data:
   nats-data:

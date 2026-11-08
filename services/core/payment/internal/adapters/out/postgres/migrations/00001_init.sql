@@ -4,9 +4,9 @@
 -- +goose Up
 -- A single payment record per sale; repeated requests are answered with this record.
 CREATE TABLE charges (
-    sale_id    TEXT PRIMARY KEY,
-    payments   TEXT NOT NULL, -- JSON
-    charged_at TEXT NOT NULL
+    sale_id    TEXT        PRIMARY KEY,
+    payments   TEXT        NOT NULL, -- JSON
+    charged_at TIMESTAMPTZ NOT NULL
 );
 
 -- +goose Down

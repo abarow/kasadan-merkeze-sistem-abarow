@@ -119,6 +119,15 @@ func ForStore(registers int) Settings {
 	})
 }
 
+// ForRegister is the setting of the database on a register: fixed, small, one connection
+// per service (pkg/pgdb). A register holds its own sales only until they are delivered.
+func ForRegister() Settings {
+	return Settings{
+		SharedBuffersMB: 32, MaxConnections: 12, WorkMemMB: 2, MaintenanceWorkMemMB: 8, WalBuffersMB: 1,
+		EffectiveCacheSizeMB: 96, MinWalSizeMB: 32, MaxWalSizeMB: 128, MemoryLimitMB: 192, ShmMB: DefaultShmMB,
+	}
+}
+
 // Constants for headquarters. Headquarters holds the data of all the stores
 // (~110 thousand sales per register per year; queries look at the recent months) and the database
 // grows with the number of stores: 50 stores × 2 registers × 30 days = 900 thousand sales, 2 GB.
