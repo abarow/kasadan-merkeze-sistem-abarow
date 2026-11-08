@@ -46,7 +46,7 @@ func TestDoubling(t *testing.T) {
 
 func TestToken(t *testing.T) {
 	a, b := NewToken(), NewToken()
-	if a == b || len(a) != 43 || TokenHash(a) == TokenHash(b) || TokenHash(a) != TokenHash(a) {
+	if a == b || len(a) != 43 || TokenHash(a) == TokenHash(b) || TokenHash(a) != TokenHash(string([]byte(a))) {
 		t.Errorf("anahtarlar %q %q", a, b)
 	}
 }

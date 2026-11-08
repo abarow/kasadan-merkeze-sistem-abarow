@@ -634,7 +634,7 @@ func cashMovementScenario(gw string) scenario {
 func shiftCloseScenario(gw string) scenario {
 	return scenario{"Shift closing: blind count, cash shortage; Z cannot be taken with an open shift; the report is printed", func(ctx context.Context, _ salesv1.SalesServiceClient) (string, error) {
 		if err := call(ctx, http.MethodPost, managerToken, gw+"/api/reports/z", nil, nil); err == nil || !strings.Contains(err.Error(), "409") {
-			return "", fmt.Errorf("Z could be taken with an open shift: %v", err)
+			return "", fmt.Errorf("z could be taken with an open shift: %v", err)
 		}
 		// 1.00 TL is counted short in the drawer.
 		expected := openingCash + shiftCash + cashIn - cashOut
@@ -937,7 +937,7 @@ func reportScenario(gw, natsURL string) scenario {
 		}
 		if x.ZNo != dayZNo || x.ReceiptCount != int64(len(completedIDs)) || x.TotalKurus != completedTotal ||
 			x.VoidedCount != int64(len(voidedIDs)) || x.VoidedTotalKurus != voidedTotal {
-			return "", fmt.Errorf("X report: Z no %d, %d receipts %s, %d cancellations %s; want Z no %d, %d receipts %s, %d cancellations %s",
+			return "", fmt.Errorf("the X report: Z no %d, %d receipts %s, %d cancellations %s; want Z no %d, %d receipts %s, %d cancellations %s",
 				x.ZNo, x.ReceiptCount, tl(x.TotalKurus), x.VoidedCount, tl(x.VoidedTotalKurus),
 				dayZNo, len(completedIDs), tl(completedTotal), len(voidedIDs), tl(voidedTotal))
 		}
@@ -963,7 +963,7 @@ func reportScenario(gw, natsURL string) scenario {
 			return "", err
 		}
 		if z.ZNo != x.ZNo || z.ReceiptCount != x.ReceiptCount || z.TotalKurus != x.TotalKurus || z.ClosedAt == nil {
-			return "", fmt.Errorf("Z raporu X ile tutmuyor: %+v", z)
+			return "", fmt.Errorf("the Z report does not match the X report: %+v", z)
 		}
 		var next report
 		if err := call(ctx, http.MethodGet, managerToken, gw+"/api/reports/x", nil, &next); err != nil {

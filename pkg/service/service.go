@@ -9,6 +9,7 @@ package service
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -16,6 +17,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
+	"runtime/debug"
 	"strings"
 	"syscall"
 	"time"
@@ -84,9 +87,17 @@ func Healthcheck(addr string) error {
 	return nil
 }
 
+// Version is the release of the service; the image build sets it
+// (-ldflags "-X abarow.com/pkg/service.Version=..."). The health port gives it at /version.
+var Version = "dev"
+
 // HealthHandler returns 200 "ok" if check returns nil, otherwise 503.
 func HealthHandler(check func(context.Context) error) http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{"version": Version, "go": runtime.Version()})
+	})
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		if check != nil {
 			if err := check(r.Context()); err != nil {
@@ -131,8 +142,30 @@ func NewGRPCServer(opts ...grpc.ServerOption) *grpc.Server {
 	base := []grpc.ServerOption{
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 5 * time.Second, PermitWithoutStream: true}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{Time: 30 * time.Second, Timeout: 10 * time.Second}),
+		grpc.ChainUnaryInterceptor(recoverUnary),
+		grpc.ChainStreamInterceptor(recoverStream),
 	}
 	return grpc.NewServer(append(base, opts...)...)
+}
+
+// recoverUnary turns a panic in a gRPC handler into an Internal error: grpc-go does not
+// recover it and the whole service would stop. The stack goes to the log.
+func recoverUnary(ctx context.Context, req any, info *grpc.UnaryServerInfo, h grpc.UnaryHandler) (resp any, err error) {
+	defer recovered(info.FullMethod, &err)
+	return h(ctx, req)
+}
+
+// recoverStream is recoverUnary for streaming calls.
+func recoverStream(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, h grpc.StreamHandler) (err error) {
+	defer recovered(info.FullMethod, &err)
+	return h(srv, ss)
+}
+
+func recovered(method string, err *error) {
+	if p := recover(); p != nil {
+		slog.Error("panic in gRPC handler", "method", method, "panic", fmt.Sprint(p), "stack", string(debug.Stack()))
+		*err = status.Error(codes.Internal, "iç hata")
+	}
 }
 
 func dial(addr string, kp keepalive.ClientParameters) (*grpc.ClientConn, error) {

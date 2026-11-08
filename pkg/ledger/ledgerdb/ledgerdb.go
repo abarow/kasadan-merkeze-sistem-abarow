@@ -190,6 +190,15 @@ func (d Dialect) SaveShift(ctx context.Context, db DB, sh ledger.Shift) error {
 // ledger.Builder. For a consistent read db can be a read-only
 // transaction.
 func (d Dialect) Report(ctx context.Context, db DB, f ledger.Filter) (ledger.Report, error) {
+	if d.Postgres() {
+		// The daily and the monthly report share their SQL text; after a few runs PostgreSQL
+		// would move the prepared statement to a generic plan that does not know the dates
+		// and assumes a short range (the monthly product ranking took 4-6 s instead of 0.7 s).
+		// Only for this transaction: db is a *sql.Tx (outside a transaction it has no effect).
+		if _, err := db.ExecContext(ctx, "SET LOCAL plan_cache_mode = force_custom_plan"); err != nil {
+			return ledger.Report{}, err
+		}
+	}
 	b := ledger.NewBuilder(f)
 	args := []any{d.Time(f.Start), d.Time(f.End)}
 	stores := ""

@@ -2,6 +2,8 @@ module abarow.com/services/update
 
 go 1.26.0
 
+toolchain go1.27.4
+
 require (
 	abarow.com/pkg v0.0.0-00010101000000-000000000000
 	github.com/go-jose/go-jose/v4 v4.1.8

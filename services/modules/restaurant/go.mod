@@ -2,6 +2,8 @@ module abarow.com/services/modules/restaurant
 
 go 1.26.0
 
+toolchain go1.27.4
+
 replace (
 	abarow.com/gen => ../../../gen
 	abarow.com/pkg => ../../../pkg

@@ -99,3 +99,46 @@ func TestReceiptValidate(t *testing.T) {
 		}
 	}
 }
+
+// The limits keep every sum inside int64: the largest sale and the largest payments
+// still add up without overflow, and anything above a limit is rejected.
+func TestLimits(t *testing.T) {
+	if err := CheckLine(MaxUnitPrice, MaxQty); err != nil {
+		t.Errorf("the largest line was rejected: %v", err)
+	}
+	for name, err := range map[string]error{
+		"quantity":   CheckLine(100, MaxQty+1),
+		"unit price": CheckLine(MaxUnitPrice+1, money.QtyScale),
+	} {
+		if !errors.Is(err, ErrTooLarge) {
+			t.Errorf("%s above the limit: %v", name, err)
+		}
+	}
+	largestLine := Line(MaxUnitPrice, MaxQty)
+	if largestLine <= 0 || largestLine*MaxLines/MaxLines != largestLine {
+		t.Fatalf("the largest line overflows: %d", largestLine)
+	}
+	if sum := largestLine * MaxLines; sum != MaxPayment {
+		t.Errorf("the largest sale %d, the largest payment %d", sum, MaxPayment)
+	}
+	var paid money.Money
+	for range MaxPayments {
+		next := paid + MaxPayment
+		if next < paid {
+			t.Fatal("the payments total overflows")
+		}
+		paid = next
+	}
+
+	big := []Payment{{Method: "cash", Amount: MaxPayment + 1}}
+	if err := CheckPayments(100, big); !errors.Is(err, ErrTooLarge) {
+		t.Errorf("payment above the limit: %v", err)
+	}
+	many := make([]Payment, MaxPayments+1)
+	for i := range many {
+		many[i] = Payment{Method: "cash", Amount: 1}
+	}
+	if err := CheckPayments(1, many); !errors.Is(err, ErrTooLarge) {
+		t.Errorf("too many payments: %v", err)
+	}
+}

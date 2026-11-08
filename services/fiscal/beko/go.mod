@@ -2,6 +2,8 @@ module abarow.com/services/fiscal/beko
 
 go 1.26.0
 
+toolchain go1.27.4
+
 require (
 	abarow.com/gen v0.0.0-00010101000000-000000000000
 	abarow.com/pkg v0.0.0-00010101000000-000000000000

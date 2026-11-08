@@ -2,6 +2,8 @@ module abarow.com/tools/natsauth
 
 go 1.26.0
 
+toolchain go1.27.4
+
 require (
 	abarow.com/pkg v0.0.0-00010101000000-000000000000
 	github.com/nats-io/nats-server/v2 v2.12.15

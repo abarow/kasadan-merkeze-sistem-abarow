@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"abarow.com/pkg/calc"
 	"abarow.com/pkg/money"
 	"abarow.com/services/core/sales/internal/domain"
 )
@@ -302,5 +303,26 @@ func TestRecordFiscalFailure(t *testing.T) {
 	// The status does not change: the sale waits to be completed at the register.
 	if s.Status() != domain.StatusCharged {
 		t.Errorf("durum %s", s.Status())
+	}
+}
+
+// A quantity or price above the limits is rejected instead of overflowing the totals.
+func TestLineLimits(t *testing.T) {
+	now := time.Date(2026, 11, 11, 10, 0, 0, 0, time.UTC)
+	line := domain.Line{ProductID: "p", Name: "Ürün", Qty: calc.MaxQty + 1, UnitPrice: 100, TaxRate: 2000}
+	if _, err := domain.NewSale("s1", "register-1", "ayse", []domain.Line{line}, now); !errors.Is(err, domain.ErrInvalidLine) || !errors.Is(err, calc.ErrTooLarge) {
+		t.Errorf("quantity above the limit: %v", err)
+	}
+	line.Qty, line.UnitPrice = money.QtyScale, calc.MaxUnitPrice+1
+	if _, err := domain.NewSale("s1", "register-1", "ayse", []domain.Line{line}, now); !errors.Is(err, calc.ErrTooLarge) {
+		t.Errorf("price above the limit: %v", err)
+	}
+	line.UnitPrice = 100
+	many := make([]domain.Line, calc.MaxLines+1)
+	for i := range many {
+		many[i] = line
+	}
+	if _, err := domain.NewSale("s1", "register-1", "ayse", many, now); !errors.Is(err, calc.ErrTooLarge) {
+		t.Errorf("too many lines: %v", err)
 	}
 }

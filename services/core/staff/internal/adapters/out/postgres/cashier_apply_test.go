@@ -38,7 +38,7 @@ func TestApplyCashier(t *testing.T) {
 	if _, _, _, err := auth.Login(ctx, "ayse", "1111"); !errors.Is(err, domain.ErrWrongPIN) {
 		t.Errorf("eski PIN: hata = %v", err)
 	}
-	token, c, _, err := auth.Login(ctx, "ayse", "2468")
+	_, c, _, err := auth.Login(ctx, "ayse", "2468")
 	if err != nil || c.Name != "Ayşe Yılmaz" || c.Origin != domain.FromStore {
 		t.Fatalf("operasyonun PIN'iyle giriş: %+v, %v", c, err)
 	}
@@ -70,7 +70,7 @@ func TestApplyCashier(t *testing.T) {
 	if err := auth.ApplyCashier(ctx, domain.Cashier{ID: "ayse", Name: "Ayşe Y.", Role: domain.RoleCashier, PINHash: pinHash(t, "1357")}); err != nil {
 		t.Fatal(err)
 	}
-	token, _, _, err = auth.Login(ctx, "ayse", "1357")
+	token, _, _, err := auth.Login(ctx, "ayse", "1357")
 	if err != nil {
 		t.Fatalf("yeni PIN'le giriş: %v", err)
 	}

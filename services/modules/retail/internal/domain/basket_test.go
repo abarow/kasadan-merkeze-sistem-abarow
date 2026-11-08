@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"abarow.com/pkg/calc"
 	"abarow.com/pkg/money"
 )
 
@@ -107,5 +108,22 @@ func TestBasketRules(t *testing.T) {
 	b.Reopen()
 	if b.Status != Open || b.SaleID != "" {
 		t.Errorf("Reopen: %+v", b)
+	}
+}
+
+// A quantity above the limit is rejected, also when it is reached by scanning again.
+func TestQuantityLimit(t *testing.T) {
+	b := NewBasket("b1", "ayse", time.Now())
+	if err := b.Add(bread, calc.MaxQty+1, false); !errors.Is(err, calc.ErrTooLarge) {
+		t.Errorf("quantity above the limit: %v", err)
+	}
+	if err := b.Add(bread, calc.MaxQty, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.Add(bread, money.QtyScale, false); !errors.Is(err, calc.ErrTooLarge) {
+		t.Errorf("a second scan crossing the limit: %v", err)
+	}
+	if err := b.SetQty(0, calc.MaxQty+1); !errors.Is(err, calc.ErrTooLarge) {
+		t.Errorf("setting a quantity above the limit: %v", err)
 	}
 }

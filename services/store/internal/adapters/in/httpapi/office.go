@@ -29,6 +29,9 @@ type options struct {
 // the code the approver will enter at headquarters) and the approval of the new version: only a manager gives
 // the approval. secret is the secret key shared with the agent. If agent is nil
 // "not installed".
+// maxJSON is the largest JSON request body these endpoints read (their bodies are a few fields).
+const maxJSON = 16 << 10
+
 func WithUpdate(agent *url.URL, secret string) Option {
 	return func(o *options) { o.update, o.secret = agent, secret }
 }
@@ -115,7 +118,7 @@ func (h *officeHandler) set(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Connected *bool `json:"connected"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.Connected == nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&in); err != nil || in.Connected == nil {
 		writeError(w, http.StatusBadRequest, "connected (true ya da false) gerekli")
 		return
 	}

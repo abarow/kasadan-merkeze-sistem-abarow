@@ -38,7 +38,6 @@ type fakeRuntime struct {
 	pullErr  map[string]error
 	badDig   map[string]bool // if switched to this digest the unit does not come up healthy
 	switchOK map[string]error
-	rolled   map[string]bool
 }
 
 func newRuntime(units ...string) *fakeRuntime {

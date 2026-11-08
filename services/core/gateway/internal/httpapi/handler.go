@@ -72,6 +72,9 @@ type Config struct {
 // New returns the gateway handler. module is the handler that goes to the active
 // vertical module (e.g. a reverse proxy). If device is nil (no ABAROW_DEVICE_ADDR)
 // the barcode reader flow is off.
+// maxJSON is the largest JSON request body these endpoints read (their bodies are a few fields).
+const maxJSON = 16 << 10
+
 func New(sales salesv1.SalesServiceClient, staff staffv1.StaffServiceClient, device devicev1.DeviceServiceClient, module http.Handler, cfg Config) http.Handler {
 	h := &handler{sales: sales, staff: staff, device: device, cfg: cfg}
 	mux := http.NewServeMux()
@@ -249,7 +252,7 @@ func (h *handler) login(w http.ResponseWriter, r *http.Request) {
 		CashierID string `json:"cashier_id"`
 		PIN       string `json:"pin"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "geçersiz istek")
 		return
 	}
@@ -289,7 +292,7 @@ func (h *handler) openDrawer(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Reason string `json:"reason"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "geçersiz istek")
 		return
 	}
@@ -312,7 +315,7 @@ func (h *handler) approve(w http.ResponseWriter, r *http.Request) {
 		PIN       string `json:"pin"`
 		Action    string `json:"action"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "geçersiz istek")
 		return
 	}
@@ -435,7 +438,7 @@ func (h *handler) checkout(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Payments []paymentJSON `json:"payments"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "geçersiz istek")
 		return
 	}
@@ -659,7 +662,7 @@ func (h *handler) openShift(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		OpeningCashKurus int64 `json:"opening_cash_kurus"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "geçersiz istek")
 		return
 	}
@@ -679,7 +682,7 @@ func (h *handler) closeShift(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		CountedCashKurus int64 `json:"counted_cash_kurus"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "geçersiz istek")
 		return
 	}
@@ -758,7 +761,7 @@ func (h *handler) cashMovement(w http.ResponseWriter, r *http.Request) {
 		AmountKurus int64  `json:"amount_kurus"`
 		Note        string `json:"note"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "geçersiz istek")
 		return
 	}

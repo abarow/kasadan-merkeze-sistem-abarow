@@ -2,6 +2,8 @@ module abarow.com/services/headquarters/reporting
 
 go 1.26.0
 
+toolchain go1.27.4
+
 replace abarow.com/pkg => ../../../pkg
 
 require abarow.com/pkg v0.0.0-00010101000000-000000000000

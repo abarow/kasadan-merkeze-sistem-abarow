@@ -79,6 +79,9 @@ func (l Line) validate() error {
 	case l.TaxRate < 0:
 		return fmt.Errorf("%w: KDV oranı negatif olamaz", ErrInvalidLine)
 	}
+	if err := calc.CheckLine(l.UnitPrice, l.Qty); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidLine, err)
+	}
 	return nil
 }
 
@@ -128,6 +131,9 @@ func NewSale(id SaleID, registerID, cashierID string, lines []Line, now time.Tim
 	}
 	if len(lines) == 0 {
 		return nil, ErrNoLines
+	}
+	if len(lines) > calc.MaxLines {
+		return nil, fmt.Errorf("%w: en çok %d satır: %w", ErrInvalidLine, calc.MaxLines, calc.ErrTooLarge)
 	}
 	for i, l := range lines {
 		if err := l.validate(); err != nil {

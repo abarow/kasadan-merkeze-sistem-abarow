@@ -15,6 +15,7 @@ import (
 
 	salesv1 "abarow.com/gen/com/abarow/sales/v1"
 
+	"abarow.com/pkg/calc"
 	"abarow.com/pkg/money"
 	"abarow.com/pkg/paymethod"
 	"abarow.com/services/core/sales/internal/app"
@@ -115,7 +116,8 @@ func toStatus(err error) error {
 		code = codes.NotFound
 	case errors.Is(err, domain.ErrNoLines), errors.Is(err, domain.ErrInvalidLine),
 		errors.Is(err, domain.ErrInvalidPayment), errors.Is(err, domain.ErrInsufficientPayment),
-		errors.Is(err, domain.ErrExcessNonCash), errors.Is(err, domain.ErrInvalidStatus):
+		errors.Is(err, domain.ErrExcessNonCash), errors.Is(err, domain.ErrInvalidStatus),
+		errors.Is(err, calc.ErrTooLarge):
 		code = codes.InvalidArgument
 	case errors.Is(err, domain.ErrNotOpen), errors.Is(err, domain.ErrNotCharged),
 		errors.Is(err, app.ErrNotProcessed), errors.Is(err, app.ErrCollectedByDevice):

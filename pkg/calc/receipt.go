@@ -31,7 +31,34 @@ var (
 	ErrExcessNonCash = errors.New("fazla ödeme yalnızca nakitle yapılabilir")
 	// ErrInconsistent means the receipt's totals do not match one another.
 	ErrInconsistent = errors.New("fiş tutarsız")
+	// ErrTooLarge means a quantity, price, amount or count is above the limits below.
+	ErrTooLarge = errors.New("miktar, fiyat ya da tutar çok büyük")
 )
+
+// Limits of a sale. The arithmetic is int64 kuruş: with these limits no line, total or
+// payment sum can overflow (1000 lines × 10¹⁴ = 10¹⁷; 50 payments × 10¹⁷ = 5·10¹⁸ < 9.2·10¹⁸).
+// They are far above any real sale; they exist so that a wrong or hostile input is
+// rejected instead of overflowing.
+const (
+	// MaxQty is the largest quantity of a line: 100 000 pieces or 100 t.
+	MaxQty money.Qty = 100_000 * money.QtyScale
+	// MaxUnitPrice is the largest unit price: 10 000 000 TL.
+	MaxUnitPrice money.Money = 10_000_000 * 100
+	// MaxLines is the largest number of lines of a sale.
+	MaxLines = 1000
+	// MaxPayments is the largest number of payments of a sale.
+	MaxPayments = 50
+	// MaxPayment is the largest single payment: the largest possible sale total.
+	MaxPayment = money.Money(MaxLines) * MaxUnitPrice * money.Money(MaxQty/money.QtyScale)
+)
+
+// CheckLine checks that a line's quantity and unit price are within the limits.
+func CheckLine(unit money.Money, qty money.Qty) error {
+	if qty > MaxQty || unit > MaxUnitPrice {
+		return fmt.Errorf("%w: miktar en çok %d, birim fiyat en çok %s TL", ErrTooLarge, MaxQty/money.QtyScale, MaxUnitPrice)
+	}
+	return nil
+}
 
 // Item is an item that enters the calculation: its VAT-included amount and VAT rate.
 type Item struct {
@@ -110,10 +137,16 @@ func Paid(payments []Payment) money.Money {
 // (the excess is given as change, it cannot exceed the cash amount). It is called
 // before the card is charged.
 func CheckPayments(total money.Money, payments []Payment) error {
+	if len(payments) > MaxPayments {
+		return fmt.Errorf("%w: en çok %d ödeme", ErrTooLarge, MaxPayments)
+	}
 	var paid, cash money.Money
 	for _, p := range payments {
 		if p.Amount <= 0 {
 			return fmt.Errorf("%w: tutar pozitif olmalı", ErrInvalidPayment)
+		}
+		if p.Amount > MaxPayment {
+			return fmt.Errorf("%w: ödeme en çok %s TL", ErrTooLarge, MaxPayment)
 		}
 		switch p.Method {
 		case paymethod.Cash:

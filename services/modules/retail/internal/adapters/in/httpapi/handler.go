@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"abarow.com/pkg/calc"
 	"abarow.com/pkg/money"
 	"abarow.com/pkg/service"
 	"abarow.com/services/modules/retail/internal/app"
@@ -21,6 +22,9 @@ import (
 )
 
 // New returns a handler that serves the API and the screen files in webDir.
+// maxJSON is the largest JSON request body these endpoints read (their bodies are a few fields).
+const maxJSON = 16 << 10
+
 func New(svc *app.Service, webDir string) http.Handler {
 	h := &handler{svc: svc}
 	mux := http.NewServeMux()
@@ -106,7 +110,7 @@ func (h *handler) addItem(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Barcode string `json:"barcode"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Barcode == "" {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&req); err != nil || req.Barcode == "" {
 		writeError(w, http.StatusBadRequest, "barkod gerekli")
 		return
 	}
@@ -119,7 +123,7 @@ func (h *handler) setQty(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		QtyMilli int64 `json:"qty_milli"`
 	}
-	if err != nil || json.NewDecoder(r.Body).Decode(&req) != nil {
+	if err != nil || json.NewDecoder(http.MaxBytesReader(w, r.Body, maxJSON)).Decode(&req) != nil {
 		writeError(w, http.StatusBadRequest, "satır numarası ve miktar gerekli")
 		return
 	}
@@ -182,7 +186,7 @@ func statusFor(err error) int {
 	case errors.Is(err, domain.ErrClosed):
 		return http.StatusConflict
 	case errors.Is(err, domain.ErrEmpty), errors.Is(err, domain.ErrInvalidQty), errors.Is(err, domain.ErrNeedsWeight),
-		errors.Is(err, domain.ErrWeighedQty), errors.Is(err, domain.ErrInvalidScale):
+		errors.Is(err, domain.ErrWeighedQty), errors.Is(err, domain.ErrInvalidScale), errors.Is(err, calc.ErrTooLarge):
 		return http.StatusUnprocessableEntity
 	}
 	switch status.Code(err) {

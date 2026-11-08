@@ -183,7 +183,7 @@ func TestOrderFlow(t *testing.T) {
 	if _, _, err := svc.Pay(ctx, o.ID, 1, nil, ali); !errors.Is(err, domain.ErrStale) {
 		t.Errorf("old version: %v", err)
 	}
-	o, rest, err := svc.Pay(ctx, o.ID, o.Version, nil, ali)
+	_, rest, err := svc.Pay(ctx, o.ID, o.Version, nil, ali)
 	if err != nil || len(sales.lines[rest]) != 2 {
 		t.Fatalf("kalan: %+v %v", sales.lines[rest], err)
 	}

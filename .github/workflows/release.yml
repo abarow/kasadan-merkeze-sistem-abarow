@@ -75,6 +75,7 @@ jobs:
             MODULE=${{ matrix.module }}
             PKG=${{ matrix.pkg }}
             UI=${{ matrix.ui }}
+            VERSION=${{ steps.version.outputs.version }}
           platforms: linux/amd64,linux/arm64
           push: true
           # The evidence is attached to the image index per platform; the digest is still the index's.

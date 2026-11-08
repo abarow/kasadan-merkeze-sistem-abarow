@@ -6,6 +6,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"time"
 
@@ -105,10 +106,19 @@ func (b *Basket) Add(p Product, qty money.Qty, weighed bool) error {
 	if !weighed {
 		for i := range b.Lines {
 			if !b.Lines[i].Weighed && b.Lines[i].ProductID == p.ID {
+				if err := calc.CheckLine(p.UnitPrice, b.Lines[i].Qty+qty); err != nil {
+					return err
+				}
 				b.Lines[i].Qty += qty
 				return nil
 			}
 		}
+	}
+	if err := calc.CheckLine(p.UnitPrice, qty); err != nil {
+		return err
+	}
+	if len(b.Lines) >= calc.MaxLines {
+		return fmt.Errorf("%w: en çok %d satır", calc.ErrTooLarge, calc.MaxLines)
 	}
 	b.Lines = append(b.Lines, Line{
 		ProductID: p.ID,
@@ -132,6 +142,9 @@ func (b *Basket) SetQty(i int, qty money.Qty) error {
 	}
 	if b.Lines[i].Weighed {
 		return ErrWeighedQty
+	}
+	if err := calc.CheckLine(b.Lines[i].UnitPrice, qty); err != nil {
+		return err
 	}
 	b.Lines[i].Qty = qty
 	return nil

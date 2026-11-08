@@ -293,6 +293,12 @@ func (o *Order) AddLine(in NewLineInput) (bool, error) {
 	if price < 0 {
 		return false, fmt.Errorf("%w: seçimlerle fiyat eksiye düşüyor", ErrInvalidLine)
 	}
+	if err := calc.CheckLine(price, money.Qty(in.Qty)*money.QtyScale); err != nil {
+		return false, fmt.Errorf("%w: %w", ErrInvalidLine, err)
+	}
+	if len(o.Lines) >= calc.MaxLines {
+		return false, fmt.Errorf("%w: en çok %d satır", ErrInvalidLine, calc.MaxLines)
+	}
 	l := Line{
 		ID: in.ID, ProductID: in.Product.ID, Name: in.Product.Name, Note: note, Qty: in.Qty,
 		UnitPrice: price, TaxRate: in.Product.TaxRate, Station: station(in.Product.Station),

@@ -34,6 +34,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"abarow.com/services/update/internal/channel"
 )
@@ -95,7 +96,11 @@ func New(o Options) (*Runtime, error) {
 	}
 	r := &Runtime{o: o, http: o.Client, base: strings.TrimRight(o.BaseURL, "/")}
 	if r.http == nil && o.BaseURL != "" {
-		r.http = &http.Client{} // Podman API over TCP (for tests and remote use)
+		// Podman API over TCP (for tests and remote use)
+		r.http = &http.Client{Transport: &http.Transport{
+			DialContext:           (&net.Dialer{Timeout: dialTimeout}).DialContext,
+			ResponseHeaderTimeout: headerTimeout,
+		}}
 	}
 	if r.http == nil {
 		if o.Socket == "" {
@@ -103,13 +108,24 @@ func New(o Options) (*Runtime, error) {
 		}
 		r.http = &http.Client{Transport: &http.Transport{
 			DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				return (&net.Dialer{}).DialContext(ctx, "unix", o.Socket)
+				return (&net.Dialer{Timeout: dialTimeout}).DialContext(ctx, "unix", o.Socket)
 			},
+			ResponseHeaderTimeout: headerTimeout,
 		}}
 		r.base = "http://podman"
 	}
 	return r, nil
 }
+
+// Limits of the calls to the Podman API: a hung API must not hold the update forever.
+// The pull streams its progress, so its headers come at once; the whole pull may take long
+// over a slow store link.
+const (
+	dialTimeout   = 5 * time.Second
+	headerTimeout = time.Minute
+	callTimeout   = 30 * time.Second
+	pullTimeout   = 30 * time.Minute
+)
 
 // units returns the allowed units in the directory (unit name → content of the .container file).
 func (r *Runtime) units() (map[string]string, error) {
@@ -241,6 +257,8 @@ func (r *Runtime) Pull(ctx context.Context, img channel.Image) error {
 	}
 	auth, _ := json.Marshal(map[string]string{"username": "abarow", "password": token, "serveraddress": host})
 	q := url.Values{"reference": {ref}, "quiet": {"false"}}
+	ctx, cancel := context.WithTimeout(ctx, pullTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.base+"/v5.0.0/libpod/images/pull?"+q.Encode(), nil)
 	if err != nil {
 		return err
@@ -314,6 +332,8 @@ func (r *Runtime) Healthy(ctx context.Context, unit string) (bool, error) {
 }
 
 func (r *Runtime) get(ctx context.Context, path string, out any) error {
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, r.base+path, nil)
 	if err != nil {
 		return err

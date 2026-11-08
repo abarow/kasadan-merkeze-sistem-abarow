@@ -33,10 +33,6 @@
 //     set aside accordingly.
 //   - maintenance_work_mem = shared_buffers / 4 (at most 64 MB), wal_buffers =
 //     shared_buffers / 32 (1–16 MB).
-//   - plan_cache_mode = force_custom_plan: the daily and the monthly report share their SQL
-//     text and differ only in the dates. After a few runs PostgreSQL moved the prepared
-//     statement to a generic plan that does not know the dates and assumes a short range:
-//     the monthly product ranking then took 4.3-6.2 s instead of 0.7 s (50 stores).
 //   - Parallel query is off below 10 registers: a small store's machine has few cores and its
 //     reports are already short. From 10 registers the period summaries use 2 workers, from 50
 //     registers 4 (the database machine of that size is expected to be a strong one).
@@ -120,7 +116,8 @@ func ForStore(registers int) Settings {
 }
 
 // ForRegister is the setting of the database on a register: fixed, small, one connection
-// per service (pkg/pgdb). A register holds its own sales only until they are delivered.
+// per service (pkg/pgdb). A register keeps its sales until the retention cleanup removes
+// them (they are delivered to the store server before that).
 func ForRegister() Settings {
 	return Settings{
 		SharedBuffersMB: 32, MaxConnections: 12, WorkMemMB: 2, MaintenanceWorkMemMB: 8, WalBuffersMB: 1,
@@ -234,7 +231,6 @@ func (s Settings) Flags() []string {
 		{"wal_buffers", mb(s.WalBuffersMB)},
 		{"effective_cache_size", mb(s.EffectiveCacheSizeMB)},
 		{"random_page_cost", "1.1"},
-		{"plan_cache_mode", "force_custom_plan"},
 		{"min_wal_size", mb(s.MinWalSizeMB)},
 		{"max_wal_size", mb(s.MaxWalSizeMB)},
 		{"checkpoint_completion_target", "0.9"},

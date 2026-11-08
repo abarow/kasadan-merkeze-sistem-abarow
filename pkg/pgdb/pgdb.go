@@ -75,7 +75,7 @@ func withSearchPath(dsn, schema string) (string, error) {
 	}
 	u, err := url.Parse(dsn)
 	if err != nil || u.Scheme == "" {
-		return "", fmt.Errorf("the database address must be in the form postgres://...")
+		return "", fmt.Errorf("the database address must be a postgres:// URL")
 	}
 	q := u.Query()
 	q.Set("search_path", schema)

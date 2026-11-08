@@ -159,14 +159,13 @@ type state struct {
 type Updater struct {
 	cfg Config
 
-	mu        sync.Mutex
-	st        state
-	phase     string
-	pollErr   string
-	polled    time.Time
-	gateText  string
-	running   bool
-	lastPhase string // the last result phase that stays on the screen when an application finishes
+	mu       sync.Mutex
+	st       state
+	phase    string
+	pollErr  string
+	polled   time.Time
+	gateText string
+	running  bool
 }
 
 // New builds the updater and reads the persistent state.

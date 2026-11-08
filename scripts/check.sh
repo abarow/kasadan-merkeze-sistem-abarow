@@ -25,3 +25,11 @@ go test $patterns
 for dir in $(go list -m -f '{{.Dir}}'); do
 	(cd "$dir" && GOWORK=off go vet ./...)
 done
+
+# Static analysis and known vulnerabilities (the Go standard library included: when a
+# newer Go patch fixes a vulnerability the code reaches, this fails until the toolchain
+# line of go.mod and the image in deploy/container are raised).
+go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 $patterns
+for dir in $(go list -m -f '{{.Dir}}'); do
+	(cd "$dir" && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...)
+done
