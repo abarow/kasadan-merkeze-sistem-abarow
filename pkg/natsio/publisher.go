@@ -59,7 +59,11 @@ func (p *Publisher) Ensure(ctx context.Context) error {
 	if p.ensured || p.stream == nil {
 		return nil
 	}
-	if _, err := p.js.CreateOrUpdateStream(ctx, *p.stream); err != nil {
+	cfg, err := Replicated(*p.stream)
+	if err != nil {
+		return err
+	}
+	if _, err := p.js.CreateOrUpdateStream(ctx, cfg); err != nil {
 		return err
 	}
 	p.ensured = true

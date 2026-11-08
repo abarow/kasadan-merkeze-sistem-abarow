@@ -13,6 +13,7 @@ import (
 
 	"github.com/nats-io/nats.go/jetstream"
 
+	"abarow.com/pkg/natsio"
 	"abarow.com/services/headquarters/ingest/internal/app"
 	"abarow.com/services/headquarters/ingest/internal/domain"
 )
@@ -67,7 +68,11 @@ func New(js jetstream.JetStream) *Stream { return &Stream{js: js} }
 
 // Ensure sets up the stream or updates its sources.
 func (s *Stream) Ensure(ctx context.Context, storeIDs []string) error {
-	_, err := s.js.CreateOrUpdateStream(ctx, Config(storeIDs))
+	cfg, err := natsio.Replicated(Config(storeIDs))
+	if err != nil {
+		return err
+	}
+	_, err = s.js.CreateOrUpdateStream(ctx, cfg)
 	return err
 }
 

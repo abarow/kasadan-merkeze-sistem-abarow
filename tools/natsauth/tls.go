@@ -60,7 +60,8 @@ func ensureLeafTLS(dir string, hosts []string, storeID string, now time.Time) er
 		return fmt.Errorf("CA: %w", err)
 	}
 	if current, err := readCert(filepath.Join(dir, serverCertFile)); err == nil &&
-		current.CheckSignatureFrom(ca) == nil && now.Add(renewBefore).Before(current.NotAfter) && sameHosts(current, hosts) {
+		current.CheckSignatureFrom(ca) == nil && now.Add(renewBefore).Before(current.NotAfter) && sameHosts(current, hosts) &&
+		slices.Contains(current.ExtKeyUsage, x509.ExtKeyUsageClientAuth) {
 		if _, err := os.Stat(filepath.Join(dir, serverKeyFile)); err == nil {
 			return nil
 		}
@@ -75,7 +76,9 @@ func ensureLeafTLS(dir string, hosts []string, storeID string, now time.Time) er
 		NotBefore:    now.Add(-time.Hour),
 		NotAfter:     now.Add(serverValidity),
 		KeyUsage:     x509.KeyUsageDigitalSignature,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		// Client use too: at headquarters on three machines the same certificate
+		// is shown when connecting to the other machines (cluster routes).
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 	}
 	for _, h := range hosts {
 		if ip := net.ParseIP(h); ip != nil {

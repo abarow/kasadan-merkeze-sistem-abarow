@@ -30,6 +30,16 @@
 //	natsauth -stores /config/stores.json -add-store store-2 -store-key U... [-store-name "Kadıköy"]
 //	natsauth -stores /config/stores.json -remove-store store-2
 //
+// Headquarters on three machines (a NATS cluster): every machine has its own server name,
+// the JetStream domain is shared (-domain headquarters). -routes lists the cluster port of all
+// three machines; the machines connect to each other only with TLS, both sides showing a
+// certificate of the same CA. The keys, the CA (<out>/tls/ca.pem and ca.key) and stores.json
+// are the same on the three machines: they are produced on the first machine and copied to the others
+// before natsauth runs there. The stores get the three addresses in -leaf:
+//
+//	natsauth -role headquarters -out /auth -users ingest -server-name headquarters-2 -domain headquarters -stores /config/stores.json -leaf-hosts hq2.example.com -routes nats://hq1.example.com:6222,nats://hq2.example.com:6222,nats://hq3.example.com:6222
+//	natsauth -role store ... -leaf tls://hq1.example.com:7422,tls://hq2.example.com:7422,tls://hq3.example.com:7422 -leaf-ca ca.pem
+//
 // Existing keys are kept (running it again is safe); the configuration
 // is rewritten every time from the keys and the permission tables below. The private keys
 // do not go into the repository: in the Docker simulation they are put on a volume at start,
@@ -458,8 +468,23 @@ http_port: 8222
 jetstream {
   store_dir: "/data"
   # JetStream alanı: üst katman bu sunucunun stream'lerine bu adla ulaşır.
-  domain: "{{.ServerName}}"
+  domain: "{{.Domain}}"
 }
+{{- with .Cluster}}
+cluster {
+  # Merkez kümesi: makineler birbirine yalnızca TLS ile bağlanır; iki taraf da
+  # aynı CA'nın imzaladığı sertifikayı gösterir.
+  name: "{{.Name}}"
+  port: {{.Port}}
+  routes: [{{quote .Routes}}]
+  tls {
+    cert_file: "{{.Cert}}"
+    key_file: "{{.Key}}"
+    ca_file: "{{.CA}}"
+    verify: true
+  }
+}
+{{- end}}
 {{- if or .Remote .Leafnodes}}
 leafnodes {
 {{- with .Leafnodes}}
@@ -476,7 +501,11 @@ leafnodes {
   # sourcing ile gider; uygulama konuları iki yönde de kapalıdır.
   remotes: [
     {
-      url: "{{.URL}}"
+{{- if eq (len .URLs) 1}}
+      url: "{{index .URLs 0}}"
+{{- else}}
+      urls: [{{quote .URLs}}]
+{{- end}}
       nkey: "{{.Seed}}"
       # Üst katmanın sertifikası onun CA'sıyla doğrulanır.
       tls { ca_file: "{{.CAFile}}" }
@@ -521,9 +550,19 @@ type user struct {
 }
 
 type remote struct {
-	Who, URL, Seed, CAFile string
-	Deny                   []string
+	Who, Seed, CAFile string
+	URLs, Deny        []string
 }
+
+type cluster struct {
+	Name          string
+	Port          int
+	Routes        []string
+	Cert, Key, CA string
+}
+
+// clusterPort is the port the headquarters machines connect to each other on.
+const clusterPort = 6222
 
 type leafnodes struct {
 	Who       string
@@ -536,8 +575,10 @@ type config struct {
 	Role       string   // register, store or headquarters
 	Out        string   // output folder
 	Users      []string // services; if empty the role's defaults
-	ServerName string   // NATS server name and JetStream domain
-	Leaf       string   // register, store: the tier above's leaf address (tls://)
+	ServerName string   // NATS server name
+	Domain     string   // JetStream domain; if empty the server name
+	Leaf       string   // register, store: the tier above's leaf addresses (tls://), comma-separated
+	Routes     []string // headquarters on three machines: the cluster addresses of all the machines (nats://host:6222)
 	LeafCA     string   // the tier above's CA certificate (there ca/ca.pem)
 	Registers  string   // operasyon: registers.json
 	Stores     string   // merkez: stores.json
@@ -553,7 +594,9 @@ func main() {
 	flag.StringVar(&c.Out, "out", "auth", "output folder")
 	users := flag.String("users", "", "comma-separated services; if empty the role's defaults (register: sales,staff; store: report; headquarters: ingest,catalog)")
 	flag.StringVar(&c.ServerName, "server-name", "register-1", "NATS server name and JetStream domain: the register id at a register, the store id at a store server, e.g. headquarters at headquarters")
-	flag.StringVar(&c.Leaf, "leaf", "", "register: the store server's, store: headquarters' leaf address (e.g. tls://store:7421); if empty it does not connect to the tier above")
+	flag.StringVar(&c.Domain, "domain", "", "JetStream domain if it differs from the server name (headquarters on three machines: headquarters)")
+	flag.StringVar(&c.Leaf, "leaf", "", "register: the store server's, store: headquarters' leaf address (e.g. tls://store:7421; for headquarters on three machines the three addresses, comma-separated); if empty it does not connect to the tier above")
+	routes := flag.String("routes", "", "headquarters on three machines: the cluster addresses of all the machines, comma-separated (e.g. nats://hq1.example.com:6222,...)")
 	flag.StringVar(&c.LeafCA, "leaf-ca", "", "CA certificate of the tier above (there it is <out>/ca/ca.pem); required with -leaf")
 	flag.StringVar(&c.Registers, "registers", "", "store: the list of connected registers (registers.json)")
 	flag.StringVar(&c.Stores, "stores", "", "headquarters: the list of connected stores (stores.json)")
@@ -571,6 +614,11 @@ func main() {
 	flag.Parse()
 	if *users != "" {
 		c.Users = strings.Split(*users, ",")
+	}
+	for _, r := range strings.Split(*routes, ",") {
+		if r = strings.TrimSpace(r); r != "" {
+			c.Routes = append(c.Routes, r)
+		}
 	}
 	for _, h := range strings.Split(*leafHosts, ",") {
 		if h = strings.TrimSpace(h); h != "" {
@@ -611,6 +659,12 @@ func run(c config) error {
 	if !nodes.ValidID(c.ServerName) {
 		return fmt.Errorf("server name %q is invalid: letters, digits, - and _ are allowed (at most 63 characters)", c.ServerName)
 	}
+	if c.Domain == "" {
+		c.Domain = c.ServerName
+	}
+	if !nodes.ValidID(c.Domain) {
+		return fmt.Errorf("domain %q is invalid: letters, digits, - and _ are allowed (at most 63 characters)", c.Domain)
+	}
 	names := c.Users
 	if len(names) == 0 {
 		names = role.Default
@@ -619,11 +673,12 @@ func run(c config) error {
 		c.ConfDir = "/auth"
 	}
 	data := struct {
-		Title, ServerName string
-		Remote            *remote
-		Leafnodes         *leafnodes
-		Users             []user
-	}{Title: role.Title, ServerName: c.ServerName}
+		Title, ServerName, Domain string
+		Remote                    *remote
+		Leafnodes                 *leafnodes
+		Cluster                   *cluster
+		Users                     []user
+	}{Title: role.Title, ServerName: c.ServerName, Domain: c.Domain}
 	for _, name := range names {
 		name = strings.TrimSpace(name)
 		p, ok := role.Permissions[name]
@@ -655,8 +710,13 @@ func run(c config) error {
 			return fmt.Errorf("-leaf is not used in this role (%s): there is no tier above", role.Title)
 		}
 		// The connection is always TLS: events do not go in the clear on the network.
-		if u, err := url.Parse(c.Leaf); err != nil || u.Scheme != "tls" || u.Host == "" || u.User != nil {
-			return fmt.Errorf("leaf address %q is invalid (e.g. tls://store:7421; the identity is not written into the address)", c.Leaf)
+		var urls []string
+		for _, l := range strings.Split(c.Leaf, ",") {
+			l = strings.TrimSpace(l)
+			if u, err := url.Parse(l); err != nil || u.Scheme != "tls" || u.Host == "" || u.User != nil {
+				return fmt.Errorf("leaf address %q is invalid (e.g. tls://store:7421; the identity is not written into the address)", l)
+			}
+			urls = append(urls, l)
 		}
 		if c.LeafCA == "" {
 			return fmt.Errorf("with -leaf the tier above's (%s) CA certificate (-leaf-ca) is required", role.Upstream)
@@ -671,7 +731,7 @@ func run(c config) error {
 		if err != nil {
 			return err
 		}
-		data.Remote = &remote{Who: role.Upstream, URL: c.Leaf, Seed: string(bytes.TrimSpace(seed)), CAFile: path.Join(c.ConfDir, "leaf", caCertFile), Deny: appSubjects()}
+		data.Remote = &remote{Who: role.Upstream, URLs: urls, Seed: string(bytes.TrimSpace(seed)), CAFile: path.Join(c.ConfDir, "leaf", caCertFile), Deny: appSubjects()}
 	}
 
 	// Leaf connections from below: each device in the list with its own key.
@@ -685,13 +745,13 @@ func run(c config) error {
 			return err
 		}
 		for _, n := range devices {
-			if n.ID == c.ServerName {
-				return fmt.Errorf("%s id %q cannot be the same as the server's name (the JetStream domains must be separate)", role.Downstream, n.ID)
+			if n.ID == c.ServerName || n.ID == c.Domain {
+				return fmt.Errorf("%s id %q cannot be the same as the server's name or domain (the JetStream domains must be separate)", role.Downstream, n.ID)
 			}
 			if !nkeys.IsValidPublicUserKey(n.NKey) {
 				return fmt.Errorf("%s %s: the key is invalid", role.Downstream, n.ID)
 			}
-			p := leafPermissions(role.Downstream, n.ID, role.Sources, c.ServerName, role.Downward)
+			p := leafPermissions(role.Downstream, n.ID, role.Sources, c.Domain, role.Downward)
 			data.Users = append(data.Users, user{Name: n.ID, Purpose: p.Purpose, PublicKey: n.NKey, Publish: p.Publish, Subscribe: p.Subscribe, ConnectionTypes: []string{"LEAFNODE"}})
 		}
 		if err := ensureLeafTLS(filepath.Join(c.Out, "tls"), c.LeafHosts, c.ServerName, time.Now()); err != nil {
@@ -702,6 +762,27 @@ func run(c config) error {
 		}
 		data.Leafnodes = &leafnodes{Who: role.Downstream + " (" + role.ListFlag[1:] + ")", Port: role.LeafPort,
 			Cert: path.Join(c.ConfDir, "tls", serverCertFile), Key: path.Join(c.ConfDir, "tls", serverKeyFile)}
+	}
+
+	// Headquarters on three machines: the cluster. The machines verify each other with the
+	// shared CA; the server certificate is also the client certificate of the route.
+	if len(c.Routes) > 0 {
+		if c.Role != "headquarters" {
+			return fmt.Errorf("-routes is used only at headquarters")
+		}
+		if len(c.Routes) < 3 {
+			return fmt.Errorf("-routes needs at least three machines (%d given): with two machines the cluster cannot decide when one is gone", len(c.Routes))
+		}
+		if c.Domain == c.ServerName {
+			return errors.New("with -routes the machines need their own server names and a shared -domain (e.g. -server-name headquarters-1 -domain headquarters)")
+		}
+		for _, r := range c.Routes {
+			if u, err := url.Parse(r); err != nil || u.Scheme != "nats" || u.Hostname() == "" || u.Port() == "" || u.User != nil {
+				return fmt.Errorf("cluster address %q is invalid (e.g. nats://hq1.example.com:6222)", r)
+			}
+		}
+		data.Cluster = &cluster{Name: c.Domain, Port: clusterPort, Routes: c.Routes,
+			Cert: path.Join(c.ConfDir, "tls", serverCertFile), Key: path.Join(c.ConfDir, "tls", serverKeyFile), CA: path.Join(c.ConfDir, "tls", caCertFile)}
 	}
 
 	var b bytes.Buffer

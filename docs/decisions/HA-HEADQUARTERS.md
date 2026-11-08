@@ -1,6 +1,6 @@
-# abarow — Kesintisiz merkez (plan, onay bekliyor)
+# abarow — Kesintisiz merkez
 
-> Tarih: 12.11.2026. [REVIEW.md](../REVIEW.md) M3'ün ikinci seviyesi. Bu belge bir plandır; kod yazılmadı. Uygulamaya geçmeden önce aşağıdaki "Karar gereken noktalar" bölümünün cevaplanması gerekir.
+> Tarih: 12.11.2026, kararlar 13.11.2026. [REVIEW.md](../REVIEW.md) M3'ün ikinci seviyesi. Kararlar ve uygulama sırası aşağıdaki "Kararlar" bölümündedir.
 
 ## Bugünkü durum
 
@@ -42,8 +42,22 @@ Amaç: bir makine ya da bir servis giderse merkez dakikalar içinde, mümkünse 
 3. Servislerin çoğaltılması ve Caddy.
 4. (İsteğe bağlı) Patroni ile otomatik yük devri.
 
-## Karar gereken noktalar
+## Kararlar (13.11.2026)
 
-1. İkinci seviye gerekli mi, yoksa birinci seviye yeterli mi?
-2. Gerekliyse yük devri elle mi (A), otomatik mi (B)?
-3. Kaç makine var ya da alınacak (üç, ayrı veri merkezlerinde mi)?
+Mehmet ERGULCU: ikinci seviye yapılacak, yük devri **otomatik** (seçenek B).
+
+- **Üç makine.** Otomatik yük devrinde kimin birincil olacağına çoğunluk karar verir (etcd). İki makineyle bir makine gidince çoğunluk kalmaz; bölünmüş beyni önlemek için en az üç gerekir. İki makine aynı anda giderse kalan makine yazmayı durdurur: iki ayrı satış defteri oluşmasındansa gecikme seçilir (satışlar mağazada bekler).
+- **Senkron replikasyon.** `ingest`, olayı PostgreSQL'e yazdıktan sonra mağazaya makbuz gönderir; makbuzu alan mağaza kendi kopyasını siler. Replikasyon asenkron olsaydı birincil, commit'ten hemen sonra ve replikaya göndermeden çökerse olay yeni birincilde olmazdı, mağazadaki kopya da silinmiş olurdu: yasal kayıt kaybı. Bu yüzden commit en az bir replikaya yazılmadan tamamlanmaz (Patroni `synchronous_mode_strict`). Bedeli: iki replika birden giderse yazma durur.
+- **Veritabanı adresi.** Servisler üç makinenin adresini bilir ve yazılabilir olanı bağlantı ayarıyla bulur (`target_session_attrs=read-write`); araya ayrı bir yönlendirici (HAProxy) girmez.
+- **`ingest` tek okuyucu.** Her makinede bir `ingest` çalışır; birincil veritabanında danışma kilidini (advisory lock) alan okur, diğerleri bekler. Kilidi tutan süreç ya da bağlantısı giderse kilit kendiliğinden düşer.
+- **Ekran adresi.** Her makinede Caddy; tek adres sanal IP ile (keepalived) verilir.
+
+### Uygulama sırası
+
+1. **NATS kümesi (13.11.2026'da yapıldı):** `natsauth -routes` ve `-domain`; düğümler arası karşılıklı TLS (ortak CA); merkezin stream'leri `ABAROW_NATS_REPLICAS=3` ile üç kopya; mağazanın leaf bağlantısı üç adresi bilir (`-leaf` virgüllü). Test: üç düğüm ve bir mağaza; stream'in lideri kapatılırken olaylar kayıpsız ve tekrarsız geliyor (`tools/natsauth/cluster_test.go`).
+2. PostgreSQL: Patroni ve etcd, senkron replika; servislerin çok adresli bağlantısı; Docker'da yük devri testi.
+3. `ingest` danışma kilidi; servislerin her makinede çalışması; Caddy ve keepalived.
+4. Kurulum betiği: ilk makinede anahtarların ve CA'nın dışa aktarılması, diğer makinelerde içe alınması; mağaza ekleme üç makinede.
+5. Tatbikat: üç makineli Docker düzeneğinde her parçanın sırayla kapatılması.
+
+Bu adımlar bitene kadar kurulum betiği tek makinelidir.

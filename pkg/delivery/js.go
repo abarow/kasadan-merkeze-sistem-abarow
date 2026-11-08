@@ -55,8 +55,11 @@ func ReceiptConfig(source, owner string, maxAge time.Duration) jetstream.StreamC
 // EnsureStream sets up or updates the stream; it tries until NATS is ready.
 // It returns when ctx ends.
 func EnsureStream(ctx context.Context, js jetstream.JetStream, cfg jetstream.StreamConfig, log *slog.Logger) {
+	cfg, err := natsio.Replicated(cfg)
 	for ctx.Err() == nil {
-		if _, err := js.CreateOrUpdateStream(ctx, cfg); err == nil {
+		if err != nil {
+			log.Error("could not set up the stream", "stream", cfg.Name, "err", err)
+		} else if _, err := js.CreateOrUpdateStream(ctx, cfg); err == nil {
 			return
 		} else {
 			log.Warn("could not set up the stream; will retry", "stream", cfg.Name, "err", err)
