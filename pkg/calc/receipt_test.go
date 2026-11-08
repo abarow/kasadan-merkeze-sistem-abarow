@@ -26,7 +26,7 @@ func TestTaxes(t *testing.T) {
 	// By rate, in ascending order; VAT over each rate's total (1800 → 300).
 	want := []Tax{{Rate: 1000, Gross: 1000, Tax: 91}, {Rate: 2000, Gross: 1800, Tax: 300}}
 	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
-		t.Errorf("Taxes = %+v, istenen %+v", got, want)
+		t.Errorf("Taxes = %+v, want %+v", got, want)
 	}
 	if TaxTotal(got) != 391 {
 		t.Errorf("TaxTotal = %d", TaxTotal(got))

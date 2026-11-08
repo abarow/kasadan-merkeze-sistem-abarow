@@ -133,7 +133,7 @@ func TestRestaurantAPI(t *testing.T) {
 		}
 	}
 	if !strings.Contains(got, `"type":"order"`) || !strings.Contains(got, `"table_id":"1"`) {
-		t.Errorf("olay: %q (%v)", got, lines.Err())
+		t.Errorf("event: %q (%v)", got, lines.Err())
 	}
 
 	if code, body := do(t, srv, http.MethodPost, "/api/module/orders/o1/lines", "ali", `{"id":"l-1","product_id":"kofte","qty":1}`); code != http.StatusUnprocessableEntity || !strings.Contains(body, "Pişirme seçin") {

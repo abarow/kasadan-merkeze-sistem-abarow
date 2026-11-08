@@ -18,7 +18,7 @@ func TestConfig(t *testing.T) {
 		src := cfg.Sources[i]
 		if src.Name != "ABAROW_STORE" || src.Domain != id || len(src.SubjectTransforms) != 1 ||
 			src.SubjectTransforms[0].Source != ">" || src.SubjectTransforms[0].Destination != id+".>" {
-			t.Errorf("%s kaynağı: %+v", id, src)
+			t.Errorf("source of %s: %+v", id, src)
 		}
 	}
 }
@@ -35,7 +35,7 @@ func TestStoreID(t *testing.T) {
 		{nil, ""},
 	} {
 		if got := storeID(tt.src); got != tt.want {
-			t.Errorf("storeID(%+v) = %q; %q olmalı", tt.src, got, tt.want)
+			t.Errorf("storeID(%+v) = %q; %q expected", tt.src, got, tt.want)
 		}
 	}
 }
@@ -46,7 +46,7 @@ func TestRoute(t *testing.T) {
 	}
 	for _, bad := range []string{"sale", ".sale.completed.v1", "store-1."} {
 		if _, _, ok := Route(bad); ok {
-			t.Errorf("Route(%q) kabul edildi", bad)
+			t.Errorf("Route(%q) was accepted", bad)
 		}
 	}
 }

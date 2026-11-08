@@ -30,7 +30,7 @@ func TestStatus(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			st := Status("register-1", "Kasa 1", tt.src, now)
 			if st.ID != "register-1" || st.Name != "Kasa 1" || st.Link != tt.link || !st.LastSeen.Equal(tt.lastSeen) || st.Pending != tt.pending {
-				t.Errorf("durum %+v; istenen %s, son haber %v, bekleyen %d", st, tt.link, tt.lastSeen, tt.pending)
+				t.Errorf("status %+v; want %s, last heard %v, pending %d", st, tt.link, tt.lastSeen, tt.pending)
 			}
 			if tt.src != nil && st.Error != tt.src.Error {
 				t.Errorf("error %q", st.Error)

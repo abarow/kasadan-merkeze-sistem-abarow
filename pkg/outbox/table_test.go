@@ -110,7 +110,7 @@ func TestTable(t *testing.T) {
 				}
 				got, err := tb.Pending(ctx, db, 10)
 				if err != nil || len(got) != 2 {
-					t.Fatalf("bekleyen: %+v %v", got, err)
+					t.Fatalf("pending: %+v %v", got, err)
 				}
 				for i, p := range got {
 					want := msgs[i]
@@ -130,7 +130,7 @@ func TestTable(t *testing.T) {
 				n, err := tb.CountPending(ctx, db)
 				rest, _ := tb.Pending(ctx, db, 10)
 				if err != nil || n != 1 || len(rest) != 1 || rest[0].ID != "e2" {
-					t.Fatalf("işaretledikten sonra: %d %v %+v", n, err, rest)
+					t.Fatalf("after marking: %d %v %+v", n, err, rest)
 				}
 
 				// Prune removes only what was published before the moment; the pending message stays.

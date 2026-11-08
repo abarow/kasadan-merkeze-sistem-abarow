@@ -67,7 +67,7 @@ func TestCodeIsStableShort(t *testing.T) {
 	id := "ABRW-AAAA-BBBB-CCCC-DDDD"
 	c := Code(id)
 	if c != Code(id) || !regexp.MustCompile(`^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$`).MatchString(c) {
-		t.Errorf("onay kodu %q", c)
+		t.Errorf("approval code %q", c)
 	}
 	if Code("ABRW-AAAA-BBBB-CCCC-DDDE") == c {
 		t.Error("a different identity gave the same code")

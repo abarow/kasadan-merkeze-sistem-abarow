@@ -127,7 +127,7 @@ func TestStoreStaffLifecycle(t *testing.T) {
 		}
 	}
 	if _, err := m.Add(ctx, Actor{ID: "x"}, "yeni", "1234", Input{Name: "A", Role: RoleCashier}); !errors.Is(err, ErrForbidden) {
-		t.Errorf("yetkisiz: %v", err)
+		t.Errorf("unauthorized: %v", err)
 	}
 
 	// Update: only what changed is written to the record; if there is no change there is no record.
@@ -257,7 +257,7 @@ func TestHeadquartersUsers(t *testing.T) {
 
 	// When the password changes the sessions close; also when someone changes their own.
 	if _, err := m.SetSecret(ctx, root, "ali", "yeni-parola-12"); err != nil || !slices.Equal(closed, []string{"ali"}) {
-		t.Errorf("parola: %v %v", err, closed)
+		t.Errorf("password: %v %v", err, closed)
 	}
 	if _, err := m.ChangeOwnSecret(ctx, Actor{ID: "ali", Name: "Ali"}, "bir-baska-12"); err != nil || st.users["ali"].PasswordHash != "parola:bir-baska-12" {
 		t.Errorf("own password: %v", err)
@@ -288,7 +288,7 @@ func TestHeadquartersUsers(t *testing.T) {
 		t.Errorf("closed administrator: %v", err)
 	}
 	if _, _, err := m.Get(ctx, Actor{ID: "x"}, "ayse"); !errors.Is(err, ErrForbidden) {
-		t.Errorf("yetkisiz okuma: %v", err)
+		t.Errorf("unauthorized read: %v", err)
 	}
 }
 
@@ -307,7 +307,7 @@ func TestImport(t *testing.T) {
 		t.Fatalf("Import: %d %v", n, err)
 	}
 	if u := st.users["ayse"]; u.Name != "Ayşe Yılmaz" || u.Role != RoleManager || string(u.PINHash) != "pin:2222" || !u.Disabled {
-		t.Errorf("var olan: %+v", u)
+		t.Errorf("existing: %+v", u)
 	}
 	if got := st.changes[len(st.changes)-1].Detail; got != "eklendi; dosyadan yüklendi: Ali (kasiyer)" {
 		t.Errorf("record of the new person %q", got)
@@ -331,7 +331,7 @@ func TestImport(t *testing.T) {
 		t.Errorf("%d people were loaded from the faulty file", len(st.saved)-before)
 	}
 	if _, err := m.Import(ctx, Actor{}, nil); !errors.Is(err, ErrForbidden) {
-		t.Errorf("yetkisiz: %v", err)
+		t.Errorf("unauthorized: %v", err)
 	}
 }
 
@@ -359,7 +359,7 @@ func TestRoleTable(t *testing.T) {
 		t.Errorf("CleanID: %q %v", id, err)
 	}
 	if _, err := CleanID(RoleCashier, "a.b"); err == nil {
-		t.Error("kasiyer kodunda nokta kabul edildi")
+		t.Error("a dot in a cashier code was accepted")
 	}
 }
 

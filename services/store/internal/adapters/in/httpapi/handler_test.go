@@ -156,11 +156,11 @@ func TestAuth(t *testing.T) {
 		last = post(t, c, srv.URL+"/api/auth/login", map[string]string{"password": "yanlış-parola"})
 	}
 	if last.StatusCode != http.StatusTooManyRequests {
-		t.Errorf("kilit: %s", last.Status)
+		t.Errorf("lock: %s", last.Status)
 	}
 	// The screen files do not ask for a sign-in (there is no data in them).
 	if code := status("/"); code != http.StatusOK {
-		t.Errorf("ekran: %d", code)
+		t.Errorf("screen: %d", code)
 	}
 }
 
@@ -218,7 +218,7 @@ func TestSummaryReport(t *testing.T) {
 	h := newHandler(t, app.NewService(fakeStore{}, reports, regs, istanbul))
 	var day report.SummaryJSON
 	if code := get(t, h, "/api/reports/summary?from=2026-10-26", &day); code != http.StatusOK {
-		t.Fatalf("durum %d", code)
+		t.Fatalf("status %d", code)
 	}
 	if day.From != "2026-10-26" || day.To != "2026-10-26" || day.ReceiptCount != 1 || day.TotalKurus != 2400 || day.TaxTotalKurus != 24 ||
 		len(day.Payments) != 2 || day.Payments[1] != (ledger.PaymentJSON{Method: "card", AmountKurus: 2400}) ||

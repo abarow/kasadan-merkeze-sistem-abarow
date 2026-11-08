@@ -29,7 +29,7 @@ func TestDivRound(t *testing.T) {
 	}
 	for _, tt := range tests {
 		if got := divRound(tt.num, tt.den); got != tt.want {
-			t.Errorf("divRound(%d, %d) = %d, istenen %d", tt.num, tt.den, got, tt.want)
+			t.Errorf("divRound(%d, %d) = %d, want %d", tt.num, tt.den, got, tt.want)
 		}
 	}
 }
@@ -37,10 +37,10 @@ func TestDivRound(t *testing.T) {
 func TestMulDivRoundLargeIntermediate(t *testing.T) {
 	// a×b does not fit in int64 but the result does.
 	if got := mulDivRound(math.MaxInt64, 1000, 1000); got != math.MaxInt64 {
-		t.Errorf("mulDivRound(MaxInt64, 1000, 1000) = %d, istenen %d", got, int64(math.MaxInt64))
+		t.Errorf("mulDivRound(MaxInt64, 1000, 1000) = %d, want %d", got, int64(math.MaxInt64))
 	}
 	if got := mulDivRound(math.MinInt64, 1000, 1000); got != math.MinInt64 {
-		t.Errorf("mulDivRound(MinInt64, 1000, 1000) = %d, istenen %d", got, int64(math.MinInt64))
+		t.Errorf("mulDivRound(MinInt64, 1000, 1000) = %d, want %d", got, int64(math.MinInt64))
 	}
 }
 
@@ -87,7 +87,7 @@ func TestMulQty(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.price.MulQty(tt.qty); got != tt.want {
-				t.Errorf("%d.MulQty(%d) = %d, istenen %d", tt.price, tt.qty, got, tt.want)
+				t.Errorf("%d.MulQty(%d) = %d, want %d", tt.price, tt.qty, got, tt.want)
 			}
 		})
 	}
@@ -112,7 +112,7 @@ func TestIncludedTax(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.gross.IncludedTax(tt.rate); got != tt.want {
-				t.Errorf("%d.IncludedTax(%d) = %d, istenen %d", tt.gross, tt.rate, got, tt.want)
+				t.Errorf("%d.IncludedTax(%d) = %d, want %d", tt.gross, tt.rate, got, tt.want)
 			}
 		})
 	}
@@ -142,7 +142,7 @@ func TestMulRate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		if got := tt.amount.MulRate(tt.rate); got != tt.want {
-			t.Errorf("%d.MulRate(%d) = %d, istenen %d", tt.amount, tt.rate, got, tt.want)
+			t.Errorf("%d.MulRate(%d) = %d, want %d", tt.amount, tt.rate, got, tt.want)
 		}
 	}
 }
@@ -163,13 +163,13 @@ func TestMoneyString(t *testing.T) {
 	}
 	for _, tt := range tests {
 		if got := tt.m.String(); got != tt.want {
-			t.Errorf("Money(%d).String() = %q, istenen %q", int64(tt.m), got, tt.want)
+			t.Errorf("Money(%d).String() = %q, want %q", int64(tt.m), got, tt.want)
 		}
 	}
 }
 
 func TestUnits(t *testing.T) {
 	if got := Units(3); got != 3000 {
-		t.Errorf("Units(3) = %d, istenen 3000", got)
+		t.Errorf("Units(3) = %d, want 3000", got)
 	}
 }

@@ -49,7 +49,7 @@ func TestPullAllowedByLevel(t *testing.T) {
 	}
 	for _, c := range cases {
 		if got := PullAllowed(c.level, c.repo); got != c.want {
-			t.Errorf("PullAllowed(%q, %q) = %v, istenen %v", c.level, c.repo, got, c.want)
+			t.Errorf("PullAllowed(%q, %q) = %v, want %v", c.level, c.repo, got, c.want)
 		}
 	}
 }
@@ -155,7 +155,7 @@ func TestTokenGrantsByLevel(t *testing.T) {
 		t.Errorf("token identity: %+v", c.Claims)
 	}
 	if exp := c.Expiry.Time(); !exp.Equal(now.Add(5 * time.Minute)) {
-		t.Errorf("son kullanma %v", exp)
+		t.Errorf("expiry %v", exp)
 	}
 	if body["expires_in"].(float64) != 300 {
 		t.Errorf("expires_in %v", body["expires_in"])
@@ -195,7 +195,7 @@ func TestTokenRejects(t *testing.T) {
 		"service yok":         {o.token(t, token.Prod, now.Add(time.Hour)), url.Values{"scope": good["scope"]}, 400},
 	} {
 		if resp := o.get(t, tc.pass, tc.params); resp.StatusCode != tc.want {
-			t.Errorf("%s: %d, istenen %d", label, resp.StatusCode, tc.want)
+			t.Errorf("%s: %d, want %d", label, resp.StatusCode, tc.want)
 		} else if tc.want == 401 && resp.Header.Get("WWW-Authenticate") == "" {
 			t.Errorf("%s: no WWW-Authenticate", label)
 		}
@@ -229,7 +229,7 @@ func TestKeyParsing(t *testing.T) {
 		t.Error("another key's certificate was accepted")
 	}
 	if _, err := ParseKey([]byte("pem değil"), k.CertPEM); err == nil {
-		t.Error("bozuk anahtar kabul edildi")
+		t.Error("a broken key was accepted")
 	}
 	if _, err := New(Config{}); err == nil {
 		t.Error("an empty setting was accepted")

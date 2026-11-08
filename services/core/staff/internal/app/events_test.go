@@ -45,11 +45,11 @@ func TestEventsWaitInOrder(t *testing.T) {
 	// The consumer is checked after the outbox is empty.
 	want := []string{"outbox", "outbox", "outbox", "tüketici", "tüketici"}
 	if len(calls) != len(want) {
-		t.Fatalf("denetimler %v, istenen %v", calls, want)
+		t.Fatalf("denetimler %v, want %v", calls, want)
 	}
 	for i := range want {
 		if calls[i] != want[i] {
-			t.Fatalf("denetimler %v, istenen %v", calls, want)
+			t.Fatalf("denetimler %v, want %v", calls, want)
 		}
 	}
 }

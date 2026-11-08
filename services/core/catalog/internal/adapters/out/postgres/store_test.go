@@ -47,10 +47,10 @@ func TestByBarcode(t *testing.T) {
 	want := products[1]
 	want.Prices = []domain.Price{{Source: domain.HeadquartersPrice, Amount: 8990}}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("ürün %+v, istenen %+v", got, want)
+		t.Errorf("product %+v, want %+v", got, want)
 	}
 	if _, err := svc.GetByBarcode(ctx, "0000000000000"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("hata = %v, istenen %v", err, app.ErrNotFound)
+		t.Errorf("error = %v, want %v", err, app.ErrNotFound)
 	}
 }
 
@@ -77,7 +77,7 @@ func TestSearchUsesTurkishCase(t *testing.T) {
 			ids = append(ids, p.ID)
 		}
 		if !reflect.DeepEqual(ids, tt.want) {
-			t.Errorf("Search(%q) = %v, istenen %v", tt.query, ids, tt.want)
+			t.Errorf("Search(%q) = %v, want %v", tt.query, ids, tt.want)
 		}
 	}
 }
@@ -92,13 +92,13 @@ func TestSeedUpdatesExisting(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, err := svc.GetByBarcode(ctx, "8690000000050"); err != nil || got.UnitPrice != 1750 {
-		t.Errorf("güncellenen ürün: %+v, %v", got, err)
+		t.Errorf("updated product: %+v, %v", got, err)
 	}
 	if _, err := svc.GetByBarcode(ctx, "8690000000012"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("eski barkod hâlâ eşleşiyor: %v", err)
+		t.Errorf("the old barcode still matches: %v", err)
 	}
 	if err := svc.Seed(ctx, []domain.Product{{ID: "x", Name: "X", Unit: "litre"}}); !errors.Is(err, domain.ErrInvalidProduct) {
-		t.Errorf("geçersiz birim: hata = %v, istenen %v", err, domain.ErrInvalidProduct)
+		t.Errorf("invalid unit: error = %v, want %v", err, domain.ErrInvalidProduct)
 	}
 }
 
@@ -135,7 +135,7 @@ func TestTurkishOrder(t *testing.T) {
 		ids = append(ids, p.ID)
 	}
 	if want := []string{"cips", "cay", "su", "sut", "seker"}; !reflect.DeepEqual(ids, want) {
-		t.Errorf("hızlı tuş sırası %v, istenen %v (Cips, Çay, Su, Süt, Şeker)", ids, want)
+		t.Errorf("quick key order %v, want %v (Cips, Çay, Su, Süt, Şeker)", ids, want)
 	}
 }
 
@@ -164,7 +164,7 @@ func TestPriceSchedule(t *testing.T) {
 		{Source: domain.StorePrice, Amount: 1800, From: monday.Add(time.Hour)},
 	}
 	if !reflect.DeepEqual(got.Prices, want) {
-		t.Errorf("takvim %+v; %+v olmalı", got.Prices, want)
+		t.Errorf("takvim %+v; %+v expected", got.Prices, want)
 	}
 	// The headquarters schedule is renewed, the store price stays.
 	p.Prices = []domain.Price{{Source: domain.HeadquartersPrice, Amount: 1600}}
@@ -174,12 +174,12 @@ func TestPriceSchedule(t *testing.T) {
 	got, _ = st.ByBarcode(ctx, "8690000000012")
 	want = []domain.Price{{Source: domain.HeadquartersPrice, Amount: 1600}, {Source: domain.StorePrice, Amount: 1800, From: monday.Add(time.Hour)}}
 	if !reflect.DeepEqual(got.Prices, want) {
-		t.Errorf("yenilenen takvim %+v; %+v olmalı", got.Prices, want)
+		t.Errorf("yenilenen takvim %+v; %+v expected", got.Prices, want)
 	}
 	// The store price is not written with the product.
 	p.Prices = append(p.Prices, domain.Price{Source: domain.StorePrice, Amount: 1, From: monday})
 	if err := st.Upsert(ctx, []domain.Product{p}, domain.OriginSeed); err == nil {
-		t.Error("mağaza fiyatı ürünle yazıldı")
+		t.Error("the store price was written with the product")
 	}
 }
 
@@ -198,7 +198,7 @@ func TestOriginAndDiscontinued(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, err := svc.GetByBarcode(ctx, "8690000000012"); err != nil || got.Name != "Ekmek 300 g" || got.UnitPrice != 1700 {
-		t.Errorf("merkezin ürünü dosyayla değişti: %+v %v", got, err)
+		t.Errorf("headquarters' product was changed by the file: %+v %v", got, err)
 	}
 	// The other products in the initial file are still updated.
 	seedOnly := products[1]
@@ -207,7 +207,7 @@ func TestOriginAndDiscontinued(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, _ := svc.GetByBarcode(ctx, "8690000000029"); got.Name != "ŞAMPUAN 750 ml" {
-		t.Errorf("dosyadaki ürün güncellenmedi: %+v", got)
+		t.Errorf("the product in the file was not updated: %+v", got)
 	}
 
 	headquarters.Discontinued = true
@@ -215,20 +215,20 @@ func TestOriginAndDiscontinued(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := svc.GetByBarcode(ctx, "8690000000012"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("satıştan kaldırılan ürün bulundu: %v", err)
+		t.Errorf("a product taken off sale was found: %v", err)
 	}
 	if list, _ := svc.Search(ctx, "ekmek", 10); len(list) != 0 {
-		t.Errorf("satıştan kaldırılan ürün aramada: %+v", list)
+		t.Errorf("a product taken off sale is in the search: %+v", list)
 	}
 	if list, _ := svc.Search(ctx, "", 10); len(list) != 1 || list[0].ID != "domates" {
-		t.Errorf("hızlı tuşlar %+v", list)
+		t.Errorf("quick keys %+v", list)
 	}
 	headquarters.Discontinued = false
 	if err := svc.Apply(ctx, headquarters); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.GetByBarcode(ctx, "8690000000012"); err != nil {
-		t.Errorf("yeniden satışa açılan ürün: %v", err)
+		t.Errorf("product put on sale again: %v", err)
 	}
 }
 
@@ -258,14 +258,14 @@ func TestMenuAndImages(t *testing.T) {
 		names = append(names, p.Name)
 	}
 	if want := []string{"Mercimek çorbası", "Köfte", "Pilav", "Ayran"}; !reflect.DeepEqual(names, want) {
-		t.Errorf("menü %v, istenen %v (market ürünleri menüde yok)", names, want)
+		t.Errorf("menu %v, want %v (no grocery products in the menu)", names, want)
 	}
 	k, err := svc.GetProduct(ctx, "kofte")
 	if err != nil || k.UnitPrice != 25000 || !reflect.DeepEqual(k.Options, groups) || items[3].Station != menu.Bar {
-		t.Fatalf("ürün: %+v %v", k, err)
+		t.Fatalf("product: %+v %v", k, err)
 	}
 	if got, err := svc.Image(ctx, "kofte"); err != nil || got.SHA256 != "eski" || string(got.Data) != string(img) {
-		t.Errorf("görsel: %+v %v", got, err)
+		t.Errorf("image: %+v %v", got, err)
 	}
 	// The new image digest came from headquarters but the image itself has not come yet.
 	k.ImageSHA256 = "yeni"
@@ -273,16 +273,16 @@ func TestMenuAndImages(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := svc.Image(ctx, "kofte"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("özeti tutmayan görsel verildi: %v", err)
+		t.Errorf("an image that does not match its digest was given: %v", err)
 	}
 	if err := st.SaveImage(ctx, domain.Image{ProductID: "kofte", SHA256: "yeni", ContentType: "image/png", Data: img}); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := svc.Image(ctx, "kofte"); err != nil || got.SHA256 != "yeni" {
-		t.Errorf("yeni görsel: %+v %v", got, err)
+		t.Errorf("new image: %+v %v", got, err)
 	}
 	if _, err := svc.GetProduct(ctx, "yok"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("olmayan ürün: %v", err)
+		t.Errorf("product that does not exist: %v", err)
 	}
 }
 

@@ -37,7 +37,7 @@ func TestEncode(t *testing.T) {
 		s.GetTotalKurus() != 4900 || s.GetChangeKurus() != 100 || s.GetReceiptNo() != 12 || len(s.GetTaxes()) != 1 ||
 		s.GetLines()[0].GetName() != "ŞAMPUAN" || s.GetPayments()[0].GetMethod() != salesv1.PaymentMethod_PAYMENT_METHOD_CASH ||
 		s.GetPayments()[1].GetRef() != "POS-1" {
-		t.Errorf("çözülen olay yanlış: %v", &got)
+		t.Errorf("the decoded event is wrong: %v", &got)
 	}
 
 	b, _, err = Encoder{}.Encode(domain.SaleVoided{SaleID: "s2", CashierID: "ayse", Total: 1299, Refunded: true, At: at}, "e2", "store-1")
@@ -46,7 +46,7 @@ func TestEncode(t *testing.T) {
 	}
 	var voided salesv1.SaleVoided
 	if err := proto.Unmarshal(b, &voided); err != nil || voided.GetSaleId() != "s2" || !voided.GetRefunded() || voided.GetCashierId() != "ayse" {
-		t.Errorf("iptal olayı: %v, %v", &voided, err)
+		t.Errorf("void event: %v, %v", &voided, err)
 	}
 
 	b, _, err = Encoder{}.Encode(domain.SaleCharged{
@@ -63,6 +63,6 @@ func TestEncode(t *testing.T) {
 		charged.GetSale().GetId() != "s3" || charged.GetSale().GetStatus() != salesv1.SaleStatus_SALE_STATUS_CHARGED ||
 		charged.GetSale().GetTotalKurus() != 1500 || charged.GetSale().GetPayments()[0].GetRef() != "POS-2" ||
 		len(charged.GetSale().GetLines()) != 1 || charged.GetRegisterId() != "register-1" {
-		t.Errorf("fişi kesilemeyen satış olayı: %v, %v", &charged, err)
+		t.Errorf("event of a sale whose receipt could not be issued: %v, %v", &charged, err)
 	}
 }

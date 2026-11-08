@@ -58,7 +58,7 @@ func TestParseCompleted(t *testing.T) {
 	e := in.Event
 	if e.ID != "e1" || e.Subject != "sale.completed.v1" || e.StoreID != "store-1" || e.RegisterID != "register-2" ||
 		!e.OccurredAt.Equal(paid.Add(time.Second)) || e.ContentType != pb || string(e.Payload) != string(data) || in.ClaimedStore != "" {
-		t.Errorf("olay %+v", in)
+		t.Errorf("event %+v", in)
 	}
 	s, ok := in.Body.(domain.Sale)
 	if !ok {
@@ -92,7 +92,7 @@ func TestParseStoreFromRoute(t *testing.T) {
 	v := in.Body.(domain.Void)
 	if in.Event.StoreID != "store-1" || v.StoreID != "store-1" || in.ClaimedStore != "store-9" ||
 		v.SaleID != "s9" || v.RegisterID != "register-1" || v.CashierID != "mert" || v.Total != 999 || !v.Refunded || !v.At.Equal(at) {
-		t.Errorf("iptal %+v", in)
+		t.Errorf("void %+v", in)
 	}
 	// An old register with no store id configured: the event is still written to the store it came from.
 	data, _ = proto.Marshal(&salesv1.SaleCharged{EventId: "e3", RegisterId: "register-1", OccurredAt: timestamppb.New(at), Reason: "yazıcı kapalı",
@@ -132,7 +132,7 @@ func TestParseShift(t *testing.T) {
 	}
 	if sh := in.Body.(domain.Shift); sh.ID != 7 || !sh.ClosedAt.Equal(closed) || sh.ClosedBy != "mert" || sh.Receipts != 31 ||
 		sh.Total != 120000 || sh.ExpectedCash != 150000 || sh.CountedCash != 149000 || sh.Difference != -1000 {
-		t.Errorf("kapanan vardiya %+v", sh)
+		t.Errorf("closed shift %+v", sh)
 	}
 
 	// A closing event with no closing time is incomplete.
@@ -154,13 +154,13 @@ func TestParseRaw(t *testing.T) {
 	}
 	if in.Body != nil || in.Event.ID != "e7" || in.Event.Subject != "node.heartbeat.v1" || in.Event.RegisterID != "register-3" ||
 		!in.Event.OccurredAt.Equal(stored) || in.Event.Validate() != nil {
-		t.Errorf("ham olay %+v", in)
+		t.Errorf("raw event %+v", in)
 	}
 
 	// An old JSON sale event and a subject with no store are rejected.
 	h.Set("content-type", "application/json")
 	if _, err := Parse("store-1.sale.completed.v1", h, []byte("{}"), stored); !errors.Is(err, ErrNotProtobuf) {
-		t.Errorf("JSON olay: %v", err)
+		t.Errorf("JSON event: %v", err)
 	}
 	if _, err := Parse("sale", h, nil, stored); !errors.Is(err, domain.ErrInvalidEvent) {
 		t.Errorf("subject with no store: %v", err)
@@ -202,6 +202,6 @@ func TestParseCashier(t *testing.T) {
 	c, ok := in.Body.(domain.Cashier)
 	if !ok || in.Event.RegisterID != "" || c.StoreID != "store-1" || in.ClaimedStore != "store-9" || c.CashierID != "zeynep" ||
 		c.Name != "Zeynep Kaya" || c.Role != "manager" || !c.Disabled || c.UpdatedBy != "mağaza" || !c.At.Equal(at) || c.Validate() != nil {
-		t.Errorf("kasiyer %+v", in)
+		t.Errorf("cashier %+v", in)
 	}
 }

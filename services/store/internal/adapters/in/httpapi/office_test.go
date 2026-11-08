@@ -119,7 +119,7 @@ func TestCatalogReadOnlyWhileConnected(t *testing.T) {
 	var st officeJSON
 	code, body := call(t, c, "GET", srv.URL+"/api/settings/headquarters", "")
 	if err := json.Unmarshal([]byte(body), &st); err != nil || code != 200 || !st.Installed || !st.Connected || st.CatalogWritable {
-		t.Fatalf("ilk durum: %d %s", code, body)
+		t.Fatalf("first status: %d %s", code, body)
 	}
 	if code, _ := call(t, c, "GET", srv.URL+"/api/catalog/products", ""); code != 200 || backend.count() != 1 {
 		t.Errorf("the read was not forwarded while connected: %d (%d requests)", code, backend.count())
@@ -163,7 +163,7 @@ func TestOfficeNotInstalled(t *testing.T) {
 	var st officeJSON
 	_, body := call(t, c, "GET", srv.URL+"/api/settings/headquarters", "")
 	if err := json.Unmarshal([]byte(body), &st); err != nil || st.Installed || st.Connected || !st.CatalogWritable {
-		t.Errorf("durum: %s", body)
+		t.Errorf("status: %s", body)
 	}
 	if code, _ := call(t, c, "POST", srv.URL+"/api/catalog/products", `{"code":"ekmek"}`); code != 200 {
 		t.Errorf("kopukken yazma: %d", code)
@@ -174,7 +174,7 @@ func TestOfficeBadRequestsAndAuth(t *testing.T) {
 	srv, c, _ := officeServer(t, true)
 	for _, body := range []string{`{}`, `{`, `{"connected":"evet"}`} {
 		if code, _ := call(t, c, "POST", srv.URL+"/api/settings/headquarters", body); code != http.StatusBadRequest {
-			t.Errorf("%s: %d, istenen 400", body, code)
+			t.Errorf("%s: %d, want 400", body, code)
 		}
 	}
 	// Without a sign-in nothing is read or changed.

@@ -36,16 +36,16 @@ func TestShiftEvents(t *testing.T) {
 	// A second shift is not opened; no event is written either.
 	var open domain.ShiftOpenError
 	if _, err := shifts.Open(ctx, "ali", 0); !errors.As(err, &open) {
-		t.Fatalf("ikinci vardiya: %v", err)
+		t.Fatalf("second shift: %v", err)
 	}
 	pending, err := st.Pending(ctx, 10)
 	if err != nil || len(pending) != 1 {
-		t.Fatalf("açılıştan sonra outbox: %d, %v", len(pending), err)
+		t.Fatalf("outbox after opening: %d, %v", len(pending), err)
 	}
 	m := pending[0]
 	if m.ID != "ev-1" || m.Subject != "shift.opened.v1" || m.Type != "com.abarow.shift.opened.v1" ||
 		m.StoreID != "store-1" || m.RegisterID != "register-2" || m.ContentType != eventproto.ContentType || !m.OccurredAt.Equal(sh.OpenedAt) {
-		t.Errorf("açılış mesajı: %+v", m.Message)
+		t.Errorf("opening message: %+v", m.Message)
 	}
 	var opened staffv1.ShiftOpened
 	if err := proto.Unmarshal(m.Payload, &opened); err != nil {
@@ -53,7 +53,7 @@ func TestShiftEvents(t *testing.T) {
 	}
 	if opened.GetEventId() != "ev-1" || opened.GetRegisterId() != "register-2" || opened.GetShift().GetId() != sh.ID ||
 		opened.GetShift().GetCashierId() != "ayse" || opened.GetShift().GetOpeningCashKurus() != 50000 {
-		t.Errorf("açılış olayı: %v", &opened)
+		t.Errorf("opening event: %v", &opened)
 	}
 
 	*now = now.Add(8 * time.Hour)
@@ -63,14 +63,14 @@ func TestShiftEvents(t *testing.T) {
 	}
 	// No event is written when there is no shift to close.
 	if _, err := shifts.Close(ctx, "ayse", 0); !errors.Is(err, domain.ErrNoShift) {
-		t.Fatalf("ikinci kapanış: %v", err)
+		t.Fatalf("second closing: %v", err)
 	}
 	if pending, err = st.Pending(ctx, 10); err != nil || len(pending) != 2 {
-		t.Fatalf("kapanıştan sonra outbox: %d, %v", len(pending), err)
+		t.Fatalf("outbox after closing: %d, %v", len(pending), err)
 	}
 	m = pending[1]
 	if m.Subject != "shift.closed.v1" || !m.OccurredAt.Equal(*now) {
-		t.Errorf("kapanış mesajı: %+v", m.Message)
+		t.Errorf("closing message: %+v", m.Message)
 	}
 	var closed staffv1.ShiftClosed
 	if err := proto.Unmarshal(m.Payload, &closed); err != nil {
@@ -79,7 +79,7 @@ func TestShiftEvents(t *testing.T) {
 	rep := closed.GetReport()
 	if rep.GetShift().GetId() != sh.ID || rep.GetShift().GetClosedBy() != "ayse" || rep.GetShift().GetCountedCashKurus() != 49900 ||
 		rep.GetExpectedCashKurus() != int64(r.ExpectedCash) || rep.GetDifferenceKurus() != -100 || rep.GetShift().GetClosedAt() == nil {
-		t.Errorf("kapanış olayı: %v", &closed)
+		t.Errorf("closing event: %v", &closed)
 	}
 
 	// As the relay publishes, the pending count falls.
@@ -87,6 +87,6 @@ func TestShiftEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c, err := st.CountPending(ctx); err != nil || c != 1 {
-		t.Errorf("bekleyen %d, %v", c, err)
+		t.Errorf("pending %d, %v", c, err)
 	}
 }

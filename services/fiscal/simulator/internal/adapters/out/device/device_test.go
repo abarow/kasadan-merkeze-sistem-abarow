@@ -60,13 +60,13 @@ func TestDeviceAdapters(t *testing.T) {
 		t.Fatal(err)
 	}
 	if srv.printed.GetTitle() != "Fiş SIM-1" || len(srv.printed.GetLines()) != 2 || srv.printed.GetLines()[1] != "satır 2" {
-		t.Errorf("yazdırılan: %v", srv.printed)
+		t.Errorf("printed: %v", srv.printed)
 	}
 	var logs bytes.Buffer
 	d := device.Drawer{Client: client, Log: slog.New(slog.NewTextHandler(&logs, nil))}
 	d.Open(ctx, "nakit satış")
 	if srv.reason != "nakit satış" || logs.Len() != 0 {
-		t.Errorf("çekmece: %q (günlük %q)", srv.reason, logs.String())
+		t.Errorf("drawer: %q (log %q)", srv.reason, logs.String())
 	}
 	if cols, err := device.Columns(ctx, client); err != nil || cols != 42 {
 		t.Errorf("Columns: %d %v", cols, err)
@@ -75,13 +75,13 @@ func TestDeviceAdapters(t *testing.T) {
 	// When the device gives an error: a printer error is returned; a drawer error is only written to the log.
 	srv.failing = true
 	if err := (device.Printer{Client: client}).Print(ctx, "x", "y"); status.Code(err) != codes.FailedPrecondition {
-		t.Errorf("yazıcı hatası: %v", err)
+		t.Errorf("printer error: %v", err)
 	}
 	d.Open(ctx, "x")
 	if !strings.Contains(logs.String(), "could not open the drawer") {
-		t.Errorf("çekmece hatası günlüğe yazılmadı: %q", logs.String())
+		t.Errorf("the drawer error was not logged: %q", logs.String())
 	}
 	if _, err := device.Columns(ctx, client); err == nil {
-		t.Error("Columns hatası döndürülmedi")
+		t.Error("the Columns error was not returned")
 	}
 }

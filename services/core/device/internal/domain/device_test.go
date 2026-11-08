@@ -57,7 +57,7 @@ func TestReadingCheck(t *testing.T) {
 	}
 	for _, tc := range tests {
 		if err := tc.r.Check(); !errors.Is(err, tc.want) {
-			t.Errorf("%s: %v, istenen %v", tc.name, err, tc.want)
+			t.Errorf("%s: %v, want %v", tc.name, err, tc.want)
 		}
 	}
 }
@@ -86,7 +86,7 @@ func TestValidateScan(t *testing.T) {
 			t.Errorf("%q reddedildi: %v", tc.code, err)
 		}
 		if !tc.ok && !errors.Is(err, ErrInvalidScan) {
-			t.Errorf("%q kabul edildi: %v", tc.code, err)
+			t.Errorf("%q was accepted: %v", tc.code, err)
 		}
 	}
 }

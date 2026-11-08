@@ -36,7 +36,7 @@ func TestIdentityColumns(t *testing.T) {
 			}
 			list, err := s.Users(ctx)
 			if err != nil || len(list) != 2 || list[0].Subject != "" || list[1].Subject != "s-1" {
-				t.Errorf("liste %+v %v", list, err)
+				t.Errorf("list %+v %v", list, err)
 			}
 
 			// The database also prevents a double link and a double address (the Manage check is

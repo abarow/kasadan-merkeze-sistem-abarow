@@ -24,10 +24,10 @@ func TestRemoteErrorKeepsCodeAndCleansMessage(t *testing.T) {
 	err := fmt.Errorf("ödeme alınamadı: %w", RemoteError(remote))
 
 	if got := err.Error(); got != "ödeme alınamadı: kart ödemesi reddedildi" {
-		t.Errorf("mesaj %q", got)
+		t.Errorf("message %q", got)
 	}
 	if got := status.Code(err); got != codes.FailedPrecondition {
-		t.Errorf("kod %v, istenen FailedPrecondition", got)
+		t.Errorf("kod %v, want FailedPrecondition", got)
 	}
 	plain := errors.New("düz hata")
 	if RemoteError(plain) != plain {
@@ -51,7 +51,7 @@ func TestDialResolvesOnEveryConnect(t *testing.T) {
 			t.Fatal(err)
 		}
 		if got := conn.Target(); got != want {
-			t.Errorf("%s → %s, istenen %s", addr, got, want)
+			t.Errorf("%s → %s, want %s", addr, got, want)
 		}
 		conn.Close()
 	}
@@ -72,7 +72,7 @@ func TestRemoteErrorFromHidesConnectionDetails(t *testing.T) {
 	for _, tt := range tests {
 		err := RemoteErrorFrom("yazıcı", tt.err)
 		if err.Error() != tt.want || status.Code(err) != tt.code {
-			t.Errorf("%v → %q (%v); istenen %q (%v)", tt.err, err, status.Code(err), tt.want, tt.code)
+			t.Errorf("%v → %q (%v); want %q (%v)", tt.err, err, status.Code(err), tt.want, tt.code)
 		}
 	}
 	plain := errors.New("düz hata")

@@ -174,7 +174,7 @@ func TestParseTrust(t *testing.T) {
 		t.Error("an invalid key was accepted")
 	}
 	if _, err := channel.ParseTrust([]byte(`bozuk`)); err == nil {
-		t.Error("bozuk dosya kabul edildi")
+		t.Error("a broken file was accepted")
 	}
 }
 
@@ -183,6 +183,6 @@ func TestUnknownFieldsRejected(t *testing.T) {
 	raw := []byte(`{"channel":"prod","version":"1","seq":1,"issued":"2026-11-06T11:00:00Z","expires":"2026-11-07T11:00:00Z","urgency":"normal","notes":"","images":[],"fazla":1}`)
 	s := channel.Signed{Payload: base64.RawURLEncoding.EncodeToString(raw)}.Add(channel.Prod, k.prod)
 	if _, err := channel.Verify(s, token.Prod, k.trust, now, 0); !errors.Is(err, channel.ErrInvalid) {
-		t.Fatalf("bilinmeyen alan kabul edildi: %v", err)
+		t.Fatalf("an unknown field was accepted: %v", err)
 	}
 }

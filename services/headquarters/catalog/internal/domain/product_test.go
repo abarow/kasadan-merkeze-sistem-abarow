@@ -53,7 +53,7 @@ func TestSchedulePrice(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !slices.Equal(p.Prices, []Price{{Amount: 1500}, {Amount: 1650, From: monday}}) {
-		t.Fatalf("ileri tarihli fiyat: %+v", p.Prices)
+		t.Fatalf("future-dated price: %+v", p.Prices)
 	}
 	if p.PriceAt(now) != 1500 || p.PriceAt(monday) != 1650 {
 		t.Errorf("price in effect %v / %v", p.PriceAt(now), p.PriceAt(monday))
@@ -70,18 +70,18 @@ func TestSchedulePrice(t *testing.T) {
 		t.Errorf("immediately valid price: %+v", p.Prices)
 	}
 	if _, err := p.SchedulePrice(-1, monday, now); !errors.Is(err, ErrInvalidProduct) {
-		t.Errorf("negatif fiyat: %v", err)
+		t.Errorf("negative price: %v", err)
 	}
 
 	// A future-dated price is withdrawn; one that has taken effect cannot be.
 	p, err = p.CancelPrice(monday, now)
 	if err != nil || !slices.Equal(p.Prices, []Price{{Amount: 1550}}) {
-		t.Errorf("geri alma: %+v %v", p.Prices, err)
+		t.Errorf("undo: %+v %v", p.Prices, err)
 	}
 	if _, err := p.CancelPrice(now.Add(-time.Minute), now); !errors.Is(err, ErrInvalidProduct) {
 		t.Errorf("withdrawing the price in effect: %v", err)
 	}
 	if _, err := p.CancelPrice(monday, now); !errors.Is(err, ErrNotFound) {
-		t.Errorf("olmayan fiyat: %v", err)
+		t.Errorf("price that does not exist: %v", err)
 	}
 }

@@ -47,11 +47,11 @@ func TestLoginValidateLogout(t *testing.T) {
 		t.Fatalf("Login: %v", err)
 	}
 	if c.Name != "Müdür Ali" || !c.CanCloseDay() || len(token) != 43 || expires.IsZero() {
-		t.Errorf("giriş yanlış: %+v, token %d karakter", c, len(token))
+		t.Errorf("sign-in is wrong: %+v, token %d characters", c, len(token))
 	}
 	var stored string
 	if err := st.db.QueryRow(`SELECT token_hash FROM sessions`).Scan(&stored); err != nil || stored == token {
-		t.Errorf("oturum anahtarı açık metin saklanmış olmamalı: %q, %v", stored, err)
+		t.Errorf("the session key must not be stored in plain text: %q, %v", stored, err)
 	}
 
 	got, err := auth.Validate(ctx, token)
@@ -59,16 +59,16 @@ func TestLoginValidateLogout(t *testing.T) {
 		t.Errorf("Validate: %+v, %v", got, err)
 	}
 	if _, err := auth.Validate(ctx, "uydurma"); !errors.Is(err, domain.ErrInvalidSession) {
-		t.Errorf("uydurma anahtar: hata = %v", err)
+		t.Errorf("made-up key: error = %v", err)
 	}
 	if err := auth.Logout(ctx, token); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := auth.Validate(ctx, token); !errors.Is(err, domain.ErrInvalidSession) {
-		t.Errorf("çıkıştan sonra oturum geçerli kaldı: %v", err)
+		t.Errorf("the session stayed valid after sign-out: %v", err)
 	}
 	if list, err := auth.List(ctx); err != nil || len(list) != 2 {
-		t.Errorf("kasiyer listesi: %v, %v", list, err)
+		t.Errorf("cashier list: %v, %v", list, err)
 	}
 }
 
@@ -81,7 +81,7 @@ func TestSessionExpires(t *testing.T) {
 	}
 	*now = now.Add(12 * time.Hour)
 	if _, err := auth.Validate(ctx, token); !errors.Is(err, domain.ErrInvalidSession) {
-		t.Errorf("süresi dolan oturum geçerli: %v", err)
+		t.Errorf("an expired session is valid: %v", err)
 	}
 }
 
@@ -93,22 +93,22 @@ func TestLockAfterFailedAttempts(t *testing.T) {
 		_, _, _, err := auth.Login(ctx, "ayse", "0000")
 		var wrong domain.WrongPINError
 		if !errors.As(err, &wrong) || wrong.Remaining != domain.MaxFailedAttempts-i {
-			t.Fatalf("%d. deneme: hata = %v", i, err)
+			t.Fatalf("attempt %d: error = %v", i, err)
 		}
 	}
 	if _, _, _, err := auth.Login(ctx, "ayse", "0000"); !errors.Is(err, domain.ErrWrongPIN) {
-		t.Fatalf("son deneme: hata = %v", err)
+		t.Fatalf("last attempt: error = %v", err)
 	}
 	// While locked even the right PIN is not accepted.
 	if _, _, _, err := auth.Login(ctx, "ayse", "1111"); !errors.Is(err, domain.ErrLocked) {
-		t.Fatalf("kilitliyken: hata = %v, istenen %v", err, domain.ErrLocked)
+		t.Fatalf("while locked: error = %v, want %v", err, domain.ErrLocked)
 	}
 	*now = now.Add(domain.LockDuration)
 	if _, _, _, err := auth.Login(ctx, "ayse", "1111"); err != nil {
-		t.Errorf("kilit süresi dolunca giriş: %v", err)
+		t.Errorf("sign-in after the lock ended: %v", err)
 	}
 	if _, _, _, err := auth.Login(ctx, "kimse", "1111"); !errors.Is(err, domain.ErrUnknownCashier) {
-		t.Errorf("bilinmeyen kasiyer: hata = %v", err)
+		t.Errorf("unknown cashier: error = %v", err)
 	}
 }
 
@@ -116,10 +116,10 @@ func TestSeedValidates(t *testing.T) {
 	auth, _, _ := newAuth(t)
 	ctx := context.Background()
 	if _, err := auth.Seed(ctx, []app.SeedCashier{{ID: "x", Name: "X", Role: domain.RoleCashier, PIN: "12a4"}}); !errors.Is(err, domain.ErrInvalidPIN) {
-		t.Errorf("harfli PIN: hata = %v", err)
+		t.Errorf("PIN with letters: error = %v", err)
 	}
 	if _, err := auth.Seed(ctx, []app.SeedCashier{{ID: "x", Name: "X", Role: "patron", PIN: "1234"}}); !errors.Is(err, domain.ErrInvalidRole) {
-		t.Errorf("bilinmeyen rol: hata = %v", err)
+		t.Errorf("unknown role: error = %v", err)
 	}
 }
 
@@ -128,33 +128,33 @@ func TestApproval(t *testing.T) {
 	auth, st, now := newAuth(t)
 
 	if _, _, err := auth.Approve(ctx, "ayse", "ali", "9999", "her_sey"); !errors.Is(err, domain.ErrUnknownAction) {
-		t.Errorf("bilinmeyen işlem: %v", err)
+		t.Errorf("unknown action: %v", err)
 	}
 	if _, _, err := auth.Approve(ctx, "ayse", "ayse", "1111", domain.ActionCloseDay); !errors.Is(err, domain.ErrNotManager) {
-		t.Errorf("kasiyer onay verebildi: %v", err)
+		t.Errorf("a cashier could give an approval: %v", err)
 	}
 	// A wrong PIN counts toward the manager's attempt counter.
 	var wrong domain.WrongPINError
 	if _, _, err := auth.Approve(ctx, "ayse", "ali", "0000", domain.ActionCloseDay); !errors.As(err, &wrong) || wrong.Remaining != domain.MaxFailedAttempts-1 {
-		t.Errorf("hatalı PIN: %v", err)
+		t.Errorf("wrong PIN: %v", err)
 	}
 
 	token, expires, err := auth.Approve(ctx, "ayse", "ali", "9999", domain.ActionCashOut)
 	if err != nil || len(token) != 43 || !expires.Equal(now.Add(domain.ApprovalTTL)) {
-		t.Fatalf("onay: %q %v %v", token, expires, err)
+		t.Fatalf("approval: %q %v %v", token, expires, err)
 	}
 	// The approval is used only in the operation it was given for and only once.
 	if _, err := auth.Actor(ctx, "ayse", token, domain.ActionCloseDay); !errors.Is(err, domain.ErrInvalidApproval) {
-		t.Errorf("başka işlemde kullanıldı: %v", err)
+		t.Errorf("used for another action: %v", err)
 	}
 	if actor, err := auth.Actor(ctx, "ayse", token, domain.ActionCashOut); err != nil || actor != "ali" {
-		t.Errorf("onaylı işlemi yapan %q, %v; istenen ali", actor, err)
+		t.Errorf("the approved action was done by %q, %v; want ali", actor, err)
 	}
 	if _, err := auth.Actor(ctx, "ayse", token, domain.ActionCashOut); !errors.Is(err, domain.ErrInvalidApproval) {
-		t.Errorf("onay ikinci kez kullanıldı: %v", err)
+		t.Errorf("the approval was used a second time: %v", err)
 	}
 	if actor, err := auth.Actor(ctx, "ayse", "", domain.ActionCashOut); err != nil || actor != "ayse" {
-		t.Errorf("onaysız işlemi yapan %q, %v; istenen ayse", actor, err)
+		t.Errorf("the action without approval was done by %q, %v; want ayse", actor, err)
 	}
 
 	// An expired approval is not used.
@@ -164,13 +164,13 @@ func TestApproval(t *testing.T) {
 	}
 	*now = now.Add(domain.ApprovalTTL)
 	if _, err := auth.Actor(ctx, "ayse", token, domain.ActionCloseDay); !errors.Is(err, domain.ErrInvalidApproval) {
-		t.Errorf("süresi dolan onay kullanıldı: %v", err)
+		t.Errorf("an expired approval was used: %v", err)
 	}
 
 	// Z only by a manager (or by a cashier with manager approval, in the manager's name).
 	svc := app.NewService(st, st, st, app.Events{})
 	if _, err := svc.CloseDay(ctx, "ayse"); !errors.Is(err, domain.ErrCloseDayNotManager) {
-		t.Errorf("kasiyer Z alabildi: %v", err)
+		t.Errorf("a cashier could take Z: %v", err)
 	}
 }
 
@@ -179,22 +179,22 @@ func TestAuthorize(t *testing.T) {
 	auth, _, _ := newAuth(t)
 
 	if id, err := auth.Authorize(ctx, "ali", "", domain.ActionRefundCharged); err != nil || id != "ali" {
-		t.Errorf("müdür oturumu: %q, %v", id, err)
+		t.Errorf("manager session: %q, %v", id, err)
 	}
 	if _, err := auth.Authorize(ctx, "ayse", "", domain.ActionRefundCharged); !errors.Is(err, domain.ErrManagerRequired) {
-		t.Errorf("kasiyer onaysız: %v", err)
+		t.Errorf("cashier without approval: %v", err)
 	}
 	token, _, err := auth.Approve(ctx, "ayse", "ali", "9999", domain.ActionRefundCharged)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if id, err := auth.Authorize(ctx, "ayse", token, domain.ActionRefundCharged); err != nil || id != "ali" {
-		t.Errorf("onaylı kasiyer: %q, %v", id, err)
+		t.Errorf("cashier with approval: %q, %v", id, err)
 	}
 	if _, err := auth.Authorize(ctx, "ayse", token, domain.ActionRefundCharged); !errors.Is(err, domain.ErrInvalidApproval) {
-		t.Errorf("onay ikinci kez: %v", err)
+		t.Errorf("approval a second time: %v", err)
 	}
 	if _, err := auth.Authorize(ctx, "ali", "", "her_sey"); !errors.Is(err, domain.ErrUnknownAction) {
-		t.Errorf("bilinmeyen işlem: %v", err)
+		t.Errorf("unknown action: %v", err)
 	}
 }

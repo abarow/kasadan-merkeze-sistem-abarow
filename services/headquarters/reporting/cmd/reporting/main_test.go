@@ -87,12 +87,12 @@ func TestUserCommand(t *testing.T) {
 		t.Error(err)
 	}
 	if out, err := run("", "list"); err != nil || out != "ayse\tAyşe Yılmaz\työnetici\tbütün mağazalar\tclosed\nmehmet\tMehmet Er\työnetici\tbütün mağazalar\topen\n" {
-		t.Errorf("liste %q %v", out, err)
+		t.Errorf("list %q %v", out, err)
 	}
 	if _, err := run("", "disable", "veli"); err == nil {
 		t.Error("a non-existent user was closed")
 	}
 	if _, err := run("", "sil", "ayse"); err == nil || !strings.Contains(err.Error(), "kullanım") {
-		t.Errorf("bilinmeyen komut: %v", err)
+		t.Errorf("unknown command: %v", err)
 	}
 }

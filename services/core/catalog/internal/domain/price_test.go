@@ -63,7 +63,7 @@ func TestValidatePrices(t *testing.T) {
 		{{Source: HeadquartersPrice, Amount: 1}, {Source: HeadquartersPrice, Amount: 2}},
 	} {
 		if err := ValidatePrices(bad); !errors.Is(err, ErrInvalidProduct) {
-			t.Errorf("%+v kabul edildi", bad)
+			t.Errorf("%+v was accepted", bad)
 		}
 	}
 }

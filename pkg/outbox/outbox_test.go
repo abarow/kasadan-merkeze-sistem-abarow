@@ -75,13 +75,13 @@ func TestRelayPublishesInOrder(t *testing.T) {
 	o, p := newMemOutbox(3), &memPublisher{}
 	n, err := newRelay(o, p).Flush(context.Background())
 	if err != nil || n != 3 {
-		t.Fatalf("Flush = %d, %v; istenen 3, nil", n, err)
+		t.Fatalf("Flush = %d, %v; want 3, nil", n, err)
 	}
 	if !reflect.DeepEqual(p.ids, []string{"e1", "e2", "e3"}) {
-		t.Errorf("yayın sırası %v", p.ids)
+		t.Errorf("publish order %v", p.ids)
 	}
 	if n, _ := newRelay(o, p).Flush(context.Background()); n != 0 {
-		t.Errorf("ikinci Flush %d mesaj yayınladı, istenen 0", n)
+		t.Errorf("the second Flush published %d messages, want 0", n)
 	}
 }
 
@@ -89,20 +89,20 @@ func TestRelayStopsOnPublishErrorAndResumes(t *testing.T) {
 	o, p := newMemOutbox(3), &memPublisher{failAt: 2}
 	relay := newRelay(o, p)
 	if n, err := relay.Flush(context.Background()); err == nil || n != 1 {
-		t.Fatalf("Flush = %d, %v; istenen 1 ve hata", n, err)
+		t.Fatalf("Flush = %d, %v; want 1 and an error", n, err)
 	}
 	if n, _ := relay.Backlog(context.Background()); n != 2 {
-		t.Errorf("bekleyen %d olay, istenen 2", n)
+		t.Errorf("%d events pending, want 2", n)
 	}
 	// The message path came back: the rest go without breaking the order.
 	if n, err := relay.Flush(context.Background()); err != nil || n != 2 {
-		t.Fatalf("Flush = %d, %v; istenen 2, nil", n, err)
+		t.Fatalf("Flush = %d, %v; want 2, nil", n, err)
 	}
 	if n, _ := relay.Backlog(context.Background()); n != 0 {
-		t.Errorf("hepsi yayınlandıktan sonra bekleyen %d olay", n)
+		t.Errorf("%d events pending after all were published", n)
 	}
 	if !reflect.DeepEqual(p.ids, []string{"e1", "e2", "e3"}) {
-		t.Errorf("yayın sırası %v", p.ids)
+		t.Errorf("publish order %v", p.ids)
 	}
 }
 
@@ -111,7 +111,7 @@ func TestRelayRepublishesWhenMarkFails(t *testing.T) {
 	o.markErr = errors.New("disk dolu")
 	relay := newRelay(o, p)
 	if _, err := relay.Flush(context.Background()); err == nil {
-		t.Fatal("işaretleme hatası dönmedi")
+		t.Fatal("the marking error was not returned")
 	}
 	o.markErr = nil
 	if _, err := relay.Flush(context.Background()); err != nil {
@@ -119,7 +119,7 @@ func TestRelayRepublishesWhenMarkFails(t *testing.T) {
 	}
 	// At-least-once delivery: the same ID was published twice, the receiver de-duplicates the repeat.
 	if !reflect.DeepEqual(p.ids, []string{"e1", "e1"}) {
-		t.Errorf("yayınlar %v, istenen [e1 e1]", p.ids)
+		t.Errorf("publishes %v, want [e1 e1]", p.ids)
 	}
 }
 
@@ -141,7 +141,7 @@ func TestRelaySequenced(t *testing.T) {
 	}
 	for i, want := range []int64{10, 11, 13} {
 		if p.got[i].Seq != want || p.got[i].Producer != "sales" {
-			t.Errorf("mesaj %d: seq %d producer %q", i, p.got[i].Seq, p.got[i].Producer)
+			t.Errorf("message %d: seq %d producer %q", i, p.got[i].Seq, p.got[i].Producer)
 		}
 	}
 
@@ -151,7 +151,7 @@ func TestRelaySequenced(t *testing.T) {
 	}
 	for _, m := range p.got {
 		if m.Seq != 0 || m.Producer != "" {
-			t.Errorf("Sequenced olmayan relay sıra ekledi: %+v", m)
+			t.Errorf("a relay that is not Sequenced added a sequence: %+v", m)
 		}
 	}
 }

@@ -202,13 +202,13 @@ func TestFormatQtyAndRate(t *testing.T) {
 	qtys := map[money.Qty]string{1000: "1", 3000: "3", 1250: "1,250", 5: "0,005"}
 	for q, want := range qtys {
 		if got := formatQty(q); got != want {
-			t.Errorf("formatQty(%d) = %q, istenen %q", q, got, want)
+			t.Errorf("formatQty(%d) = %q, want %q", q, got, want)
 		}
 	}
 	rates := map[money.Rate]string{2000: "%20", 100: "%1", 150: "%1,5", 0: "%0", 1025: "%10,25"}
 	for r, want := range rates {
 		if got := formatRate(r); got != want {
-			t.Errorf("formatRate(%d) = %q, istenen %q", r, got, want)
+			t.Errorf("formatRate(%d) = %q, want %q", r, got, want)
 		}
 	}
 }

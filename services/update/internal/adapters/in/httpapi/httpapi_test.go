@@ -113,11 +113,11 @@ func TestFullFlowOverHTTP(t *testing.T) {
 	// The approver sees the list; the list contains no keys or approval code.
 	rec := call(e.adm, "GET", "/api/update/registrations", nil, person("admin"))
 	if rec.Code != 200 {
-		t.Fatalf("liste: %d %s", rec.Code, rec.Body)
+		t.Fatalf("list: %d %s", rec.Code, rec.Body)
 	}
 	list := decodeBody[ListJSON](t, rec)
 	if len(list.Registrations) != 1 || list.Registrations[0].Device != i.ID || list.Registrations[0].Store != "store-1" {
-		t.Fatalf("liste: %+v", list)
+		t.Fatalf("list: %+v", list)
 	}
 	if strings.Contains(rec.Body.String(), enc.EncodeToString(i.Public)) || strings.Contains(rec.Body.String(), identity.Code(i.ID)) {
 		t.Error("the list leaks a key or approval code")
@@ -129,13 +129,13 @@ func TestFullFlowOverHTTP(t *testing.T) {
 		t.Errorf("wrong code: %d %s", rec.Code, rec.Body)
 	}
 	if rec := call(e.adm, "POST", path, ApproveRequest{Code: identity.Code(i.ID)}, person("admin")); rec.Code != 200 {
-		t.Fatalf("onay: %d %s", rec.Code, rec.Body)
+		t.Fatalf("approval: %d %s", rec.Code, rec.Body)
 	}
 	if rec := call(e.dev, "GET", "/v1/registrations/"+i.ID, nil, nil); rec.Code != 200 || decodeBody[StatusJSON](t, rec).Status != "approved" {
-		t.Errorf("durum: %d %s", rec.Code, rec.Body)
+		t.Errorf("status: %d %s", rec.Code, rec.Body)
 	}
 
-	// Meydan okuma ve jeton.
+	// Challenge and token.
 	nonce := decodeBody[ChallengeResponse](t, call(e.dev, "POST", "/v1/challenge", ChallengeRequest{Device: i.ID}, nil)).Nonce
 	tok := call(e.dev, "POST", "/v1/token", TokenRequest{Device: i.ID, Nonce: nonce, Signature: enc.EncodeToString(i.Sign(token.PossessionMessage(i.ID, nonce)))}, nil)
 	if tok.Code != 200 {
@@ -152,7 +152,7 @@ func TestFullFlowOverHTTP(t *testing.T) {
 
 	// After revocation no new challenge is given.
 	if rec := call(e.adm, "POST", "/api/update/registrations/"+i.ID+"/revoke", "{}", person("admin")); rec.Code != 200 {
-		t.Fatalf("iptal: %d %s", rec.Code, rec.Body)
+		t.Fatalf("cancel: %d %s", rec.Code, rec.Body)
 	}
 	if rec := call(e.dev, "POST", "/v1/challenge", ChallengeRequest{Device: i.ID}, nil); rec.Code != 403 || decodeBody[ErrorJSON](t, rec).Code != CodeRevoked {
 		t.Errorf("after revocation: %d %s", rec.Code, rec.Body)
@@ -179,7 +179,7 @@ func TestAdminAuth(t *testing.T) {
 	}
 	for _, c := range cases {
 		if c.rec.Code != c.want {
-			t.Errorf("%s: %d, istenen %d (%s)", c.label, c.rec.Code, c.want, c.rec.Body)
+			t.Errorf("%s: %d, want %d (%s)", c.label, c.rec.Code, c.want, c.rec.Body)
 		}
 	}
 	// A request without the headers changed nothing in the registration: it is still pending.
@@ -227,7 +227,7 @@ func TestDeviceInputValidation(t *testing.T) {
 	}
 	for _, c := range cases {
 		if rec := call(e.dev, "POST", "/v1/registrations", c.body, nil); rec.Code != c.want {
-			t.Errorf("%s: %d, istenen %d (%s)", c.label, rec.Code, c.want, rec.Body)
+			t.Errorf("%s: %d, want %d (%s)", c.label, rec.Code, c.want, rec.Body)
 		}
 	}
 	// A non-JSON content type.
@@ -236,11 +236,11 @@ func TestDeviceInputValidation(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.dev.ServeHTTP(rec, req)
 	if rec.Code != 415 {
-		t.Errorf("text/plain: %d, istenen 415", rec.Code)
+		t.Errorf("text/plain: %d, want 415", rec.Code)
 	}
 	// Bilinmeyen birim.
 	if rec := call(e.dev, "GET", "/v1/registrations/ABRW-YOK", nil, nil); rec.Code != 404 {
-		t.Errorf("bilinmeyen birim: %d", rec.Code)
+		t.Errorf("unknown unit: %d", rec.Code)
 	}
 	// No invalid request created a registration.
 	list := decodeBody[ListJSON](t, call(e.adm, "GET", "/api/update/registrations", nil, person("admin")))
@@ -298,6 +298,6 @@ func TestReportOverHTTP(t *testing.T) {
 	list := decodeBody[ListJSON](t, call(e.adm, "GET", "/api/update/registrations?status=approved", nil, person("admin")))
 	if len(list.Registrations) != 1 || list.Registrations[0].Report == nil || list.Registrations[0].Report.Version != "0.4.0" ||
 		list.Registrations[0].Report.Units["abarow-sales"] != "sha256:"+strings.Repeat("a", 64) || list.Registrations[0].Report.At.IsZero() {
-		t.Fatalf("liste: %+v", list.Registrations)
+		t.Fatalf("list: %+v", list.Registrations)
 	}
 }

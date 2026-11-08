@@ -103,7 +103,7 @@ func TestUpdateStatusProxy(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(login.UpdateSecretHeader, "sahte")
 	if resp, err := c.Do(req); err != nil || resp.StatusCode != http.StatusOK || got.path != "/api/update/apply" || got.secret != "gizli" {
-		t.Errorf("onay: %v %v %+v", resp, err, got)
+		t.Errorf("approval: %v %v %+v", resp, err, got)
 	}
 	got.secret = "kalan"
 	if resp, err := c.Get(srv.URL + "/api/update/status"); err != nil || resp.StatusCode != http.StatusOK || got.secret != "" {

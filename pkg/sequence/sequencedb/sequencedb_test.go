@@ -130,7 +130,7 @@ func TestGapAppearsAndCloses(t *testing.T) {
 			}
 			record(t, tr, "m1", "register-1", "sales", 3)
 			if g := gaps(t, tr, "m1", 0); len(g) != 1 || g[0].From != 4 || g[0].To != 4 {
-				t.Errorf("3 geldi: %v", g)
+				t.Errorf("3 came: %v", g)
 			}
 			record(t, tr, "m1", "register-1", "sales", 4)
 			if g := gaps(t, tr, "m1", 0); len(g) != 0 {

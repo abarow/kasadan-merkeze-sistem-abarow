@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	// StreamName, kasadaki kasiyer stream'idir.
+	// StreamName is the cashier stream at the register.
 	StreamName = "ABAROW_CASHIERS"
 	// ConfigStream is the store server's store settings stream; the cashiers are on the
 	// config.cashier.<cashier> subject.

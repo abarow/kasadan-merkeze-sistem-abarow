@@ -28,7 +28,7 @@ func testStore(t *testing.T) *Store {
 	t.Helper()
 	dsn := os.Getenv("ABAROW_TEST_POSTGRES")
 	if dsn == "" {
-		t.Skip("ABAROW_TEST_POSTGRES yok; PostgreSQL testleri atlandı")
+		t.Skip("ABAROW_TEST_POSTGRES is not set; the PostgreSQL tests are skipped")
 	}
 	ctx := context.Background()
 	admin, err := sql.Open("pgx", dsn)
@@ -54,7 +54,7 @@ func testStore(t *testing.T) *Store {
 		store.Close()
 		stdlib.UnregisterConnConfig(connStr)
 		if _, err := admin.ExecContext(ctx, "DROP DATABASE "+name+" WITH (FORCE)"); err != nil {
-			t.Errorf("test veritabanı silinemedi: %v", err)
+			t.Errorf("could not drop the test database: %v", err)
 		}
 		admin.Close()
 	})
@@ -96,31 +96,31 @@ func TestRecordSale(t *testing.T) {
 
 	fresh, err := s.Record(ctx, saleEvent("e1", "store-1", "register-1"), sale("s1", "store-1", "register-1", 1))
 	if err != nil || !fresh {
-		t.Fatalf("ilk kayıt: %v, %v", fresh, err)
+		t.Fatalf("first record: %v, %v", fresh, err)
 	}
 	// If the same event comes again nothing is written.
 	if fresh, err := s.Record(ctx, saleEvent("e1", "store-1", "register-1"), sale("s1", "store-1", "register-1", 1)); err != nil || fresh {
-		t.Errorf("tekrar gelen olay: %v, %v", fresh, err)
+		t.Errorf("event that came again: %v, %v", fresh, err)
 	}
 	// If the same sale comes with another event the event is stored, the sale is not duplicated.
 	if fresh, err := s.Record(ctx, saleEvent("e2", "store-1", "register-1"), sale("s1", "store-1", "register-1", 1)); err != nil || !fresh {
-		t.Errorf("aynı satış: %v, %v", fresh, err)
+		t.Errorf("the same sale: %v, %v", fresh, err)
 	}
 	if n := queryInt(t, s, "SELECT count(*) FROM sales"); n != 1 {
-		t.Errorf("%d satış; 1 olmalı", n)
+		t.Errorf("%d sales; 1 expected", n)
 	}
 	if n := queryInt(t, s, "SELECT count(*) FROM sale_lines WHERE sale_id = 's1'"); n != 2 {
-		t.Errorf("%d satır; 2 olmalı", n)
+		t.Errorf("%d lines; 2 expected", n)
 	}
 	// The line amount is the same as the calculation at the register: 1.250 kg × 89.90 = 112.38 TL; 2 × 12.00 = 24.00 TL.
 	if n := queryInt(t, s, "SELECT sum(total) FROM sale_lines"); n != 11238+2400 {
-		t.Errorf("satır toplamı %d kuruş", n)
+		t.Errorf("line total %d kuruş", n)
 	}
 	if n := queryInt(t, s, "SELECT sum(amount) FROM sale_payments"); n != 14000 {
-		t.Errorf("ödeme toplamı %d kuruş", n)
+		t.Errorf("payment total %d kuruş", n)
 	}
 	if n := queryInt(t, s, "SELECT sum(tax) FROM sale_taxes"); n != 135 {
-		t.Errorf("KDV toplamı %d kuruş", n)
+		t.Errorf("VAT total %d kuruş", n)
 	}
 
 	// Registers with the same name in different stores and the same sale id are not mixed up.
@@ -139,7 +139,7 @@ func TestRecordSale(t *testing.T) {
 		t.Errorf("store-2: %+v", a)
 	}
 	if n := queryInt(t, s, "SELECT count(*) FROM sales WHERE register_id = 'register-1'"); n != 2 {
-		t.Errorf("%d satış; 2 olmalı", n)
+		t.Errorf("%d sales; 2 expected", n)
 	}
 }
 
@@ -158,7 +158,7 @@ func TestRecordOthers(t *testing.T) {
 
 	record(ev("v1", "sale.voided.v1"), domain.Void{SaleID: "s9", StoreID: "store-1", RegisterID: "register-1", CashierID: "mert", Total: 999, Refunded: true, At: at})
 	if n := queryInt(t, s, "SELECT count(*) FROM voids WHERE refunded AND total = 999"); n != 1 {
-		t.Errorf("%d iptal", n)
+		t.Errorf("%d voids", n)
 	}
 
 	// A sale whose receipt could not be issued: the first time stays, the reason and the last attempt are
@@ -173,7 +173,7 @@ func TestRecordOthers(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reason != "kâğıt bitti" || !since.Equal(at) || !last.Equal(at.Add(time.Minute)) {
-		t.Errorf("fişi kesilemeyen satış: %q %v %v", reason, since, last)
+		t.Errorf("sale whose receipt could not be issued: %q %v %v", reason, since, last)
 	}
 
 	// Shift: the result is the same even if the closing comes before the opening.
@@ -189,7 +189,7 @@ func TestRecordOthers(t *testing.T) {
 		t.Fatal(err)
 	}
 	if receipts != 31 || diff != -1000 || !closedAt.Valid || !closedAt.Time.Equal(closed.ClosedAt) {
-		t.Errorf("vardiya: %d %d %v", receipts, diff, closedAt)
+		t.Errorf("shift: %d %d %v", receipts, diff, closedAt)
 	}
 
 	// An unknown event is stored only in its raw form; an event with no register does not enter the register summary.
@@ -200,10 +200,10 @@ func TestRecordOthers(t *testing.T) {
 	}
 	if a := activity["store-1"]; a.Events != 6 || a.Sales != 0 || !a.LastEventAt.Equal(at.Add(time.Hour)) ||
 		len(a.Registers) != 1 || a.Registers[0].Events != 5 || !a.Registers[0].LastEventAt.Equal(at) {
-		t.Errorf("özet: %+v", a)
+		t.Errorf("summary: %+v", a)
 	}
 	if n := queryInt(t, s, "SELECT count(*) FROM events WHERE payload = ''::bytea"); n != 6 {
-		t.Errorf("%d boş gövdeli olay", n)
+		t.Errorf("%d events with an empty body", n)
 	}
 }
 
@@ -216,15 +216,15 @@ func TestRecordAtomic(t *testing.T) {
 	bad.Lines = append(bad.Lines, bad.Lines[0])
 	bad.Taxes = append(bad.Taxes, bad.Taxes[0]) // the same rate twice: primary key violation
 	if _, err := s.Record(ctx, saleEvent("e1", "store-1", "register-1"), bad); err == nil {
-		t.Fatal("bozuk satış kaydedildi")
+		t.Fatal("a broken sale was saved")
 	}
 	for _, table := range []string{"events", "sales", "sale_lines", "store_stats", "registers"} {
 		if n := queryInt(t, s, "SELECT count(*) FROM "+table); n != 0 {
-			t.Errorf("%s tablosunda %d satır kaldı", table, n)
+			t.Errorf("%s: %d rows left", table, n)
 		}
 	}
 	if fresh, err := s.Record(ctx, saleEvent("e1", "store-1", "register-1"), sale("s1", "store-1", "register-1", 1)); err != nil || !fresh {
-		t.Errorf("düzeltilmiş olay: %v, %v", fresh, err)
+		t.Errorf("corrected event: %v, %v", fresh, err)
 	}
 }
 
@@ -253,10 +253,10 @@ func TestSaveLinks(t *testing.T) {
 	}
 	if id != "store-1" || link != "disconnected" || !lastSeen.Valid || !lastSeen.Time.Equal(at) || pending != 0 ||
 		errText != "stream not found" || !checked.Equal(at.Add(time.Minute)) {
-		t.Errorf("durum: %s %s %v %d %q %v", id, link, lastSeen, pending, errText, checked)
+		t.Errorf("state: %s %s %v %d %q %v", id, link, lastSeen, pending, errText, checked)
 	}
 	if n := queryInt(t, s, "SELECT count(*) FROM store_links"); n != 1 {
-		t.Errorf("%d mağaza durumu; 1 olmalı", n)
+		t.Errorf("%d store states; 1 expected", n)
 	}
 }
 
@@ -284,11 +284,11 @@ func TestStorePrices(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(prices, `"amount": 1800`) || !strings.Contains(prices, `"clear": true`) || !updated.Equal(at.Add(time.Minute)) {
-		t.Errorf("son hal %s %v", prices, updated)
+		t.Errorf("last state %s %v", prices, updated)
 	}
 	// An event with no register does not enter the register summary.
 	if n := queryInt(t, s, "SELECT count(*) FROM registers"); n != 0 {
-		t.Errorf("%d kasa özeti", n)
+		t.Errorf("%d register summaries", n)
 	}
 }
 
@@ -312,10 +312,10 @@ func TestCashiers(t *testing.T) {
 		t.Fatal(err)
 	}
 	if name != "Zeynep Kaya" || role != "manager" || !disabled {
-		t.Errorf("son hal %s %s %v", name, role, disabled)
+		t.Errorf("last state %s %s %v", name, role, disabled)
 	}
 	if n := queryInt(t, s, "SELECT count(*) FROM cashiers"); n != 2 {
-		t.Errorf("%d kasiyer; mağaza başına ayrı olmalı (2)", n)
+		t.Errorf("%d cashiers; one per store expected (2)", n)
 	}
 }
 
@@ -328,31 +328,31 @@ func TestRecordIssuesReceipt(t *testing.T) {
 	s.NewID = func() string { n++; return fmt.Sprintf("receipt-%d", n) }
 
 	if fresh, err := s.Record(ctx, saleEvent("e1", "store-1", "register-1"), sale("s1", "store-1", "register-1", 1)); err != nil || !fresh {
-		t.Fatalf("ilk kayıt: %v, %v", fresh, err)
+		t.Fatalf("first record: %v, %v", fresh, err)
 	}
 	pending, err := s.Pending(ctx, 10)
 	if err != nil || len(pending) != 1 {
-		t.Fatalf("outbox: %v, %v; bir makbuz beklenir", pending, err)
+		t.Fatalf("outbox: %v, %v; one receipt expected", pending, err)
 	}
 	m := pending[0]
 	if m.ID != "receipt-1" || m.Type != delivery.ReceiptType || m.Subject != "receipt.store-1.abarow_store" {
-		t.Errorf("makbuz mesajı = %+v", m.Message)
+		t.Errorf("receipt message = %+v", m.Message)
 	}
 	r, err := delivery.ParseReceipt(m.Payload)
 	if err != nil || r.EventID != "e1" || r.ReceiptID != "receipt-1" {
-		t.Errorf("makbuz içeriği = %+v, %v", r, err)
+		t.Errorf("receipt content = %+v, %v", r, err)
 	}
 	var stored string
 	if err := s.db.QueryRowContext(ctx, "SELECT receipt_id FROM delivery_issued WHERE event_id = 'e1'").Scan(&stored); err != nil || stored != "receipt-1" {
-		t.Errorf("veritabanındaki makbuz = %q, %v", stored, err)
+		t.Errorf("receipt in the database = %q, %v", stored, err)
 	}
 
 	// If the same event comes again the same receipt remains, a second receipt is not published.
 	if fresh, err := s.Record(ctx, saleEvent("e1", "store-1", "register-1"), sale("s1", "store-1", "register-1", 1)); err != nil || fresh {
-		t.Fatalf("tekrar gelen olay: %v, %v", fresh, err)
+		t.Fatalf("event that came again: %v, %v", fresh, err)
 	}
 	if got := queryInt(t, s, "SELECT count(*) FROM receipt_outbox"); got != 1 {
-		t.Errorf("outbox'ta %d makbuz; tekrar gelen olay için yenisi yazılmamalı", got)
+		t.Errorf("%d receipts in the outbox; none must be written for an event that came again", got)
 	}
 
 	// An event processed before this version (it has no receipt) is given its receipt when it comes again.
@@ -360,10 +360,10 @@ func TestRecordIssuesReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	if fresh, err := s.Record(ctx, saleEvent("e1", "store-1", "register-1"), sale("s1", "store-1", "register-1", 1)); err != nil || fresh {
-		t.Fatalf("eski olay yeniden: %v, %v", fresh, err)
+		t.Fatalf("old event again: %v, %v", fresh, err)
 	}
 	if got := queryInt(t, s, "SELECT count(*) FROM receipt_outbox"); got != 1 {
-		t.Errorf("eski olay için %d makbuz; 1 olmalı", got)
+		t.Errorf("%d receipts for the old event; 1 expected", got)
 	}
 
 	// A published receipt drops out of the pending ones.
@@ -372,7 +372,7 @@ func TestRecordIssuesReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, _ := s.CountPending(ctx); got != 0 {
-		t.Errorf("%d makbuz bekliyor", got)
+		t.Errorf("%d receipts pending", got)
 	}
 }
 
@@ -383,11 +383,11 @@ func TestRecordRollsBackReceipt(t *testing.T) {
 	bad := sale("s1", "store-1", "register-1", 1)
 	bad.Taxes = append(bad.Taxes, bad.Taxes[0])
 	if _, err := s.Record(ctx, saleEvent("e1", "store-1", "register-1"), bad); err == nil {
-		t.Fatal("bozuk satış kaydedildi")
+		t.Fatal("a broken sale was saved")
 	}
 	for _, table := range []string{"delivery_issued", "receipt_outbox"} {
 		if got := queryInt(t, s, "SELECT count(*) FROM "+table); got != 0 {
-			t.Errorf("%s tablosunda %d satır kaldı", table, got)
+			t.Errorf("%s: %d rows left", table, got)
 		}
 	}
 }

@@ -74,7 +74,7 @@ func TestPrintDrawerStatus(t *testing.T) {
 	}
 	if st.GetPrinter() != "simulator" || st.GetColumns() != 32 || st.GetPrinted() != 1 || st.GetDrawerOpened() != 1 ||
 		st.GetPrinterState() != devicev1.PrinterState_PRINTER_STATE_READY {
-		t.Errorf("durum: %v", st)
+		t.Errorf("state: %v", st)
 	}
 
 	// If the drawer fails the service returns unavailable (Unavailable).
@@ -97,7 +97,7 @@ func TestPrinterStates(t *testing.T) {
 	}
 	st, _ := c.GetStatus(ctx, &devicev1.GetStatusRequest{})
 	if st.GetPrinterState() != devicev1.PrinterState_PRINTER_STATE_PAPER_OUT || st.GetPrinterMessage() != "Kağıt bitti" {
-		t.Errorf("durum: %v", st)
+		t.Errorf("state: %v", st)
 	}
 	if _, err := c.SimulatePrinter(ctx, &devicev1.SimulatePrinterRequest{State: devicev1.PrinterState(99)}); code(err) != codes.InvalidArgument {
 		t.Errorf("invalid state: %v", err)
@@ -121,7 +121,7 @@ func TestWatchPrinter(t *testing.T) {
 	}
 	first, err := stream.Recv()
 	if err != nil || first.GetState() != devicev1.PrinterState_PRINTER_STATE_READY {
-		t.Fatalf("ilk durum: %v %v", first, err)
+		t.Fatalf("first state: %v %v", first, err)
 	}
 	if _, err := c.SimulatePrinter(ctx, &devicev1.SimulatePrinterRequest{State: devicev1.PrinterState_PRINTER_STATE_COVER_OPEN}); err != nil {
 		t.Fatal(err)
@@ -193,7 +193,7 @@ func TestScans(t *testing.T) {
 		select {
 		case code := <-got:
 			if code != "8690000000012" {
-				t.Fatalf("okunan kod %q", code)
+				t.Fatalf("code read %q", code)
 			}
 			goto done
 		case <-time.After(50 * time.Millisecond):

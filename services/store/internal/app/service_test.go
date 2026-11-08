@@ -118,7 +118,7 @@ func TestSetupStoreWithoutRegisters(t *testing.T) {
 	store := &fakeStore{}
 	if err := NewService(store, &fakeReports{}, nil, istanbul).SetupStore(context.Background(), discard); err != nil ||
 		len(store.ensured) != 1 || len(store.ensured[0]) != 0 {
-		t.Errorf("kasa yokken stream: %v %v", err, store.ensured)
+		t.Errorf("stream without registers: %v %v", err, store.ensured)
 	}
 }
 
@@ -174,7 +174,7 @@ func TestRecordRejectsIncompleteEvents(t *testing.T) {
 		t.Errorf("shift with no number: %v", err)
 	}
 	if err := svc.RecordShift(context.Background(), domain.Shift{RegisterID: "register-1", ID: 3, OpenedAt: time.Now()}); err != nil || len(reports.shifts) != 1 {
-		t.Errorf("vardiya kaydedilmedi: %v", err)
+		t.Errorf("the shift was not saved: %v", err)
 	}
 }
 

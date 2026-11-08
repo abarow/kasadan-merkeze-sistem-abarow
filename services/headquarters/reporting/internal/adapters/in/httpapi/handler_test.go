@@ -91,7 +91,7 @@ func TestAuthFlow(t *testing.T) {
 		t.Errorf("sign-in methods: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, http.MethodGet, "/raporlar", "", nil); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "headquarters") {
-		t.Errorf("ekran: %d %s", rec.Code, rec.Body)
+		t.Errorf("screen: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, http.MethodGet, "/", "", nil); !strings.Contains(rec.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") ||
 		rec.Header().Get("X-Content-Type-Options") != "nosniff" {
@@ -125,7 +125,7 @@ func TestAuthFlow(t *testing.T) {
 	}
 
 	if rec := do(h, http.MethodGet, "/api/auth/session", "", cookie); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"username":"ayse"`) {
-		t.Errorf("oturum: %d %s", rec.Code, rec.Body)
+		t.Errorf("session: %d %s", rec.Code, rec.Body)
 	}
 	rec = do(h, http.MethodGet, "/api/stores", "", cookie)
 	var stores struct {
@@ -273,11 +273,11 @@ func TestUpdateProxy(t *testing.T) {
 	// Admin endpoints: list and an action on a unit; a fake role header is overwritten by the real role.
 	rec = do(h, http.MethodGet, "/api/update/registrations?status=pending", "", cookie, login.RoleHeader, "report")
 	if rec.Code != http.StatusTeapot || server.path != "/api/update/registrations" || !server.forwarded || server.person.Username != "yonetici" || server.person.Role != "admin" {
-		t.Errorf("liste: %d %+v", rec.Code, server)
+		t.Errorf("list: %d %+v", rec.Code, server)
 	}
 	rec = do(h, http.MethodPost, "/api/update/registrations/ABRW-X/approve", `{"code":"AAAA-BBBB"}`, cookie)
 	if rec.Code != http.StatusTeapot || server.path != "/api/update/registrations/ABRW-X/approve" || server.method != http.MethodPost {
-		t.Errorf("onay: %d %+v", rec.Code, server)
+		t.Errorf("approval: %d %+v", rec.Code, server)
 	}
 	// The agent's status.
 	rec = do(h, http.MethodGet, "/api/update/status", "", cookie)
@@ -291,7 +291,7 @@ func TestUpdateProxy(t *testing.T) {
 	}
 	rec = do(h, http.MethodPost, "/api/update/apply", `{"seq":3}`, cookie, login.UpdateSecretHeader, "sahte")
 	if rec.Code != http.StatusTeapot || agent.path != "/api/update/apply" || agent.secret != "gizli" || agent.person.Username != "yonetici" {
-		t.Errorf("onay: %d %+v", rec.Code, agent)
+		t.Errorf("approval: %d %+v", rec.Code, agent)
 	}
 	for _, path := range []string{"/api/update/skip", "/api/update/snooze"} {
 		agent = call{}

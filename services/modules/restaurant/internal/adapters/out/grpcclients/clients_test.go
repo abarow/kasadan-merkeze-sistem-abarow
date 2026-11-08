@@ -71,10 +71,10 @@ func TestCatalog(t *testing.T) {
 	}
 	it := items[0]
 	if it.Category != "Ana yemek" || it.ImageSHA256 != "abc" || it.Station != "mutfak" || it.UnitPrice != 25000 || it.TaxRate != 1000 {
-		t.Errorf("menü kalemi: %+v", it)
+		t.Errorf("menu item: %+v", it)
 	}
 	if len(it.Options) != 1 || it.Options[0].Min != 1 || len(it.Options[0].Options) != 2 || it.Options[0].Options[1].PriceDelta != 500 {
-		t.Errorf("opsiyon grupları: %+v", it.Options)
+		t.Errorf("option groups: %+v", it.Options)
 	}
 
 	p, err := c.Product(ctx, "kofte")
@@ -87,7 +87,7 @@ func TestCatalog(t *testing.T) {
 		}
 	}
 	if _, err := c.Product(ctx, "bozuk"); err == nil || errors.Is(err, app.ErrProductNotFound) {
-		t.Errorf("sunucu hatası: %v", err)
+		t.Errorf("server error: %v", err)
 	}
 
 	img, err := c.Image(ctx, "kofte")
@@ -95,10 +95,10 @@ func TestCatalog(t *testing.T) {
 		t.Errorf("Image: %+v %v", img, err)
 	}
 	if _, err := c.Image(ctx, "yok"); !errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("olmayan görsel: %v", err)
+		t.Errorf("image that does not exist: %v", err)
 	}
 	if _, err := c.Image(ctx, "bozuk"); err == nil || errors.Is(err, domain.ErrNotFound) {
-		t.Errorf("görsel sunucu hatası: %v", err)
+		t.Errorf("image server error: %v", err)
 	}
 }
 
@@ -142,10 +142,10 @@ func TestSales(t *testing.T) {
 	}
 	got := srv.got.GetLines()
 	if len(got) != 1 || got[0].GetQtyMilli() != 2000 || got[0].GetUnitPriceKurus() != 25000 || got[0].GetTaxRateBp() != 1000 {
-		t.Errorf("gönderilen satır (adet milli birime çevrilmeli): %v", srv.got)
+		t.Errorf("line sent (the count must be converted to milli units): %v", srv.got)
 	}
 	if _, err := sales.CreateSale(ctx, "kapali", lines); status.Code(err) != codes.FailedPrecondition {
-		t.Errorf("sunucu hatası kodu: %v", err)
+		t.Errorf("server error code: %v", err)
 	}
 
 	for id, want := range map[string]app.SaleStatus{
@@ -153,11 +153,11 @@ func TestSales(t *testing.T) {
 		"yok": app.SaleVoided, // if there is no sale record it counts as cancelled
 	} {
 		if got, err := sales.Status(ctx, id); err != nil || got != want {
-			t.Errorf("Status(%s) = %q %v, istenen %q", id, got, err, want)
+			t.Errorf("Status(%s) = %q %v, want %q", id, got, err, want)
 		}
 	}
 	if _, err := sales.Status(ctx, "bozuk"); err == nil {
-		t.Error("sunucu hatası döndürülmedi")
+		t.Error("the server error was not returned")
 	}
 }
 
@@ -195,16 +195,16 @@ func TestPrinter(t *testing.T) {
 		t.Fatal(err)
 	}
 	if dev.printed.GetStation() != "mutfak" || dev.printed.GetTitle() != "Masa 4" || len(dev.printed.GetLines()) != 1 {
-		t.Errorf("yazdırılan: %v", dev.printed)
+		t.Errorf("printed: %v", dev.printed)
 	}
 
 	dev.failing = true
 	// The printer's own message (e.g. "paper out") stays as it is.
 	if err := p.Print(ctx, "", "x", nil); status.Code(err) != codes.FailedPrecondition || status.Convert(err).Message() != "kağıt bitti" {
-		t.Errorf("Print hatası: %v", err)
+		t.Errorf("Print error: %v", err)
 	}
 	if _, err := p.Columns(ctx); err == nil {
-		t.Error("Columns hatası döndürülmedi")
+		t.Error("the Columns error was not returned")
 	}
 }
 
@@ -233,10 +233,10 @@ func TestStaff(t *testing.T) {
 	ctx := context.Background()
 
 	if id, err := st.VoidLine(ctx, "ali", ""); err != nil || id != "mudur-ali" || srv.action != staffv1.Action_ACTION_VOID_ORDER_LINE {
-		t.Errorf("VoidLine: %q %v (işlem %v)", id, err, srv.action)
+		t.Errorf("VoidLine: %q %v (action %v)", id, err, srv.action)
 	}
 	if id, err := st.EditFloor(ctx, "ali", "tok"); err != nil || id != "mudur-ali" || srv.action != staffv1.Action_ACTION_EDIT_FLOOR {
-		t.Errorf("EditFloor: %q %v (işlem %v)", id, err, srv.action)
+		t.Errorf("EditFloor: %q %v (action %v)", id, err, srv.action)
 	}
 	for _, who := range []string{"garson", "oturumsuz"} {
 		if _, err := st.VoidLine(ctx, who, ""); !errors.Is(err, app.ErrNotAuthorized) {
@@ -244,6 +244,6 @@ func TestStaff(t *testing.T) {
 		}
 	}
 	if _, err := st.EditFloor(ctx, "bozuk", ""); err == nil || errors.Is(err, app.ErrNotAuthorized) {
-		t.Errorf("sunucu hatası yetkisizlik sayıldı: %v", err)
+		t.Errorf("a server error was taken as unauthorized: %v", err)
 	}
 }

@@ -110,7 +110,7 @@ func TestGenerateRefusesPartialTrust(t *testing.T) {
 	}
 	for _, bad := range []string{"", "m:5443/prod", "m 5443", "m:5443\"", "https://m:5443", "m:99999999"} {
 		if _, err := policy.Generate(token.Prod, bad, keys(t)); err == nil {
-			t.Errorf("ayna adresi %q kabul edildi", bad)
+			t.Errorf("the mirror address %q was accepted", bad)
 		}
 	}
 }
@@ -129,7 +129,7 @@ func TestParseKeys(t *testing.T) {
 		"bilinmeyen rol": `{"cosign":{"root":"x"}}`,
 	} {
 		if _, err := policy.ParseKeys([]byte(raw), time.Now()); err == nil {
-			t.Errorf("%s: kabul edildi", label)
+			t.Errorf("%s: accepted", label)
 		}
 	}
 	// A trust file with no cosign section is valid (signature verification is not asked for).

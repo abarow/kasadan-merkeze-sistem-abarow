@@ -273,7 +273,7 @@ func TestStore(t *testing.T) {
 	// it can open a source consumer only for the catalog, store settings and receipt
 	// streams.
 	if strings.Contains(conf, `"sale.>"`) {
-		t.Errorf("kasaya fazla yetki:\n%s", conf)
+		t.Errorf("too much permission for the register:\n%s", conf)
 	}
 	allowed := func(field string) bool {
 		for _, s := range []string{"ABAROW_CATALOG", "ABAROW_STORE_CONFIG", "ABAROW_RECEIPT"} {
@@ -287,7 +287,7 @@ func TestStore(t *testing.T) {
 	}
 	for _, field := range strings.FieldsFunc(conf, func(r rune) bool { return strings.ContainsRune(" \t\n[],\"", r) }) {
 		if strings.HasPrefix(field, "$JS.store-1.") && !allowed(field) {
-			t.Errorf("kasaya operasyon API'sinde fazla yetki: %s", field)
+			t.Errorf("too much permission for the register on the store server API: %s", field)
 		}
 	}
 	if !strings.Contains(conf, `"$JS.store-1.API.CONSUMER.CREATE.ABAROW_CATALOG.>"`) {
@@ -811,7 +811,7 @@ func TestThreeTiers(t *testing.T) {
 	// Delivery receipt (pkg/delivery): headquarters → store server → register. A receipt goes down only to
 	// its own owner; an event whose receipt is recorded is deleted, one without stays.
 	if _, err := ingest.CreateOrUpdateStream(ctx, delivery.ReceiptConfig("", "", 0)); err != nil {
-		t.Fatalf("ingest makbuz stream'i: %v", err)
+		t.Fatalf("ingest receipt stream: %v", err)
 	}
 	for _, s := range storeIDs {
 		b, _ := delivery.Receipt{EventID: s + "-0", ReceiptID: "headquarters-" + s, At: time.Now()}.Marshal()
@@ -852,7 +852,7 @@ func TestThreeTiers(t *testing.T) {
 		s := s
 		report := jsAs(t, storeServers[s], filepath.Join(dir, s, "report", "nats.nk"))
 		if _, err := report.CreateOrUpdateStream(ctx, delivery.ReceiptConfig("headquarters", s, 0)); err != nil {
-			t.Fatalf("%s makbuz stream'i: %v", s, err)
+			t.Fatalf("%s receipt stream: %v", s, err)
 		}
 		// The store server gives the register a receipt (publishes locally).
 		b, _ := delivery.Receipt{EventID: s + "-0", ReceiptID: "store-" + s, At: time.Now()}.Marshal()
@@ -892,7 +892,7 @@ func TestThreeTiers(t *testing.T) {
 		// Register: gets only its own receipt, deletes the event with a receipt.
 		sales := jsAs(t, registerServers[s], filepath.Join(dir, s+"-register-1", "sales", "nats.nk"))
 		if _, err := sales.CreateOrUpdateStream(ctx, delivery.ReceiptConfig(s, "register-1", 0)); err != nil {
-			t.Fatalf("%s kasa makbuz stream'i: %v", s, err)
+			t.Fatalf("%s register receipt stream: %v", s, err)
 		}
 		waitFor(t, 60*time.Second, s+" kasasına makbuz inmesi", func() bool { return msgCount(t, sales, delivery.ReceiptStream) == 1 })
 		time.Sleep(2 * time.Second)

@@ -30,7 +30,7 @@ func TestPgtuneCommandRegistersFlag(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "shared_buffers=128MB") || !strings.Contains(out.String(), "MEMORY_MB=576") {
-		t.Errorf("12 kasa:\n%s", out.String())
+		t.Errorf("12 registers:\n%s", out.String())
 	}
 }
 
@@ -56,7 +56,7 @@ func TestPgtuneCommandReadsRegisterFile(t *testing.T) {
 	}
 	// 6 kasa: 64 + 2×8 = 80 MB.
 	if !strings.Contains(out.String(), "shared_buffers=80MB") {
-		t.Errorf("6 kasa:\n%s", out.String())
+		t.Errorf("6 registers:\n%s", out.String())
 	}
 
 	out.Reset()
@@ -64,14 +64,14 @@ func TestPgtuneCommandReadsRegisterFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "shared_buffers=64MB") {
-		t.Errorf("kasa listesi yokken:\n%s", out.String())
+		t.Errorf("without a register list:\n%s", out.String())
 	}
 }
 
 func TestPgtuneCommandBadFlag(t *testing.T) {
 	var out bytes.Buffer
 	if err := pgtuneCommand([]string{"--bilinmeyen"}, &out); err == nil {
-		t.Error("bilinmeyen bayrak kabul edildi")
+		t.Error("an unknown flag was accepted")
 	}
 }
 

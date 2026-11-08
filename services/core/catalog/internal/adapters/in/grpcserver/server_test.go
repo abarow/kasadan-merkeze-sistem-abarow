@@ -77,7 +77,7 @@ func TestGetByBarcodeAndProduct(t *testing.T) {
 		t.Errorf("kg birimi: %v", r)
 	}
 	if _, err := c.GetByBarcode(ctx, &catalogv1.GetByBarcodeRequest{Barcode: "0000"}); status.Code(err) != codes.NotFound {
-		t.Errorf("olmayan barkod: %v", err)
+		t.Errorf("barcode that does not exist: %v", err)
 	}
 	if _, err := c.GetByBarcode(ctx, &catalogv1.GetByBarcodeRequest{Barcode: "111"}); status.Code(err) != codes.FailedPrecondition {
 		t.Errorf("product whose price is not in effect: %v", err)

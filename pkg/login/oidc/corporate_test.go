@@ -132,7 +132,7 @@ func (s *site) viaIdP(jar map[string]string, first, sub, email string) string {
 	s.idp.Sub, s.idp.Email = sub, email
 	w := s.do("GET", first, jar, false)
 	if w.Code != http.StatusSeeOther {
-		s.t.Fatalf("%s: durum %d: %s", first, w.Code, w.Body)
+		s.t.Fatalf("%s: status %d: %s", first, w.Code, w.Body)
 	}
 	cb, _ := s.idp.Authorize(s.t, w.Header().Get("Location"))
 	u, _ := url.Parse(cb)
@@ -176,7 +176,7 @@ func TestCorporateLogin(t *testing.T) {
 		t.Fatalf("first sign-in: %q", got)
 	}
 	if code, p := s.who(jar); code != http.StatusOK || p.Username != "ayse" || p.Role != "admin" {
-		t.Errorf("oturum: %d %+v", code, p)
+		t.Errorf("session: %d %+v", code, p)
 	}
 	if u, _ := s.store.User(ctx, "ayse"); u.Subject != "s-ayse" || u.Issuer != s.idp.URL() {
 		t.Errorf("identity was not linked: %+v", u)
@@ -188,7 +188,7 @@ func TestCorporateLogin(t *testing.T) {
 		t.Errorf("linked identity: %q", got)
 	}
 	if _, p := s.who(jar); p.Username != "ayse" {
-		t.Errorf("oturum: %+v", p)
+		t.Errorf("session: %+v", p)
 	}
 
 	// An unregistered identity, an identity with no address, another identity that names a linked
@@ -261,7 +261,7 @@ func TestLinkIdentity(t *testing.T) {
 		t.Errorf("corporate sign-in: %q", got)
 	}
 	if _, p := s.who(jar); p.Username != "veli" {
-		t.Errorf("oturum: %+v", p)
+		t.Errorf("session: %+v", p)
 	}
 
 	// An identity linked to someone else cannot be taken.
@@ -373,7 +373,7 @@ func TestConfigure(t *testing.T) {
 		"yanlış geri dönüş": {"ABAROW_OIDC_REDIRECT_URL": "https://m.example/login"},
 	} {
 		if c, err := Configure(with(mod), svc); err == nil {
-			t.Errorf("%s: ayar kabul edildi (%v)", name, c)
+			t.Errorf("%s: the setting was accepted (%v)", name, c)
 		}
 	}
 }
@@ -390,7 +390,7 @@ func TestParseMode(t *testing.T) {
 	}
 	for _, in := range []string{"ldap", "yerel;oidc", "OIDC"} {
 		if _, err := login.ParseMode(in); err == nil {
-			t.Errorf("%q kabul edildi", in)
+			t.Errorf("%q was accepted", in)
 		}
 	}
 }

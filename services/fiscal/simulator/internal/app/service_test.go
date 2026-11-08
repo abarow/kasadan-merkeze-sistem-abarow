@@ -40,7 +40,7 @@ func TestRegisterPrintsNonFiscalReceipt(t *testing.T) {
 			t.Fatalf("Register: %v", err)
 		}
 		if no != want {
-			t.Errorf("numara %q, istenen %q", no, want)
+			t.Errorf("number %q, want %q", no, want)
 		}
 	}
 	if got := strings.Count(out.String(), domain.Warning); got != 4 {

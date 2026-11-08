@@ -26,27 +26,27 @@ func TestGate(t *testing.T) {
 	ctx := t.Context()
 
 	if r, err := g.Unsafe(ctx); err != nil || r != "" || secret != "gizli" {
-		t.Fatalf("güvenli: %q %v %q", r, err, secret)
+		t.Fatalf("safe: %q %v %q", r, err, secret)
 	}
 	body = `{"safe":false,"reason":"açık vardiya var"}`
 	if r, err := g.Unsafe(ctx); err != nil || r != "açık vardiya var" {
-		t.Fatalf("güvensiz: %q %v", r, err)
+		t.Fatalf("unsafe: %q %v", r, err)
 	}
 	body = `{"safe":false}`
 	if r, _ := g.Unsafe(ctx); r == "" {
-		t.Fatal("nedensiz güvensiz yanıt güvenli sayıldı")
+		t.Fatal("an unsafe answer without a reason was taken as safe")
 	}
 	// Uncertainty is not counted as safe: it returns an error.
 	code = 500
 	if _, err := g.Unsafe(ctx); err == nil {
-		t.Fatal("sunucu hatası yutuldu")
+		t.Fatal("a server error was swallowed")
 	}
 	code, body = 200, `bozuk`
 	if _, err := g.Unsafe(ctx); err == nil {
-		t.Fatal("bozuk yanıt yutuldu")
+		t.Fatal("a broken answer was swallowed")
 	}
 	srv.Close()
 	if _, err := g.Unsafe(ctx); err == nil {
-		t.Fatal("ulaşılamayan kapı güvenli sayıldı")
+		t.Fatal("an unreachable gate was taken as safe")
 	}
 }

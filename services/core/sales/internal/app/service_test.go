@@ -140,7 +140,7 @@ func TestCheckoutCompletesSale(t *testing.T) {
 	}
 
 	if len(f.repo.outbox) != 1 {
-		t.Fatalf("outbox'ta %d mesaj, istenen 1", len(f.repo.outbox))
+		t.Fatalf("%d messages in the outbox, want 1", len(f.repo.outbox))
 	}
 	msg := f.repo.outbox[0]
 	if msg.Type != "com.abarow.sale.completed.v1" || msg.Subject != "sale.completed.v1" ||
@@ -187,7 +187,7 @@ func TestCheckoutPaymentFailureLeavesNoTrace(t *testing.T) {
 		t.Errorf("sale changed: %+v", stored.Snapshot())
 	}
 	if len(f.repo.outbox) != 0 {
-		t.Errorf("outbox'ta %d mesaj, istenen 0", len(f.repo.outbox))
+		t.Errorf("%d messages in the outbox, want 0", len(f.repo.outbox))
 	}
 
 	// A failed attempt must not spend a receipt number.
@@ -232,7 +232,7 @@ func TestCheckoutRetryMatchesTheSamePayment(t *testing.T) {
 	f.fiscal.Err = nil
 	got, err := f.svc.Checkout(ctx, s.ID(), cash20000)
 	if err != nil {
-		t.Fatalf("tekrar deneme: %v", err)
+		t.Fatalf("retry: %v", err)
 	}
 	if f.payments.Calls != 1 {
 		t.Errorf("payment was taken %d times, want 1", f.payments.Calls)
@@ -241,7 +241,7 @@ func TestCheckoutRetryMatchesTheSamePayment(t *testing.T) {
 		t.Errorf("sale is wrong: %+v", got.Snapshot())
 	}
 	if len(f.repo.outbox) != 2 || f.repo.outbox[1].Subject != "sale.completed.v1" {
-		t.Errorf("outbox'ta %d mesaj, istenen 2 (charged, completed)", len(f.repo.outbox))
+		t.Errorf("%d messages in the outbox, want 2 (charged, completed)", len(f.repo.outbox))
 	}
 }
 
@@ -275,7 +275,7 @@ func TestVoidSale(t *testing.T) {
 		t.Fatalf("VoidSale: %v", err)
 	}
 	if got.Status() != domain.StatusVoided {
-		t.Errorf("durum %s, istenen voided", got.Status())
+		t.Errorf("status %s, want voided", got.Status())
 	}
 	if len(f.repo.outbox) != 1 || f.repo.outbox[0].Subject != "sale.voided.v1" {
 		t.Errorf("outbox is wrong: %+v", f.repo.outbox)
@@ -428,7 +428,7 @@ func TestCollectedDeclineKeepsSaleOpen(t *testing.T) {
 		t.Errorf("the declined card changed the sale: %+v", stored.Snapshot())
 	}
 	if len(f.repo.outbox) != 0 {
-		t.Errorf("outbox'ta %d mesaj, istenen 0", len(f.repo.outbox))
+		t.Errorf("%d messages in the outbox, want 0", len(f.repo.outbox))
 	}
 
 	// The cashier continues with cash; the receipt number was not spent.
@@ -465,7 +465,7 @@ func TestCollectedUnknownOutcomeKeepsPaymentAndRetries(t *testing.T) {
 	f.fiscal.Err = nil
 	got, err := f.svc.Checkout(ctx, s.ID(), cash20000)
 	if err != nil {
-		t.Fatalf("tekrar deneme: %v", err)
+		t.Fatalf("retry: %v", err)
 	}
 	if f.payments.Calls != 0 || !f.fiscal.Last.Payments()[0].Collect {
 		t.Errorf("wrong payment on retry: payments=%d %+v", f.payments.Calls, f.fiscal.Last.Payments())
@@ -523,7 +523,7 @@ func TestCheckoutSettlesAfterRequestContextIsCanceled(t *testing.T) {
 		t.Fatalf("record: %v %v", stored, err)
 	}
 	if len(f.repo.outbox) != 1 {
-		t.Errorf("outbox'ta %d mesaj, istenen 1", len(f.repo.outbox))
+		t.Errorf("%d messages in the outbox, want 1", len(f.repo.outbox))
 	}
 }
 

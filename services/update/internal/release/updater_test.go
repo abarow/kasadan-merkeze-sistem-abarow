@@ -178,7 +178,7 @@ func TestPollOffersNewVersionWithoutApplying(t *testing.T) {
 	}
 	s := u.Status()
 	if s.Phase != release.PhaseAvailable || s.Version != "0.4.0" || s.Urgency != channel.UrgencySecurity || s.Notes == "" {
-		t.Fatalf("durum: %+v", s)
+		t.Fatalf("state: %+v", s)
 	}
 	// The manifest is not applied by itself.
 	for _, c := range e.rt.log() {
@@ -219,7 +219,7 @@ func TestPollRefreshesTrust(t *testing.T) {
 		t.Fatalf("yenilenen anahtarla: %v", err)
 	}
 	if u.Status().Phase != release.PhaseAvailable {
-		t.Fatalf("durum: %+v", u.Status())
+		t.Fatalf("state: %+v", u.Status())
 	}
 	// When the file cannot be read the keys in hand are kept; the error shows up as a polling error.
 	failure = errors.New("dosya yok")
@@ -230,7 +230,7 @@ func TestPollRefreshesTrust(t *testing.T) {
 	}
 	// Since the key in hand (last known) is still valid the manifest is still verified.
 	if u.Status().Version == "" && u.Status().Phase == release.PhaseNone && u.Status().Error == "" {
-		t.Fatalf("durum: %+v", u.Status())
+		t.Fatalf("state: %+v", u.Status())
 	}
 	// When the expired key drops out the signature is rejected (the refresh returns an empty key).
 	failure, next = nil, channel.Trust{channel.Prod: {}}
@@ -278,7 +278,7 @@ func TestPollRejectsBadManifests(t *testing.T) {
 		t.Fatalf("wrong key: %v", err)
 	}
 	if u.Status().Phase != release.PhaseNone || u.Status().Error == "" {
-		t.Fatalf("durum: %+v", u.Status())
+		t.Fatalf("state: %+v", u.Status())
 	}
 
 	// The source cannot be reached.
@@ -298,7 +298,7 @@ func TestPollRejectsBadManifests(t *testing.T) {
 		t.Fatalf("an old version was accepted: %v", err)
 	}
 	if u.Status().Version != "0.5.0" {
-		t.Fatalf("eski bildirim durumu bozdu: %+v", u.Status())
+		t.Fatalf("an old report broke the state: %+v", u.Status())
 	}
 }
 
@@ -591,7 +591,7 @@ func TestReportDescribesRunningState(t *testing.T) {
 	e.publish(1, "0.4.0", img("abarow-sales", newDig))
 	_ = u.Poll(ctx)
 	if rep, _ = u.Report(ctx); rep.Offered != "0.4.0" || rep.Phase != release.PhaseAvailable || rep.Version != "" {
-		t.Fatalf("bildirimden sonra: %+v", rep)
+		t.Fatalf("after the report: %+v", rep)
 	}
 	if changes == 0 {
 		t.Error("OnChange was not called when a new version was announced")

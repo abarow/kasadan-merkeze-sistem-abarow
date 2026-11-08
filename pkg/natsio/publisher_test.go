@@ -20,11 +20,11 @@ func TestMsg(t *testing.T) {
 	}
 	for k, v := range want {
 		if got := m.Header.Get(k); got != v {
-			t.Errorf("%s = %q, istenen %q", k, got, v)
+			t.Errorf("%s = %q, want %q", k, got, v)
 		}
 	}
 	if m.Subject != "sale.completed.v1" || string(m.Data) != "\x01" {
-		t.Errorf("mesaj %s %v", m.Subject, m.Data)
+		t.Errorf("message %s %v", m.Subject, m.Data)
 	}
 	// An event with no register (store server, headquarters) and an old record with no
 	// content type.

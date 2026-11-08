@@ -15,23 +15,23 @@ func TestSettings(t *testing.T) {
 	st := postgrestest.Open(t)
 
 	if _, ok, err := st.Setting(ctx, "headquarters"); err != nil || ok {
-		t.Fatalf("hiç yazılmamış ayar: ok=%v err=%v", ok, err)
+		t.Fatalf("a setting never written: ok=%v err=%v", ok, err)
 	}
 	if err := st.SetSetting(ctx, "headquarters", "off"); err != nil {
 		t.Fatal(err)
 	}
 	if v, ok, err := st.Setting(ctx, "headquarters"); err != nil || !ok || v != "off" {
-		t.Errorf("yazılan ayar: %q %v %v", v, ok, err)
+		t.Errorf("written setting: %q %v %v", v, ok, err)
 	}
 	// When the same key is written again it changes, it does not multiply.
 	if err := st.SetSetting(ctx, "headquarters", "on"); err != nil {
 		t.Fatal(err)
 	}
 	if v, _, _ := st.Setting(ctx, "headquarters"); v != "on" {
-		t.Errorf("değişen ayar %q", v)
+		t.Errorf("changed setting %q", v)
 	}
 	if _, ok, _ := st.Setting(ctx, "baska"); ok {
-		t.Error("başka anahtar geldi")
+		t.Error("another key came")
 	}
 }
 
@@ -54,7 +54,7 @@ func TestActivityMissingEvents(t *testing.T) {
 	}
 	gaps := a["register-1"].MissingEvents
 	if len(gaps) != 1 || gaps[0].Producer != "sales" || gaps[0].From != 3 || gaps[0].To != 4 || gaps[0].Store != "store-1" {
-		t.Fatalf("eksik olaylar: %+v", gaps)
+		t.Fatalf("missing events: %+v", gaps)
 	}
 	for _, seq := range []int64{4, 3} {
 		if err := st.RecordSequence(ctx, "store-1", "register-1", "sales", seq); err != nil {
@@ -63,6 +63,6 @@ func TestActivityMissingEvents(t *testing.T) {
 	}
 	a, _ = st.Activity(ctx)
 	if len(a["register-1"].MissingEvents) != 0 {
-		t.Errorf("boşluk kapanmadı: %+v", a["register-1"].MissingEvents)
+		t.Errorf("the gap did not close: %+v", a["register-1"].MissingEvents)
 	}
 }

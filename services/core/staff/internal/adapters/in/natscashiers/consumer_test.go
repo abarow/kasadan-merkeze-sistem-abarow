@@ -49,13 +49,13 @@ func TestDecode(t *testing.T) {
 	}
 	if c.ID != "ayse" || c.Name != "Ayşe" || c.Role != domain.RoleCashier || !c.Disabled || c.Origin != domain.FromStore ||
 		bcrypt.CompareHashAndPassword(c.PINHash, []byte("2468")) != nil {
-		t.Errorf("kasiyer %+v", c)
+		t.Errorf("cashier %+v", c)
 	}
 	if _, err := Decode("application/json", []byte("{}")); !errors.Is(err, errUndecodable) {
 		t.Errorf("JSON: %v", err)
 	}
 	if _, err := Decode("application/protobuf", []byte{0xff}); !errors.Is(err, errUndecodable) {
-		t.Errorf("bozuk mesaj: %v", err)
+		t.Errorf("broken message: %v", err)
 	}
 }
 
@@ -171,6 +171,6 @@ func TestRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, ok := info.State.Subjects["config.price.1"]; ok || len(info.State.Subjects) != 3 {
-		t.Errorf("kasiyer stream'indeki konular: %v", info.State.Subjects)
+		t.Errorf("subjects in the cashier stream: %v", info.State.Subjects)
 	}
 }

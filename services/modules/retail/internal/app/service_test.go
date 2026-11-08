@@ -66,11 +66,11 @@ func TestScanAndCheckout(t *testing.T) {
 
 	b, err = svc.Checkout(ctx, b.ID, "ayse")
 	if err != nil || b.SaleID != "sale-1" || b.Status != domain.CheckedOut || sales.cashier != "ayse" {
-		t.Fatalf("Checkout: %+v, %v (kasiyer %q)", b, err, sales.cashier)
+		t.Fatalf("Checkout: %+v, %v (cashier %q)", b, err, sales.cashier)
 	}
 	// A repeated request does not create a second sale.
 	if b, err = svc.Checkout(ctx, b.ID, "ayse"); err != nil || b.SaleID != "sale-1" || sales.calls != 1 {
-		t.Errorf("ikinci Checkout: %+v, %v (CreateSale %d kez)", b, err, sales.calls)
+		t.Errorf("second Checkout: %+v, %v (CreateSale %d times)", b, err, sales.calls)
 	}
 }
 
@@ -146,7 +146,7 @@ func TestCurrentBasket(t *testing.T) {
 	svc.Now = func() time.Time { return now }
 
 	if _, err := svc.CurrentBasket(ctx, "ayse"); !errors.Is(err, app.ErrNotFound) {
-		t.Fatalf("sepetsiz kasiyer: %v", err)
+		t.Fatalf("cashier without a basket: %v", err)
 	}
 	old, _ := svc.NewBasket(ctx, "ayse")
 	now = now.Add(time.Minute)
@@ -162,7 +162,7 @@ func TestCurrentBasket(t *testing.T) {
 	// A cashier continues from their own last basket; they do not see anyone else's.
 	cur, err := svc.CurrentBasket(ctx, "ayse")
 	if err != nil || cur.ID != b.ID || len(cur.Lines) != 1 {
-		t.Errorf("devam edilen sepet: %+v, %v; istenen %s", cur, err, b.ID)
+		t.Errorf("continued basket: %+v, %v; want %s", cur, err, b.ID)
 	}
 	// Eski sepete dokunulunca o son sepet olur.
 	now = now.Add(time.Minute)
@@ -176,7 +176,7 @@ func TestCurrentBasket(t *testing.T) {
 	// A basket older than the session duration is stale; one past the retention period is deleted.
 	now = now.Add(app.ResumeWindow + time.Minute)
 	if _, err := svc.CurrentBasket(ctx, "ayse"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("bayat sepetten devam edildi: %v", err)
+		t.Errorf("a stale basket was continued: %v", err)
 	}
 	now = now.Add(app.Retention)
 	if _, err := svc.NewBasket(ctx, "ayse"); err != nil {
@@ -226,7 +226,7 @@ func TestConcurrentScans(t *testing.T) {
 	}
 	b, _ = svc.Basket(ctx, b.ID)
 	if len(b.Lines) != 1 || b.Lines[0].Qty != n*1000 {
-		t.Fatalf("%d okutmadan sonra sepet: %+v", n, b.Lines)
+		t.Fatalf("basket after %d scans: %+v", n, b.Lines)
 	}
 }
 
@@ -253,7 +253,7 @@ func TestScanDuringCheckout(t *testing.T) {
 	}
 	b, _ = svc.Basket(ctx, b.ID)
 	if b.Status != domain.CheckedOut || b.SaleID != "sale-1" || len(b.Lines) != 1 || b.Lines[0].Qty != 1000 {
-		t.Fatalf("sepet: %+v", b)
+		t.Fatalf("basket: %+v", b)
 	}
 	if !errors.Is(scanErr, domain.ErrClosed) {
 		t.Errorf("scan into a basket in payment: %v", scanErr)
@@ -272,7 +272,7 @@ func TestSetQtyRemoveReopenSearch(t *testing.T) {
 	}
 	b, err = svc.SetQty(ctx, b.ID, 0, 3000)
 	if err != nil || b.Total() != 4500 {
-		t.Fatalf("SetQty: %v, toplam %v", err, b.Total())
+		t.Fatalf("SetQty: %v, total %v", err, b.Total())
 	}
 	if _, err := svc.SetQty(ctx, b.ID, 5, 1000); !errors.Is(err, domain.ErrNoLine) {
 		t.Errorf("non-existent line: %v", err)
@@ -281,7 +281,7 @@ func TestSetQtyRemoveReopenSearch(t *testing.T) {
 		t.Errorf("zero quantity: %v", err)
 	}
 	if _, err := svc.SetQty(ctx, "yok", 0, 1000); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("olmayan sepet: %v", err)
+		t.Errorf("basket that does not exist: %v", err)
 	}
 	if _, err := svc.Checkout(ctx, b.ID, "ayse"); err != nil {
 		t.Fatal(err)
@@ -291,7 +291,7 @@ func TestSetQtyRemoveReopenSearch(t *testing.T) {
 	}
 	b, err = svc.Reopen(ctx, b.ID)
 	if err != nil || b.Status != domain.Open {
-		t.Fatalf("Reopen: %v, durum %v", err, b.Status)
+		t.Fatalf("Reopen: %v, status %v", err, b.Status)
 	}
 	b, err = svc.RemoveLine(ctx, b.ID, 0)
 	if err != nil || len(b.Lines) != 0 {

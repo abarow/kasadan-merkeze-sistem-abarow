@@ -72,7 +72,7 @@ func TestPgtuneCommandReadsStoreFile(t *testing.T) {
 func TestPgtuneCommandBadFlag(t *testing.T) {
 	var out bytes.Buffer
 	if err := pgtuneCommand([]string{"--bilinmeyen"}, &out); err == nil {
-		t.Error("bilinmeyen bayrak kabul edildi")
+		t.Error("an unknown flag was accepted")
 	}
 }
 

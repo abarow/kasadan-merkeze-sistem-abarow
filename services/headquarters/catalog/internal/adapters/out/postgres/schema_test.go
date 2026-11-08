@@ -24,15 +24,15 @@ func TestWithSearchPath(t *testing.T) {
 		t.Errorf("adres %q (%v)", got, err)
 	}
 	if pw, _ := u.User.Password(); pw != "p@ss" {
-		t.Errorf("parola bozuldu: %q", pw)
+		t.Errorf("the password was changed: %q", pw)
 	}
 	for _, bad := range []string{"", "Katalog", "a-b", "1abc", "a;drop table x", strings.Repeat("a", 64)} {
 		if _, err := WithSearchPath("postgres://x@h/db", bad); err == nil {
-			t.Errorf("%q şema adı kabul edildi", bad)
+			t.Errorf("the schema name %q was accepted", bad)
 		}
 	}
 	if _, err := WithSearchPath("host=db dbname=abarow", "catalog"); err == nil {
-		t.Error("URL olmayan adres kabul edildi")
+		t.Error("an address that is not a URL was accepted")
 	}
 }
 
@@ -41,7 +41,7 @@ func TestWithSearchPath(t *testing.T) {
 func TestSchemaIsolation(t *testing.T) {
 	base := os.Getenv("ABAROW_TEST_POSTGRES")
 	if base == "" {
-		t.Skip("ABAROW_TEST_POSTGRES yok; PostgreSQL testleri atlandı")
+		t.Skip("ABAROW_TEST_POSTGRES is not set; the PostgreSQL tests are skipped")
 	}
 	ctx := context.Background()
 	admin, err := sql.Open("pgx", base)
@@ -72,7 +72,7 @@ func TestSchemaIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := EnsureSchema(ctx, dsn, "catalog"); err != nil {
-		t.Fatalf("ikinci kurulum hata verdi: %v", err)
+		t.Fatalf("the second setup failed: %v", err)
 	}
 	scoped, err := WithSearchPath(dsn, "catalog")
 	if err != nil {
@@ -80,7 +80,7 @@ func TestSchemaIsolation(t *testing.T) {
 	}
 	store, err := Open(ctx, scoped)
 	if err != nil {
-		t.Fatalf("şemada migration: %v", err)
+		t.Fatalf("migration in the schema: %v", err)
 	}
 	defer store.Close()
 
@@ -89,15 +89,15 @@ func TestSchemaIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !inSchema.Valid {
-		t.Error("catalog-admin tablosu katalog şemasında yok")
+		t.Error("the catalog-admin table is not in the catalog schema")
 	}
 	var cols int
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'catalog_products'`).Scan(&cols); err != nil || cols != 1 {
-		t.Errorf("public.catalog_products bozuldu: %d sütun, %v", cols, err)
+		t.Errorf("public.catalog_products was changed: %d columns, %v", cols, err)
 	}
 	_ = inPublic
 
 	if err := EnsureSchema(ctx, dsn, "Kötü Ad"); err == nil {
-		t.Error("geçersiz şema adı kabul edildi")
+		t.Error("an invalid schema name was accepted")
 	}
 }

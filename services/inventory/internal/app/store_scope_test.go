@@ -81,10 +81,10 @@ func TestStockFlow(t *testing.T) {
 		}
 	}
 	if q := qty(t, svc, "8690000000012"); q != -2000 {
-		t.Errorf("ekmek %v, istenen -2 (eksi stok)", q)
+		t.Errorf("bread %v, want -2 (negative stock)", q)
 	}
 	if q := qty(t, svc, "2700001"); q != 4000 {
-		t.Errorf("domates %v, istenen 4,000 kg", q)
+		t.Errorf("domates %v, want 4,000 kg", q)
 	}
 
 	m, err := svc.Count(ctx, "SAYIM-1", "ali", []stock.Line{{ProductID: "ekmek", Counted: 3000}})
@@ -143,7 +143,7 @@ func TestProductsFromSales(t *testing.T) {
 		t.Errorf("unknown product: %v", err)
 	}
 	if _, err := svc.ByBarcode(ctx, "000"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("bilinmeyen barkod: %v", err)
+		t.Errorf("unknown barcode: %v", err)
 	}
 }
 
@@ -161,7 +161,7 @@ func TestTransfers(t *testing.T) {
 		t.Fatalf("places (including itself, by name): %+v %v", locs, err)
 	}
 	if _, err := svc.Send(ctx, "store-9", "ali", []stock.Line{{ProductID: "ekmek", Qty: 1000}}); !errors.Is(err, stock.ErrUnknownLocation) {
-		t.Errorf("bilinmeyen yer: %v", err)
+		t.Errorf("unknown place: %v", err)
 	}
 	if _, err := svc.Send(ctx, "store-1", "ali", []stock.Line{{ProductID: "ekmek", Qty: 1000}}); !errors.Is(err, stock.ErrSameLocation) {
 		t.Errorf("kendine: %v", err)
@@ -195,7 +195,7 @@ func TestTransfers(t *testing.T) {
 		t.Errorf("what was received did not enter: %v", q)
 	}
 	if _, err := svc.ReceiveTransfer(ctx, "T-1", "ayse", nil); !errors.Is(err, stock.ErrTransferReceived) {
-		t.Errorf("ikinci kez: %v", err)
+		t.Errorf("second time: %v", err)
 	}
 	if _, err := svc.ReceiveTransfer(ctx, "T-2", "ayse", nil); !errors.Is(err, stock.ErrUnknownTransfer) {
 		t.Errorf("another store's transfer: %v", err)
@@ -219,6 +219,6 @@ func TestTransfers(t *testing.T) {
 	}
 	if sent.GetKind() != inventoryv1.MovementKind_MOVEMENT_KIND_TRANSFER_OUT || sent.GetCounterpart() != "store-2" || sent.GetRef() != out.ID ||
 		recv.GetKind() != inventoryv1.MovementKind_MOVEMENT_KIND_TRANSFER_IN || recv.GetCounterpart() != "headquarters" || recv.GetRef() != "T-1" {
-		t.Errorf("olaylar: %v / %v", &sent, &recv)
+		t.Errorf("events: %v / %v", &sent, &recv)
 	}
 }

@@ -28,7 +28,7 @@ func TestCounterIsSequentialAndSafe(t *testing.T) {
 			mu.Lock()
 			defer mu.Unlock()
 			if seen[n] {
-				t.Errorf("%d iki kez verildi", n)
+				t.Errorf("%d was given twice", n)
 			}
 			seen[n] = true
 		}()
@@ -36,7 +36,7 @@ func TestCounterIsSequentialAndSafe(t *testing.T) {
 	wg.Wait()
 	for i := 1; i <= 100; i++ {
 		if !seen[i] {
-			t.Errorf("%d hiç verilmedi", i)
+			t.Errorf("%d was never given", i)
 		}
 	}
 }

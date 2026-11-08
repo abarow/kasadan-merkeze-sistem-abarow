@@ -28,7 +28,7 @@ func TestGuardAttempt(t *testing.T) {
 	// The third wrong one locks and LockedError is returned.
 	var locked LockedError
 	if _, err := g.Attempt("ali", no); !errors.As(err, &locked) || !locked.Until.Equal(now.Add(5*time.Minute)) {
-		t.Fatalf("kilit: %v", err)
+		t.Fatalf("lock: %v", err)
 	}
 	// While locked verify is not called, and the right credential is not accepted either.
 	called := false
@@ -37,7 +37,7 @@ func TestGuardAttempt(t *testing.T) {
 	}
 	now = now.Add(6 * time.Minute)
 	if ok, err := g.Attempt("ali", yes); !ok || err != nil {
-		t.Fatalf("kilit bitince: ok=%v err=%v", ok, err)
+		t.Fatalf("after the lock: ok=%v err=%v", ok, err)
 	}
 	// After a right sign-in the counter is zero: two wrong ones do not lock.
 	for range 2 {
@@ -96,7 +96,7 @@ func TestSessions(t *testing.T) {
 		t.Errorf("closed account: %v", err)
 	}
 	if _, ok, _ := ss.store.Get(ctx, TokenHash(closed), now); ok {
-		t.Error("kapanan oturum silinmedi")
+		t.Error("the closed session was not deleted")
 	}
 
 	// When the time is up the session becomes invalid.
@@ -122,10 +122,10 @@ func TestSessionsCloseAndRebind(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := ss.Person(ctx, mine); err != nil {
-		t.Errorf("yenilenen oturum: %v", err)
+		t.Errorf("renewed session: %v", err)
 	}
 	if _, err := ss.Person(ctx, other); !errors.Is(err, ErrNoSession) {
-		t.Errorf("eski parmak izli oturum: %v", err)
+		t.Errorf("session with an old fingerprint: %v", err)
 	}
 	// Another person's session is not touched.
 	if err := ss.Rebind(ctx, someone, "ali", []byte("yeni")); err != nil {

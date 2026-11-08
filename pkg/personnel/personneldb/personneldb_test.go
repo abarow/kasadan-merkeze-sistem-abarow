@@ -120,7 +120,7 @@ func TestUsers(t *testing.T) {
 			}
 			var n int
 			if err := x.db.QueryRowContext(ctx, "SELECT count(*) FROM outbox").Scan(&n); err != nil || n != 1 {
-				t.Errorf("outbox'ta %d mesaj (%v)", n, err)
+				t.Errorf("%d messages in the outbox (%v)", n, err)
 			}
 			if err := save(t, s, ali, true, "yine", false); !errors.Is(err, personnel.ErrExists) {
 				t.Errorf("same code: %v", err)
@@ -199,7 +199,7 @@ func TestSessions(t *testing.T) {
 			put("a", "ali", t0, time.Hour, []byte("parmak"))
 			sess, ok, err := s.Get(ctx, key("a"), t0)
 			if err != nil || !ok || sess.Subject != "ali" || string(sess.Binding) != "parmak" || !sess.Expires.Equal(t0.Add(time.Hour)) {
-				t.Errorf("oturum %+v %v %v", sess, ok, err)
+				t.Errorf("session %+v %v %v", sess, ok, err)
 			}
 			if _, ok, _ := s.Get(ctx, key("a"), t0.Add(time.Hour)); ok {
 				t.Error("an expired session is valid")
@@ -212,10 +212,10 @@ func TestSessions(t *testing.T) {
 			put("a", "ali", t0, 2*time.Hour, []byte("yeni"))
 			put("b", "ali", t0, time.Hour, nil)
 			if sess, ok, _ := s.Get(ctx, key("a"), t0.Add(time.Hour)); !ok || string(sess.Binding) != "yeni" {
-				t.Errorf("yenilenen oturum %+v %v", sess, ok)
+				t.Errorf("renewed session %+v %v", sess, ok)
 			}
 			if sess, ok, _ := s.Get(ctx, key("b"), t0); !ok || len(sess.Binding) != 0 {
-				t.Errorf("parmak izsiz oturum %+v %v", sess, ok)
+				t.Errorf("session without a fingerprint %+v %v", sess, ok)
 			}
 
 			// When a new session is opened the expired ones are deleted.
@@ -279,7 +279,7 @@ func TestSaveClosesSessions(t *testing.T) {
 			}
 			for n, want := range map[string]bool{"1": false, "2": false, "3": true} {
 				if _, ok, _ := s.Get(ctx, login.TokenHash(n), t0); ok != want {
-					t.Errorf("oturum %s: %v, istenen %v", n, ok, want)
+					t.Errorf("session %s: %v, want %v", n, ok, want)
 				}
 			}
 		})

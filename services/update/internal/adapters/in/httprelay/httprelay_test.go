@@ -92,7 +92,7 @@ func (o env) approve(t *testing.T, device string) {
 	rec := httptest.NewRecorder()
 	o.adm.ServeHTTP(rec, req)
 	if rec.Code != 200 {
-		t.Fatalf("onay: %d %s", rec.Code, rec.Body)
+		t.Fatalf("approval: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -113,7 +113,7 @@ func TestRegisterEnrollsThroughRelay(t *testing.T) {
 	}
 	a.Step(ctx)
 	if a.Status().State != agent.StatePending {
-		t.Fatalf("durum %s: %s", a.Status().State, a.Status().Error)
+		t.Fatalf("status %s: %s", a.Status().State, a.Status().Error)
 	}
 	o.approve(t, a.Status().Device)
 	a.Step(ctx)
@@ -156,7 +156,7 @@ func TestRelayOnlyForwardsDeviceEndpoints(t *testing.T) {
 	} {
 		resp := get(t, o.relayServer.URL+tc.path, tc.method, nil, nil, c)
 		if resp.StatusCode != tc.want {
-			t.Errorf("%s: %d, istenen %d", tc.label, resp.StatusCode, tc.want)
+			t.Errorf("%s: %d, want %d", tc.label, resp.StatusCode, tc.want)
 		}
 	}
 }
@@ -280,7 +280,7 @@ func TestNewValidates(t *testing.T) {
 		"şema yok":       {Upstream: "ftp://headquarters", Transport: tr},
 	} {
 		if _, err := httprelay.New(o); err == nil {
-			t.Errorf("%s: kabul edildi", label)
+			t.Errorf("%s: accepted", label)
 		}
 	}
 }

@@ -87,7 +87,7 @@ func TestAgentStatusIncludesUpdate(t *testing.T) {
 		t.Fatalf("%d %v %s", rec.Code, err, rec.Body)
 	}
 	if out.Device != "ABRW-X" || out.Update == nil || out.Update.Version != "0.4.0" {
-		t.Fatalf("durum: %+v", out)
+		t.Fatalf("state: %+v", out)
 	}
 	// If the new release flow is not installed the field is absent.
 	rec = httptest.NewRecorder()
@@ -119,11 +119,11 @@ func TestApplyNeedsSecretAndPerson(t *testing.T) {
 	}
 	rec := post(h, "/api/update/apply", `{"seq":7}`, person("gizli"))
 	if rec.Code != http.StatusAccepted || u.by != "ayse" || u.seq != 7 {
-		t.Fatalf("onay: %d %q %d", rec.Code, u.by, u.seq)
+		t.Fatalf("approval: %d %q %d", rec.Code, u.by, u.seq)
 	}
 	// Unknown fields and non-JSON content are rejected.
 	if rec := post(h, "/api/update/apply", `{"seq":7,"fazla":1}`, person("gizli")); rec.Code != http.StatusBadRequest {
-		t.Errorf("bilinmeyen alan: %d", rec.Code)
+		t.Errorf("unknown field: %d", rec.Code)
 	}
 }
 

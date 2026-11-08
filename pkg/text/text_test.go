@@ -29,7 +29,7 @@ func TestSortKeyTurkishOrder(t *testing.T) {
 func TestFold(t *testing.T) {
 	for in, want := range map[string]string{" ŞAMPUAN ": "şampuan", "IŞIK": "ışık", "İncir": "incir"} {
 		if got := Fold(in); got != want {
-			t.Errorf("Fold(%q) = %q, istenen %q", in, got, want)
+			t.Errorf("Fold(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

@@ -33,7 +33,7 @@ func TestParseDuration(t *testing.T) {
 	} {
 		got, err := ParseDuration(tt.in)
 		if (err == nil) != tt.ok || (tt.ok && got != tt.want) {
-			t.Errorf("ParseDuration(%q) = %v, %v; %v (ok=%v) beklenir", tt.in, got, err, tt.want, tt.ok)
+			t.Errorf("ParseDuration(%q) = %v, %v; %v (ok=%v) expected", tt.in, got, err, tt.want, tt.ok)
 		}
 	}
 }

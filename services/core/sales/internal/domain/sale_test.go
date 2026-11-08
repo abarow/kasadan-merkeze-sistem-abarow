@@ -81,17 +81,17 @@ func TestNewSaleRequiresIDs(t *testing.T) {
 func TestSaleTotals(t *testing.T) {
 	s := newSale(t)
 	if got := s.Total(); got != 12537 {
-		t.Errorf("Total = %d, istenen 12537", got)
+		t.Errorf("Total = %d, want 12537", got)
 	}
 	wantTaxes := []domain.TaxLine{
 		{Rate: 100, Gross: 11238, Tax: 111},
 		{Rate: 2000, Gross: 1299, Tax: 217},
 	}
 	if got := s.TaxBreakdown(); !reflect.DeepEqual(got, wantTaxes) {
-		t.Errorf("TaxBreakdown = %+v, istenen %+v", got, wantTaxes)
+		t.Errorf("TaxBreakdown = %+v, want %+v", got, wantTaxes)
 	}
 	if got := s.TaxTotal(); got != 328 {
-		t.Errorf("TaxTotal = %d, istenen 328", got)
+		t.Errorf("TaxTotal = %d, want 328", got)
 	}
 	if got := s.Change(); got != 0 {
 		t.Errorf("Change = %d on an unpaid sale, want 0", got)
@@ -113,10 +113,10 @@ func TestGIBReceiptExample(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := s.TaxTotal(); got != 462 {
-		t.Errorf("TOPKDV = %s, istenen 4,62", got)
+		t.Errorf("TOPKDV = %s, want 4,62", got)
 	}
 	if got := s.Total(); got != 4900 {
-		t.Errorf("TOPLAM = %s, istenen 49,00", got)
+		t.Errorf("TOPLAM = %s, want 49,00", got)
 	}
 }
 
@@ -130,7 +130,7 @@ func TestTaxBreakdownUsesRateTotals(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got := s.TaxTotal(); got != 5 {
-		t.Errorf("TaxTotal = %d, istenen 5", got)
+		t.Errorf("TaxTotal = %d, want 5", got)
 	}
 }
 
@@ -214,16 +214,16 @@ func TestMarkPaid(t *testing.T) {
 		t.Errorf("sale status is wrong: %+v", s.Snapshot())
 	}
 	if got := s.Change(); got != 463 {
-		t.Errorf("Change = %d, istenen 463", got)
+		t.Errorf("Change = %d, want 463", got)
 	}
 
 	events := s.PullEvents()
 	if len(events) != 1 {
-		t.Fatalf("%d olay, istenen 1", len(events))
+		t.Fatalf("%d events, want 1", len(events))
 	}
 	ev, ok := events[0].(domain.SaleCompleted)
 	if !ok {
-		t.Fatalf("olay tipi %T, istenen SaleCompleted", events[0])
+		t.Fatalf("event type %T, want SaleCompleted", events[0])
 	}
 	if ev.Name() != "sale.completed.v1" || ev.ReceiptNo != 7 || ev.Total != 12537 || ev.TaxTotal != 328 || ev.Change != 463 || !ev.OccurredAt().Equal(paidAt) {
 		t.Errorf("event is wrong: %+v", ev)
@@ -246,7 +246,7 @@ func TestVoid(t *testing.T) {
 	}
 	events := s.PullEvents()
 	if len(events) != 1 {
-		t.Fatalf("%d olay, istenen 1", len(events))
+		t.Fatalf("%d events, want 1", len(events))
 	}
 	if ev, ok := events[0].(domain.SaleVoided); !ok || ev.Total != 12537 || ev.Name() != "sale.voided.v1" {
 		t.Errorf("event is wrong: %+v", events[0])
@@ -298,11 +298,11 @@ func TestRecordFiscalFailure(t *testing.T) {
 	ev, ok := events[0].(domain.SaleCharged)
 	if len(events) != 1 || !ok || ev.Name() != "sale.charged.v1" || ev.Total != 12537 || ev.Reason != "yazıcı yanıt vermiyor" ||
 		!reflect.DeepEqual(ev.Payments, payments) || len(ev.Lines) != 2 || !ev.OccurredAt().Equal(now) {
-		t.Fatalf("olay: %+v", events)
+		t.Fatalf("event: %+v", events)
 	}
 	// The status does not change: the sale waits to be completed at the register.
 	if s.Status() != domain.StatusCharged {
-		t.Errorf("durum %s", s.Status())
+		t.Errorf("status %s", s.Status())
 	}
 }
 

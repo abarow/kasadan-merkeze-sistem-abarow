@@ -148,7 +148,7 @@ func TestCurrentReadsRunningDigest(t *testing.T) {
 		t.Errorf("gateway: %+v", got)
 	}
 	if got := cur["abarow-pinned"]; got.Digest != "" {
-		t.Errorf("çalışmayan ve sabitlenmemiş birimin digest'i bilinmiyor olmalı: %+v", got)
+		t.Errorf("the digest of a unit that is not running and not pinned should be unknown: %+v", got)
 	}
 }
 
@@ -160,39 +160,39 @@ func TestPullSendsTokenAndVerifiesDigest(t *testing.T) {
 		t.Fatal(err)
 	}
 	if e.pod.pullRef != img.Ref() {
-		t.Errorf("çekilen: %s", e.pod.pullRef)
+		t.Errorf("pulled: %s", e.pod.pullRef)
 	}
 	raw, _ := base64.URLEncoding.DecodeString(e.pod.pullAuth)
 	var auth map[string]string
 	if err := json.Unmarshal(raw, &auth); err != nil || auth["password"] != "token-123" || auth["username"] != "abarow" || auth["serveraddress"] != "ghcr.io" {
-		t.Errorf("kayıt defteri kimliği: %s %v", raw, err)
+		t.Errorf("registry identity: %s %v", raw, err)
 	}
 
 	// An error if the digest of the pulled image does not match.
 	e.pod.pulledDig = d1
 	if err := e.rt.Pull(context.Background(), img); err == nil || !strings.Contains(err.Error(), "digest") {
-		t.Errorf("digest uyuşmazlığı kabul edildi: %v", err)
+		t.Errorf("a digest mismatch was accepted: %v", err)
 	}
 	e.pod.pulledDig = d2
 
 	// An error line in the stream.
 	e.pod.pullLines = `{"error":"manifest unknown"}` + "\n"
 	if err := e.rt.Pull(context.Background(), img); err == nil || !strings.Contains(err.Error(), "manifest unknown") {
-		t.Errorf("akış hatası yutuldu: %v", err)
+		t.Errorf("a stream error was swallowed: %v", err)
 	}
 	e.pod.pullLines = "{}\n"
 
 	// HTTP error.
 	e.pod.pullCode = http.StatusForbidden
 	if err := e.rt.Pull(context.Background(), img); err == nil {
-		t.Error("HTTP hatası yutuldu")
+		t.Error("an HTTP error was swallowed")
 	}
 	e.pod.pullCode = 0
 
-	// Jeton yok.
+	// No token.
 	e.token = ""
 	if err := e.rt.Pull(context.Background(), img); err == nil {
-		t.Error("jetonsuz çekme denendi")
+		t.Error("a pull without a token was tried")
 	}
 }
 
@@ -208,17 +208,17 @@ func TestSwitchWritesDropInAndRestarts(t *testing.T) {
 		t.Fatalf("drop-in: %q %v", raw, err)
 	}
 	if got := strings.Join(e.sd.calls, ","); got != "reload,restart abarow-sales.service" {
-		t.Fatalf("systemd çağrıları: %s", got)
+		t.Fatalf("systemd calls: %s", got)
 	}
 	// The actual unit file was not touched.
 	body, _ := os.ReadFile(filepath.Join(e.dir, "abarow-sales.container"))
 	if !strings.Contains(string(body), "abarow-sales:0.1") {
-		t.Errorf("birim dosyası değişti: %s", body)
+		t.Errorf("the unit file changed: %s", body)
 	}
 	// If the restart fails it returns an error.
 	e.sd.restartE = fmt.Errorf("iş başarısız")
 	if err := e.rt.Switch(context.Background(), img); err == nil {
-		t.Error("yeniden başlatma hatası yutuldu")
+		t.Error("a restart error was swallowed")
 	}
 }
 
@@ -228,17 +228,17 @@ func TestAllowListBlocksOtherUnits(t *testing.T) {
 	for _, unit := range []string{"sshd", "abarow-yok", "abarow-../x", "abarow-sales/../../x", ""} {
 		img := channel.Image{Unit: unit, Repo: "ghcr.io/abarow/x", Digest: d2}
 		if err := e.rt.Pull(context.Background(), img); err == nil {
-			t.Errorf("%q çekilebildi", unit)
+			t.Errorf("%q could be pulled", unit)
 		}
 		if err := e.rt.Switch(context.Background(), img); err == nil {
-			t.Errorf("%q değiştirilebildi", unit)
+			t.Errorf("%q could be changed", unit)
 		}
 		if _, err := e.rt.Healthy(context.Background(), unit); err == nil {
-			t.Errorf("%q için sağlık sorulabildi", unit)
+			t.Errorf("health could be asked for %q", unit)
 		}
 	}
 	if len(e.sd.calls) != 0 {
-		t.Fatalf("izinsiz birim için systemd çağrıldı: %v", e.sd.calls)
+		t.Fatalf("systemd was called for a unit that is not allowed: %v", e.sd.calls)
 	}
 }
 
@@ -250,6 +250,6 @@ func TestHealthyFollowsSystemd(t *testing.T) {
 	}
 	e.sd.active = false
 	if ok, _ := e.rt.Healthy(context.Background(), "abarow-sales"); ok {
-		t.Fatal("etkin olmayan birim sağlıklı sayıldı")
+		t.Fatal("an inactive unit was taken as healthy")
 	}
 }

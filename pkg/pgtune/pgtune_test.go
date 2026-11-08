@@ -15,7 +15,7 @@ func TestBasePoint(t *testing.T) {
 	for _, n := range []int{-3, 0, 1, 2, 4} {
 		s := ForStore(n)
 		if s.SharedBuffersMB != 64 || s.MaxConnections != 20 || s.WorkMemMB != 4 {
-			t.Errorf("%d kasa: %+v", n, s)
+			t.Errorf("%d registers: %+v", n, s)
 		}
 	}
 }
@@ -55,7 +55,7 @@ func TestMemoryLimitFormula(t *testing.T) {
 func TestWorkMemTiersAndParallel(t *testing.T) {
 	for n, want := range map[int]int{0: 4, 4: 4, 5: 8, 16: 8, 17: 16, 50: 16} {
 		if got := ForStore(n).WorkMemMB; got != want {
-			t.Errorf("%d kasa: work_mem %d, istenen %d", n, got, want)
+			t.Errorf("%d registers: work_mem %d, want %d", n, got, want)
 		}
 	}
 	for _, n := range []int{1, 4, 9} {
@@ -99,13 +99,13 @@ func TestScalesWithRegisters(t *testing.T) {
 		prev = s
 	}
 	if got := ForStore(8).SharedBuffersMB; got != 96 {
-		t.Errorf("8 kasa: shared_buffers %d, istenen 96", got)
+		t.Errorf("8 registers: shared_buffers %d, want 96", got)
 	}
 	if got := ForStore(1000).SharedBuffersMB; got != MaxSharedBuffersMB {
 		t.Errorf("many registers: shared_buffers %d, upper limit %d", got, MaxSharedBuffersMB)
 	}
 	if got := ForStore(100).MaxWalSizeMB; got != 1600 {
-		t.Errorf("100 kasa: max_wal_size %d, istenen 1600", got)
+		t.Errorf("100 registers: max_wal_size %d, want 1600", got)
 	}
 	if ForStore(1000).MaintenanceWorkMemMB != 64 || ForStore(1000).WalBuffersMB != 8 {
 		t.Errorf("upper limits: %+v", ForStore(1000))
@@ -159,13 +159,13 @@ func TestForHeadquarters(t *testing.T) {
 	// 1 store × 2 registers = 2 registers: the base.
 	s := ForHeadquarters(2)
 	if s.SharedBuffersMB != 64 || s.MaxConnections != 30 || s.WorkMemMB != 4 || s.MemoryLimitMB != 256 {
-		t.Errorf("2 kasa: %+v", s)
+		t.Errorf("2 registers: %+v", s)
 	}
 	// 50 stores × 2 registers = 100 registers: 64 + 8 × 96 = 832 MB of buffers; memory 2 × 832 + 128 = 1792 MB
 	// and 768 MB of /dev/shm for parallel query.
 	s = ForHeadquarters(100)
 	if s.SharedBuffersMB != 832 || s.MemoryLimitMB != 2560 || s.WorkMemMB != 32 || s.MaxWalSizeMB != 1600 || s.MaintenanceWorkMemMB != 128 {
-		t.Errorf("100 kasa: %+v", s)
+		t.Errorf("100 registers: %+v", s)
 	}
 	if got := ForHeadquarters(100000).SharedBuffersMB; got != MaxHeadquartersSharedBuffersMB {
 		t.Errorf("tavan: %d", got)

@@ -209,7 +209,7 @@ func TestStockAPI(t *testing.T) {
 	}
 	receipt := `{"supplier":"Un Değirmeni","ref":"IRS-1","lines":[{"product_id":"ekmek","qty_milli":50000}]}`
 	if code, body := do(t, srv, http.MethodPost, "/api/stock/receipts", "yonetici", receipt); code != http.StatusCreated || !strings.Contains(body, `"by":"Merkez"`) {
-		t.Fatalf("mal kabul: %d %s", code, body)
+		t.Fatalf("goods receipt: %d %s", code, body)
 	}
 	if code, _ := do(t, srv, http.MethodPost, "/api/stock/receipts", "report", receipt); code != http.StatusForbidden {
 		t.Errorf("report user goods receipt: %d", code)
@@ -247,7 +247,7 @@ func TestTransferAPI(t *testing.T) {
 		t.Errorf("report user sent: %d", code)
 	}
 	if code, body := do(t, srv, http.MethodPost, "/api/stock/transfers", "yonetici", `{"to":"store-9","lines":[{"product_id":"ekmek","qty_milli":1000}]}`); code != http.StatusUnprocessableEntity {
-		t.Errorf("bilinmeyen yer: %d %s", code, body)
+		t.Errorf("unknown place: %d %s", code, body)
 	}
 	code, body := do(t, srv, http.MethodPost, "/api/stock/transfers", "yonetici", send)
 	if code != http.StatusCreated || !strings.Contains(body, `"from":"headquarters"`) || !strings.Contains(body, `"pending":true`) {
@@ -270,7 +270,7 @@ func TestTransferAPI(t *testing.T) {
 	// No place list (it is published at start); sent from the warehouse and forwarded
 	// from store to store: two events, in the receiving store's subject.
 	if len(store.events) != 2 || !strings.HasPrefix(store.events[0].Subject, "transfer.store-1.") || store.events[1].Subject != "transfer.store-1.T-8.sent.v1" {
-		t.Errorf("olaylar: %+v", store.events)
+		t.Errorf("events: %+v", store.events)
 	}
 
 	code, body = do(t, srv, http.MethodGet, "/api/stock/transfers", "yonetici", "")
@@ -287,7 +287,7 @@ func TestTransferAPI(t *testing.T) {
 		t.Fatalf("the warehouse received: %d %s", code, body)
 	}
 	if code, _ := do(t, srv, http.MethodPost, "/api/stock/transfers/T-9/receive", "yonetici", `{}`); code != http.StatusConflict {
-		t.Errorf("ikinci kez: %d", code)
+		t.Errorf("second time: %d", code)
 	}
 	if code, _ := do(t, srv, http.MethodPost, "/api/stock/transfers/T-8/receive", "yonetici", `{}`); code != http.StatusUnprocessableEntity {
 		t.Errorf("the warehouse received a transfer going to a store: %d", code)

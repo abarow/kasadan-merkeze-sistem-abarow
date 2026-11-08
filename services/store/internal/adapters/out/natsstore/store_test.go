@@ -35,7 +35,7 @@ func TestRegisterID(t *testing.T) {
 	}
 	for _, tt := range tests {
 		if got := registerID(tt.src); got != tt.want {
-			t.Errorf("%+v: %q, istenen %q", tt.src, got, tt.want)
+			t.Errorf("%+v: %q, want %q", tt.src, got, tt.want)
 		}
 	}
 }
@@ -50,6 +50,6 @@ func TestCatalogConfig(t *testing.T) {
 	}
 	linked := CatalogConfig("headquarters")
 	if len(linked.Sources) != 1 || linked.Sources[0].Name != CatalogStream || linked.Sources[0].Domain != "headquarters" || len(linked.Subjects) != 2 {
-		t.Errorf("bağlı kip: %+v", linked)
+		t.Errorf("connected mode: %+v", linked)
 	}
 }

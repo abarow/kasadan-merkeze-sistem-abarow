@@ -74,7 +74,7 @@ func TestLoginLockout(t *testing.T) {
 	}
 	var locked LockedError
 	if _, err := a.Login(context.Background(), "yanlış"); !errors.As(err, &locked) || !locked.Until.Equal(now.Add(login.Default.Lock)) {
-		t.Fatalf("kilit: %v", err)
+		t.Fatalf("lock: %v", err)
 	}
 	// While locked even the right password is not accepted.
 	if _, err := a.Login(context.Background(), "mağaza-parolası"); !errors.As(err, &locked) {
@@ -98,7 +98,7 @@ func TestLockGrows(t *testing.T) {
 		}
 		var locked LockedError
 		if !errors.As(err, &locked) {
-			t.Fatalf("kilit: %v", err)
+			t.Fatalf("lock: %v", err)
 		}
 		d := locked.Until.Sub(*now)
 		*now = locked.Until
@@ -252,7 +252,7 @@ func TestLoginManager(t *testing.T) {
 		_, _, err = a.LoginManager(ctx, "ayse", "0000")
 	}
 	if !errors.As(err, &locked) || !locked.Until.Equal(now.Add(login.Default.Lock)) {
-		t.Fatalf("kilit: %v", err)
+		t.Fatalf("lock: %v", err)
 	}
 	if _, _, err := a.LoginManager(ctx, "ayse", "8642"); !errors.As(err, &locked) {
 		t.Errorf("right PIN while locked: %v", err)
@@ -262,7 +262,7 @@ func TestLoginManager(t *testing.T) {
 	}
 	*now = now.Add(login.Default.Lock)
 	if _, _, err := a.LoginManager(ctx, "ayse", "8642"); err != nil {
-		t.Errorf("kilit bitince: %v", err)
+		t.Errorf("after the lock: %v", err)
 	}
 }
 

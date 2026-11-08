@@ -30,7 +30,7 @@ func TestCode(t *testing.T) {
 		fmt.Errorf("sarılı: %w", app.ErrDeclined): codes.FailedPrecondition,
 	} {
 		if got := code(err); got != want {
-			t.Errorf("%v → %v, istenen %v", err, got, want)
+			t.Errorf("%v → %v, want %v", err, got, want)
 		}
 	}
 }

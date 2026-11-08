@@ -126,7 +126,7 @@ func TestCorporateLogin(t *testing.T) {
 		t.Fatalf("ali: %q", got)
 	}
 	if rec := ali.do(http.MethodGet, "/api/auth/session", ""); strings.TrimSpace(rec.Body.String()) != `{"username":"ali","name":"Ali Kaya","role":"manager","all_stores":true,"stores":[]}` {
-		t.Errorf("oturum: %s", rec.Body)
+		t.Errorf("session: %s", rec.Body)
 	}
 	rec := ali.do(http.MethodGet, "/api/cashiers", "")
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"id":"ali"`) {
@@ -151,7 +151,7 @@ func TestCorporateLogin(t *testing.T) {
 	refused := "/?" + oidc.ErrorParam + "=" + oidc.CodeRefused
 	zeynep := newBrowser(t, h)
 	if got := zeynep.viaIdP(idp, oidc.StartPath, "s-zeynep", "zeynep@firma.example"); got != refused {
-		t.Errorf("kasiyer: %q", got)
+		t.Errorf("cashier: %q", got)
 	}
 	if rec := zeynep.do(http.MethodGet, "/api/cashiers", ""); rec.Code != http.StatusUnauthorized {
 		t.Errorf("a session was opened for the cashier: %d", rec.Code)

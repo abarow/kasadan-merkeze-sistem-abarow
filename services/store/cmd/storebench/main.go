@@ -43,14 +43,14 @@ import (
 )
 
 func main() {
-	dsn := flag.String("dsn", "", "boş PostgreSQL veritabanının adresi")
-	registers := flag.Int("registers", 1, "kasa sayısı")
-	days := flag.Int("days", 30, "kasa başına geçmiş gün")
-	perDay := flag.Int("sales-per-day", 300, "kasa başına günlük satış")
-	duration := flag.Duration("duration", 60*time.Second, "yük süresi")
-	rate := flag.Float64("rate", 0.5, "kasa başına saniyedeki satış (gerçek yoğun saat: 0,03–0,1)")
-	screens := flag.Int("screens", -1, "açık ekran sayısı; -1: kasa sayısının onda biri + 1")
-	skipSeed := flag.Bool("skip-seed", false, "veriyi yükleme (zaten yüklü)")
+	dsn := flag.String("dsn", "", "the address of an empty PostgreSQL database")
+	registers := flag.Int("registers", 1, "number of registers")
+	days := flag.Int("days", 30, "days of history per register")
+	perDay := flag.Int("sales-per-day", 300, "sales per day per register")
+	duration := flag.Duration("duration", 60*time.Second, "length of the load")
+	rate := flag.Float64("rate", 0.5, "sales per second per register (a real rush hour: 0.03–0.1)")
+	screens := flag.Int("screens", -1, "open report screens; -1: a tenth of the registers + 1")
+	skipSeed := flag.Bool("skip-seed", false, "do not load the data (it is loaded already)")
 	flag.Parse()
 	if *dsn == "" {
 		fmt.Fprintln(os.Stderr, "storebench: -dsn is required")

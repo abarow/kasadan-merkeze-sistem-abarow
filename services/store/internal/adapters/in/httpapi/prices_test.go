@@ -54,7 +54,7 @@ func TestPricesAPI(t *testing.T) {
 	}
 	code, body := call(http.MethodGet, "/api/prices", "")
 	if code != http.StatusOK || !strings.Contains(body, `"headquarters_price_kurus":1500`) || strings.Contains(body, "store_price_kurus") {
-		t.Errorf("liste: %d %s", code, body)
+		t.Errorf("list: %d %s", code, body)
 	}
 	code, body = call(http.MethodPost, "/api/prices/ekmek", `{"unit_price_kurus":1750}`)
 	if code != http.StatusOK || !strings.Contains(body, `"store_price_kurus":1750`) {

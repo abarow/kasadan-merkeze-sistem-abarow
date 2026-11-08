@@ -85,13 +85,13 @@ func TestCatalog(t *testing.T) {
 	}
 	want := domain.Product{ID: "ekmek", Name: "Ekmek", Barcode: "8690000000012", Unit: domain.Piece, UnitPrice: 1500, TaxRate: 100}
 	if p != want {
-		t.Errorf("ürün %+v, istenen %+v", p, want)
+		t.Errorf("product %+v, want %+v", p, want)
 	}
 	if _, err := c.ByBarcode(ctx, "yok"); !errors.Is(err, app.ErrProductNotFound) {
-		t.Errorf("olmayan barkod: %v", err)
+		t.Errorf("barcode that does not exist: %v", err)
 	}
 	if _, err := c.ByBarcode(ctx, "bozuk"); err == nil || errors.Is(err, app.ErrProductNotFound) {
-		t.Errorf("sunucu hatası ürün yok sayıldı: %v", err)
+		t.Errorf("a server error was taken as no product: %v", err)
 	}
 
 	found, err := c.Search(ctx, "dom", 10)
@@ -99,7 +99,7 @@ func TestCatalog(t *testing.T) {
 		t.Errorf("arama: %+v %v", found, err)
 	}
 	if _, err := c.Search(ctx, "bozuk", 10); err == nil {
-		t.Error("arama hatası döndürülmedi")
+		t.Error("the search error was not returned")
 	}
 }
 
@@ -115,10 +115,10 @@ func TestSales(t *testing.T) {
 	}
 	got := srv.got.GetLines()
 	if srv.got.GetCashierId() != "ayse" || len(got) != 1 || got[0].GetQtyMilli() != 2000 || got[0].GetUnitPriceKurus() != 1500 || got[0].GetTaxRateBp() != 100 {
-		t.Errorf("sunucuya giden istek: %v", srv.got)
+		t.Errorf("request sent to the server: %v", srv.got)
 	}
 	if _, err := sales.CreateSale(context.Background(), "kapali", lines); status.Code(err) != codes.FailedPrecondition {
-		t.Errorf("sunucu hatası kodu: %v", err)
+		t.Errorf("server error code: %v", err)
 	}
 }
 
@@ -144,7 +144,7 @@ func TestScale(t *testing.T) {
 				t.Errorf("%s: %v", tc.name, err)
 			}
 		case !errors.Is(err, tc.err) || int64(got) != tc.grams:
-			t.Errorf("%s: %d %v, istenen %d %v", tc.name, got, err, tc.grams, tc.err)
+			t.Errorf("%s: %d %v, want %d %v", tc.name, got, err, tc.grams, tc.err)
 		}
 	}
 }

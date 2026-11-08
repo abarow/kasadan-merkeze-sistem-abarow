@@ -63,7 +63,7 @@ type Drawer interface {
 // ErrNoDrawer is returned when opening the drawer is requested without the drawer being configured.
 var ErrNoDrawer = errors.New("çekmece yapılandırılmamış (ABAROW_DEVICE_ADDR)")
 
-// ShiftService, vardiya use case'leridir.
+// ShiftService holds the shift use cases.
 type ShiftService struct {
 	shifts   Shifts
 	cashiers Cashiers

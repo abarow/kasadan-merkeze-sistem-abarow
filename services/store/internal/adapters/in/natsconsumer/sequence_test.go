@@ -188,7 +188,7 @@ func TestSequenceRecordedForRejectedEvent(t *testing.T) {
 	}
 }
 
-// Numara kaydedilemezse olay onaylanmaz, makbuz verilmez.
+// If the number cannot be recorded the event is not acknowledged and no receipt is given.
 func TestSequenceFailureRetriesAndHoldsReceipt(t *testing.T) {
 	c := &calls{}
 	err := handle(t, &reports{c: c}, &seqs{c: c, err: errors.New("sıra tablosu yazılamadı")}, issuer{c}, voided(t, "s1", "7"))

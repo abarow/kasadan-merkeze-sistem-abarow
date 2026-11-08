@@ -39,7 +39,7 @@ func TestCodePage(t *testing.T) {
 	}
 	for _, bad := range []string{"cp999", "pc857:300", "pc857:x"} {
 		if _, err := ParseCodePage(bad); err == nil {
-			t.Errorf("%q kabul edildi", bad)
+			t.Errorf("%q was accepted", bad)
 		}
 	}
 }
@@ -90,16 +90,16 @@ func TestTCPPrinter(t *testing.T) {
 		select {
 		case got := <-jobs:
 			if !bytes.Equal(got, want) {
-				t.Errorf("yazıcıya giden % x, beklenen % x", got, want)
+				t.Errorf("sent to the printer % x, expected % x", got, want)
 			}
 		case <-time.After(5 * time.Second):
-			t.Fatal("yazıcıya bir şey gitmedi")
+			t.Fatal("nothing was sent to the printer")
 		}
 	}
 	// If the printer is off an error (the request does not hang).
 	lis.Close()
 	if err := p.Print(context.Background(), domain.Document{Lines: []string{"x"}}); err == nil || !strings.Contains(err.Error(), "bağlanılamadı") {
-		t.Errorf("kapalı yazıcı: %v", err)
+		t.Errorf("printer off: %v", err)
 	}
 }
 
@@ -118,7 +118,7 @@ func TestUSBPrinter(t *testing.T) {
 		t.Errorf("% x", got)
 	}
 	if err := New(USB{Path: filepath.Join(t.TempDir(), "yok")}, 32, pc).Print(context.Background(), domain.Document{Lines: []string{"x"}}); err == nil {
-		t.Error("olmayan aygıta basıldı")
+		t.Error("printed to a device that does not exist")
 	}
 }
 
@@ -150,7 +150,7 @@ func TestErrorHint(t *testing.T) {
 	} {
 		err := New(c.t, 32, pc).Print(context.Background(), domain.Document{Lines: []string{"x"}})
 		if err == nil || !strings.Contains(err.Error(), c.want) {
-			t.Errorf("%v; beklenen %q", err, c.want)
+			t.Errorf("%v; expected %q", err, c.want)
 		}
 	}
 }
@@ -163,7 +163,7 @@ func TestParseTarget(t *testing.T) {
 	}
 	for _, s := range []string{"escpos-usb:lp0", "escpos-tcp:192.168.1.50", "lpt1"} {
 		if _, err := ParseTarget(s); err == nil {
-			t.Errorf("%q kabul edildi", s)
+			t.Errorf("%q was accepted", s)
 		}
 	}
 }
@@ -186,7 +186,7 @@ func TestParseStatus(t *testing.T) {
 		{[3]byte{0x00, ok, ok}, domain.PrinterUnknown},
 	} {
 		if got := parseStatus(c.r); got != c.want {
-			t.Errorf("% x → %v, beklenen %v", c.r, got, c.want)
+			t.Errorf("% x → %v, expected %v", c.r, got, c.want)
 		}
 	}
 }
@@ -218,14 +218,14 @@ func TestTCPState(t *testing.T) {
 	defer cancel()
 	answer <- []byte{0x12, 0x12 | 0x20, 0x12 | 0x60}
 	if got := p.State(ctx); got != domain.PrinterPaperOut {
-		t.Errorf("kağıt bitti: %v", got)
+		t.Errorf("out of paper: %v", got)
 	}
 	answer <- nil // a printer that does not answer
 	if got := p.State(ctx); got != domain.PrinterUnknown {
-		t.Errorf("yanıtsız: %v", got)
+		t.Errorf("no answer: %v", got)
 	}
 	lis.Close()
 	if got := p.State(ctx); got != domain.PrinterOffline {
-		t.Errorf("kapalı: %v", got)
+		t.Errorf("off: %v", got)
 	}
 }

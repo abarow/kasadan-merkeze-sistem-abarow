@@ -42,7 +42,7 @@ func TestReportsAcrossDays(t *testing.T) {
 		t.Fatal(err)
 	}
 	if x.ZNo != 1 || x.ReceiptCount != 2 || x.Total != 3500 || x.VoidedCount != 1 || !x.ClosedAt.IsZero() {
-		t.Fatalf("X raporu yanlış: %+v", x)
+		t.Fatalf("the X report is wrong: %+v", x)
 	}
 
 	z, err := svc.CloseDay(ctx, "ali")
@@ -50,7 +50,7 @@ func TestReportsAcrossDays(t *testing.T) {
 		t.Fatal(err)
 	}
 	if z.ZNo != 1 || z.ReceiptCount != 2 || z.Total != 3500 || z.ClosedAt.IsZero() {
-		t.Fatalf("Z raporu yanlış: %+v", z)
+		t.Fatalf("the Z report is wrong: %+v", z)
 	}
 
 	// After Z the new period starts empty; new sales go into it.
@@ -62,6 +62,6 @@ func TestReportsAcrossDays(t *testing.T) {
 		t.Fatal(err)
 	}
 	if x.ZNo != 2 || x.ReceiptCount != 1 || x.Total != 700 || x.VoidedCount != 0 {
-		t.Errorf("Z sonrası X raporu yanlış: %+v", x)
+		t.Errorf("the X report after Z is wrong: %+v", x)
 	}
 }

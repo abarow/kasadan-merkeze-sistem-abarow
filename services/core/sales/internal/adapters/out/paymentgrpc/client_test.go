@@ -64,7 +64,7 @@ func TestChargeAndRefund(t *testing.T) {
 		t.Fatal(err)
 	}
 	if srv.charged.GetSaleId() != "s1" || len(srv.charged.GetPayments()) != 3 {
-		t.Fatalf("sunucuya giden: %v", srv.charged)
+		t.Fatalf("sent to the server: %v", srv.charged)
 	}
 	want := []domain.Payment{
 		{Method: domain.PaymentCash, Amount: 1000},
@@ -73,18 +73,18 @@ func TestChargeAndRefund(t *testing.T) {
 	}
 	for i, w := range want {
 		if got[i].Method != w.Method || got[i].Amount != w.Amount || got[i].Ref != w.Ref {
-			t.Errorf("ödeme %d: %+v, istenen %+v", i, got[i], w)
+			t.Errorf("payment %d: %+v, want %+v", i, got[i], w)
 		}
 	}
 	if _, err := c.Charge(ctx, "reddedildi", []domain.Payment{{Method: domain.PaymentCard, Amount: 1}}); status.Code(err) != codes.FailedPrecondition {
-		t.Errorf("reddedilen ödeme: %v", err)
+		t.Errorf("refused payment: %v", err)
 	}
 
 	if err := c.Refund(ctx, "s1"); err != nil || srv.refunded != "s1" {
 		t.Errorf("Refund: %v (%q)", err, srv.refunded)
 	}
 	if err := c.Refund(ctx, "geri-verilemedi"); err == nil {
-		t.Error("iade hatası döndürülmedi")
+		t.Error("the refund error was not returned")
 	}
 }
 
@@ -94,7 +94,7 @@ func TestTimeout(t *testing.T) {
 	c.Timeout = 20 * time.Millisecond
 	_, err := c.Charge(context.Background(), "s1", []domain.Payment{{Method: domain.PaymentCash, Amount: 1}})
 	if status.Code(err) != codes.DeadlineExceeded {
-		t.Errorf("zaman aşımı: %v", err)
+		t.Errorf("timeout: %v", err)
 	}
 }
 

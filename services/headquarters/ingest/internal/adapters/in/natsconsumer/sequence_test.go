@@ -65,7 +65,7 @@ func (r *recSeqs) RecordSequence(_ context.Context, store, register, producer st
 	return nil
 }
 
-// failStore, Record'u hep hata verdirir.
+// failStore makes Record always fail.
 type failStore struct{ memStore }
 
 func (f *failStore) Record(context.Context, domain.Event, any) (bool, error) {

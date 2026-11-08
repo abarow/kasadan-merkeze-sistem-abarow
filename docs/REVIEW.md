@@ -31,6 +31,7 @@ Bulgular aşağıda yazıldıkları gibi duruyor; yapılanlar bu tabloda izleniy
 | G2 | Çözüldü (12.11.2026) | `toolchain go1.27.4` bütün modüllerde; imajlar sürüm ve özetle sabit; CI ve terfi akışı aynı sürüm. `govulncheck` CI'da (`scripts/check.sh`). |
 | G3 | Çözüldü (12.11.2026) | Kalan JSON uçlarında 16 KB gövde sınırı. |
 | G4 | Çözüldü (12.11.2026) | Podman istemcisinde bağlantı, başlık ve çağrı zaman aşımları (imaj çekme 30 dakika). |
+| G5 | Çözüldü (12.11.2026) | Benchmark bayraklarının 17 açıklaması, testlerde 800'ü aşkın ileti ve 11 Türkçe yorum İngilizceye çevrildi. Kullanıcıya giden ve testlerin doğruladığı Türkçe iletiler, test verisi (ad, ürün) ve alan terimleri (kuruş, ÖKC, GİB) bilerek Türkçe kaldı. |
 | G6 | Çözüldü (12.11.2026) | `staticcheck` bulguları düzeltildi; `staticcheck` CI'da. |
 | G7 | Çözüldü (12.11.2026) | Yorum düzeltildi; kasa satışları artık saklama süresinden sonra siliniyor (D1). |
 | B1 | Çözüldü (12.11.2026) | `ingest` ve `catalog-admin`, `reporting`'in okuduğu tabloları `ingest_v1` ve `catalog_v1` şemalarında görünüm olarak yayımlıyor. `reporting` bağlantısında bu şemalar önce aranıyor, sorgu metni değişmedi. PostgreSQL, görünümün kullandığı sütunun silinmesini ya da tipinin değişmesini reddediyor; sözleşmeyi bozacak bir değişiklik sahibin migration'ında başarısız oluyor. Testte sahip tablolar başka şemaya taşınıyor; görünümü atlayan bir sorgu testi kırıyor. Satış defteri SQL'i (`pkg/ledger`) bilinçli olarak ortak kalıyor. |

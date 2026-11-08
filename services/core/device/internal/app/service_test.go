@@ -80,7 +80,7 @@ func TestScans(t *testing.T) {
 		t.Error("the channel of the listener that left did not close")
 	}
 	if st := svc.Status(); st.Scanner != "simulator" || st.Scanned != 1 {
-		t.Errorf("durum %+v", st)
+		t.Errorf("state %+v", st)
 	}
 
 	// No imitation on a real reader.

@@ -87,7 +87,7 @@ func TestCheckoutOverGRPC(t *testing.T) {
 	}
 	// sale.completed.v1 is waiting to be published.
 	if out, err := c.GetOutboxStatus(ctx, &salesv1.GetOutboxStatusRequest{}); err != nil || out.GetPending() != 1 {
-		t.Errorf("GetOutboxStatus = %v, %v; istenen 1 bekleyen", out, err)
+		t.Errorf("GetOutboxStatus = %v, %v; want 1 pending", out, err)
 	}
 }
 
@@ -125,7 +125,7 @@ func TestErrorCodes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := status.Code(tt.call()); got != tt.want {
-				t.Errorf("kod = %v, istenen %v", got, tt.want)
+				t.Errorf("kod = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -148,14 +148,14 @@ func TestDownstreamErrorCodeIsPropagated(t *testing.T) {
 	}
 	_, err = c.Checkout(ctx, &salesv1.CheckoutRequest{SaleId: created.GetSale().GetId(), Payments: card(12537)})
 	if status.Code(err) != codes.Unavailable {
-		t.Fatalf("kod = %v, istenen Unavailable (%v)", status.Code(err), err)
+		t.Fatalf("kod = %v, want Unavailable (%v)", status.Code(err), err)
 	}
 	got, err := c.GetSale(ctx, &salesv1.GetSaleRequest{SaleId: created.GetSale().GetId()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.GetSale().GetStatus() != salesv1.SaleStatus_SALE_STATUS_CHARGED {
-		t.Errorf("durum %v, istenen CHARGED", got.GetSale().GetStatus())
+		t.Errorf("status %v, want CHARGED", got.GetSale().GetStatus())
 	}
 
 	// A sale whose receipt could not be printed is listed at the register; when completed it leaves the list.
@@ -171,6 +171,6 @@ func TestDownstreamErrorCodeIsPropagated(t *testing.T) {
 		t.Errorf("the completed sale is still in the list: %v", charged)
 	}
 	if _, err := c.ListSales(ctx, &salesv1.ListSalesRequest{}); status.Code(err) != codes.InvalidArgument {
-		t.Errorf("durumsuz liste: %v", err)
+		t.Errorf("list without a status: %v", err)
 	}
 }

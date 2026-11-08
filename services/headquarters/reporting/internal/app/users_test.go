@@ -157,7 +157,7 @@ func TestChangeOwnPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := auth.Session(ctx, token); err != nil {
-		t.Errorf("yeni oturum: %v", err)
+		t.Errorf("new session: %v", err)
 	}
 	if _, err := auth.Session(ctx, other); !errors.Is(err, ErrNoSession) {
 		t.Errorf("the other session stayed open: %v", err)
@@ -175,7 +175,7 @@ func TestChangeOwnPassword(t *testing.T) {
 		_, err = auth.ChangeOwnPassword(ctx, ali, "yanlış-parola", "baska-parola-1")
 	}
 	if !errors.As(err, &locked) {
-		t.Fatalf("kilit: %v", err)
+		t.Fatalf("lock: %v", err)
 	}
 	if _, _, err := auth.Login(ctx, "ali", "yeni-parola-12"); !errors.As(err, &locked) {
 		t.Errorf("sign-in while locked: %v", err)

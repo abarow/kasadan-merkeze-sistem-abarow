@@ -34,7 +34,7 @@ func TestParseToledo(t *testing.T) {
 	} {
 		got, err := Toledo8217.parse([]byte(c.reply))
 		if got != c.want || !errors.Is(err, c.err) && !(err == nil && c.err == nil) {
-			t.Errorf("%q → %+v %v; beklenen %+v %v", c.reply, got, err, c.want, c.err)
+			t.Errorf("%q → %+v %v; expected %+v %v", c.reply, got, err, c.want, c.err)
 		}
 	}
 }
@@ -58,7 +58,7 @@ func TestParseNCI(t *testing.T) {
 	} {
 		got, err := NCI.parse([]byte(c.reply))
 		if got != c.want || !errors.Is(err, c.err) && !(err == nil && c.err == nil) {
-			t.Errorf("%q → %+v %v; beklenen %+v %v", c.reply, got, err, c.want, c.err)
+			t.Errorf("%q → %+v %v; expected %+v %v", c.reply, got, err, c.want, c.err)
 		}
 	}
 }
@@ -69,7 +69,7 @@ func TestParseSettings(t *testing.T) {
 	}
 	for _, bad := range []string{"9600", "9601,7E1", "9600,9E1", "9600,7X1", "9600,7E3"} {
 		if _, err := ParseSettings(bad); err == nil {
-			t.Errorf("%q kabul edildi", bad)
+			t.Errorf("%q was accepted", bad)
 		}
 	}
 }
@@ -117,10 +117,10 @@ func TestScaleRead(t *testing.T) {
 	// A scale that gives no reply: the time runs out, the port stays open.
 	start := time.Now()
 	if _, err := s.Read(ctx); err == nil || !strings.Contains(err.Error(), "yanıt vermiyor") || time.Since(start) > 2*time.Second {
-		t.Fatalf("yanıtsız: %v", err)
+		t.Fatalf("no answer: %v", err)
 	}
 	if r, err := s.Read(ctx); err != nil || r.Grams != 300 {
-		t.Fatalf("yanıtsızdan sonra: %+v %v", r, err)
+		t.Fatalf("after no answer: %+v %v", r, err)
 	}
 	// A port that breaks is closed, reopened at the next read.
 	s = fakeScale(t, NCI, "kopuk")
@@ -128,13 +128,13 @@ func TestScaleRead(t *testing.T) {
 		t.Fatal("kopuk port")
 	}
 	if s.p != nil {
-		t.Error("kopuk port kapatılmadı")
+		t.Error("the disconnected port was not closed")
 	}
 	// The converter is not plugged in: the cashier sees the reason.
 	s.open = func(string, Settings) (port, error) {
 		return nil, &os.PathError{Op: "open", Path: "/dev/test", Err: syscall.ENXIO}
 	}
 	if _, err := s.Read(ctx); err == nil || !strings.Contains(err.Error(), "takılı değil") {
-		t.Errorf("takılı değil: %v", err)
+		t.Errorf("not plugged in: %v", err)
 	}
 }

@@ -92,7 +92,7 @@ func TestDecoder(t *testing.T) {
 	ty.key(81, 2)
 	ty.press(keyEnter)
 	if got := decode(ty.events); !slices.Equal(got, []string{"123"}) {
-		t.Errorf("sayısal takım %q", got)
+		t.Errorf("numeric set %q", got)
 	}
 }
 

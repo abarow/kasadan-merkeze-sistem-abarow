@@ -59,7 +59,7 @@ func TestDecode(t *testing.T) {
 		t.Errorf("JSON: %v", err)
 	}
 	if _, err := Decode("application/protobuf", []byte{0xff}); !errors.Is(err, errUndecodable) {
-		t.Errorf("bozuk mesaj: %v", err)
+		t.Errorf("broken message: %v", err)
 	}
 
 	// Menu details and image.

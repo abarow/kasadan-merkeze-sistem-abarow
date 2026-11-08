@@ -122,14 +122,14 @@ func TestCatalogAPI(t *testing.T) {
 	var p productJSON
 	if err := json.Unmarshal(rec.Body.Bytes(), &p); err != nil || rec.Code != http.StatusOK || p.Version != 2 || len(p.Prices) != 2 ||
 		p.UnitPriceKurus != 1500 || p.Prices[1].From == nil || p.Prices[1].From.Year() != 2099 {
-		t.Fatalf("fiyat: %d %s", rec.Code, rec.Body)
+		t.Fatalf("price: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, http.MethodPost, "/api/catalog/products/ekmek/prices", `{"version":1,"unit_price_kurus":1700}`, true); rec.Code != http.StatusConflict {
 		t.Errorf("old version: %d", rec.Code)
 	}
 	cancel := `{"version":2,"from":"` + p.Prices[1].From.Format(time.RFC3339Nano) + `"}`
 	if rec := do(h, http.MethodPost, "/api/catalog/products/ekmek/prices/cancel", cancel, true); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"version":3`) {
-		t.Errorf("geri alma: %d %s", rec.Code, rec.Body)
+		t.Errorf("undo: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, http.MethodPost, "/api/catalog/products/ekmek/discontinue", `{"version":3,"discontinued":true}`, true); rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `"discontinued":true`) {
@@ -144,7 +144,7 @@ func TestCatalogAPI(t *testing.T) {
 		t.Errorf("non-existent product: %d", rec.Code)
 	}
 	if rec := do(h, http.MethodGet, "/api/catalog/products?q=ekmek", "", true); rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"code":"ekmek"`) {
-		t.Errorf("liste: %d %s", rec.Code, rec.Body)
+		t.Errorf("list: %d %s", rec.Code, rec.Body)
 	}
 }
 

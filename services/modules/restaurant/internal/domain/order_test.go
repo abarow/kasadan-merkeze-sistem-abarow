@@ -38,7 +38,7 @@ func TestAddLine(t *testing.T) {
 		t.Errorf("line %+v, total %v, version %d", l, o.Total(), o.Version)
 	}
 	if added, err := o.AddLine(NewLineInput{ID: "l-1", Product: yogurtdrink, Qty: 1}); err != nil || added || len(o.Lines) != 1 {
-		t.Errorf("tekrar gelen istek: %v %v", added, err)
+		t.Errorf("request that came again: %v %v", added, err)
 	}
 	if _, err := o.AddLine(NewLineInput{ID: "l-2", Product: meatball, Qty: 1}); !errors.Is(err, menu.ErrChoice) {
 		t.Errorf("zorunlu opsiyon: %v", err)
@@ -47,7 +47,7 @@ func TestAddLine(t *testing.T) {
 		t.Errorf("invalid id: %v", err)
 	}
 	if _, err := o.AddLine(NewLineInput{ID: "l-4", Product: yogurtdrink, Qty: 100}); !errors.Is(err, ErrInvalidLine) {
-		t.Errorf("100 adet: %v", err)
+		t.Errorf("100 pieces: %v", err)
 	}
 	if _, err := o.AddLine(NewLineInput{ID: "l-5", Product: Product{ID: "balik", Name: "Levrek", Weighed: true}, Qty: 1}); !errors.Is(err, ErrInvalidLine) {
 		t.Errorf("weighed product: %v", err)
@@ -64,7 +64,7 @@ func TestSendAndVoid(t *testing.T) {
 		t.Fatalf("deleting a pending line: %v", err)
 	}
 	if err := o.SetLine("l-1", 2, "  buzsuz  "); err != nil || o.Lines[0].Qty != 2 || o.Lines[0].Note != "buzsuz" {
-		t.Fatalf("adet ve not: %+v %v", o.Lines[0], err)
+		t.Fatalf("count and note: %+v %v", o.Lines[0], err)
 	}
 	if _, err := o.Void("l-1", "v-1", 1, "yanlış", "Müdür"); !errors.Is(err, ErrLineNotSent) {
 		t.Errorf("cancelling one that was not sent: %v", err)
@@ -80,7 +80,7 @@ func TestSendAndVoid(t *testing.T) {
 		t.Errorf("changing one that was sent: %v", err)
 	}
 	if _, err := o.Void("l-1", "v-1", 1, " ", "Müdür"); !errors.Is(err, ErrVoidReason) {
-		t.Errorf("nedensiz iptal: %v", err)
+		t.Errorf("void without a reason: %v", err)
 	}
 	v, err := o.Void("l-1", "v-1", 1, "döküldü", "Müdür")
 	if err != nil || v.ID != "v-1" || v.Qty != 1 || v.Status != Voided || o.Lines[0].Qty != 1 || o.Total() != 4000 {
@@ -107,7 +107,7 @@ func TestPayAndSplit(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := o.Parts([]Part{{LineID: "l-1", Qty: 4}}); !errors.Is(err, ErrQtyTooLarge) {
-		t.Errorf("fazla adet: %v", err)
+		t.Errorf("too many: %v", err)
 	}
 	if err := o.Hold("s1", parts, "Ali", at); err != nil {
 		t.Fatal(err)
@@ -128,7 +128,7 @@ func TestPayAndSplit(t *testing.T) {
 	}
 	rest, err := o.Parts(nil)
 	if err != nil || len(rest) != 2 || rest[0].Qty != 1 {
-		t.Fatalf("kalan: %+v %v", rest, err)
+		t.Fatalf("left: %+v %v", rest, err)
 	}
 	o.Hold("s3", rest, "Ali", at)
 	if !o.Settle(true, at) || !o.Closed || o.Due() != 0 {

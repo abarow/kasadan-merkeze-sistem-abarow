@@ -27,15 +27,15 @@ func TestIssueReceipt(t *testing.T) {
 	}
 	pending, err := s.Receipts().Pending(ctx, 10)
 	if err != nil || len(pending) != 1 {
-		t.Fatalf("outbox = %v, %v; bir makbuz beklenir", pending, err)
+		t.Fatalf("outbox = %v, %v; one receipt expected", pending, err)
 	}
 	m := pending[0]
 	if m.ID != "receipt-1" || m.Type != delivery.ReceiptType || m.Subject != "receipt.register-1.abarow_sales" || m.StoreID != "store-1" {
-		t.Errorf("makbuz mesajı = %+v", m.Message)
+		t.Errorf("receipt message = %+v", m.Message)
 	}
 	r, err := delivery.ParseReceipt(m.Payload)
 	if err != nil || r.EventID != "e1" || r.ReceiptID != "receipt-1" {
-		t.Errorf("içerik = %+v, %v", r, err)
+		t.Errorf("content = %+v, %v", r, err)
 	}
 
 	// The same event comes again: no new receipt.
@@ -43,7 +43,7 @@ func TestIssueReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c, _ := s.Receipts().CountPending(ctx); c != 1 {
-		t.Errorf("%d makbuz bekliyor; tekrar için yenisi yazılmamalı", c)
+		t.Errorf("%d receipts pending; none must be written for a repeat", c)
 	}
 	// Another register's event gets its own receipt.
 	if err := s.IssueReceipt(ctx, "register-2", "ABAROW_STAFF", "e2"); err != nil {
@@ -57,7 +57,7 @@ func TestIssueReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c, _ := s.Receipts().CountPending(ctx); c != 1 {
-		t.Errorf("%d makbuz bekliyor; 1 beklenir", c)
+		t.Errorf("%d receipts pending; 1 expected", c)
 	}
 }
 

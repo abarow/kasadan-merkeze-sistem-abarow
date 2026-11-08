@@ -165,7 +165,7 @@ func TestVerifyRejects(t *testing.T) {
 func TestCertificateDoesNotReplaceToken(t *testing.T) {
 	z := setup(t)
 	if _, err := Verify(z.rootPub, z.cert, now); !errors.Is(err, ErrInvalid) {
-		t.Errorf("sertifika jeton gibi kabul edildi: %v", err)
+		t.Errorf("a certificate was accepted as a token: %v", err)
 	}
 }
 
@@ -207,7 +207,7 @@ func TestCertSubject(t *testing.T) {
 		t.Errorf("sertifika sahibi %q, %v", sub, err)
 	}
 	if _, err := CertSubject(z.unitToken(t, Register, now.Add(time.Hour))); !errors.Is(err, ErrInvalid) {
-		t.Errorf("jeton sertifika gibi okundu: %v", err)
+		t.Errorf("a token was read as a certificate: %v", err)
 	}
 	if _, err := CertSubject("çöp"); !errors.Is(err, ErrInvalid) {
 		t.Errorf("garbage certificate: %v", err)

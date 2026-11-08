@@ -106,7 +106,7 @@ func TestSession(t *testing.T) {
 		t.Errorf("wrong PIN: %v", err)
 	}
 	if _, err := e.Login(ctx, &staffv1.LoginRequest{CashierId: "yok", Pin: "1111"}); code(err) != codes.NotFound {
-		t.Errorf("olmayan kasiyer: %v", err)
+		t.Errorf("cashier that does not exist: %v", err)
 	}
 	token := login(t, e, "ayse", "1111")
 	v, err := e.ValidateSession(ctx, &staffv1.ValidateSessionRequest{Token: token})
@@ -151,7 +151,7 @@ func TestAuthorizeAndApprove(t *testing.T) {
 		t.Errorf("approval with a wrong PIN: %v", err)
 	}
 	if _, err := e.Approve(ctx, &staffv1.ApproveRequest{RequestedBy: "ayse", ManagerId: "ayse", Pin: "1111", Action: staffv1.Action_ACTION_VOID_ORDER_LINE}); code(err) != codes.PermissionDenied {
-		t.Errorf("kasiyerden onay: %v", err)
+		t.Errorf("approval from a cashier: %v", err)
 	}
 	ap, err := e.Approve(ctx, &staffv1.ApproveRequest{RequestedBy: "ayse", ManagerId: "ali", Pin: "9999", Action: staffv1.Action_ACTION_VOID_ORDER_LINE})
 	if err != nil || ap.GetApprovalToken() == "" || ap.GetExpiresAt() == nil {
@@ -159,7 +159,7 @@ func TestAuthorizeAndApprove(t *testing.T) {
 	}
 	req := &staffv1.AuthorizeRequest{CashierId: "ayse", ApprovalToken: ap.GetApprovalToken(), Action: staffv1.Action_ACTION_VOID_ORDER_LINE}
 	if r, err := e.Authorize(ctx, req); err != nil || r.GetManagerId() != "ali" {
-		t.Errorf("onayla yetki: %v %v", r, err)
+		t.Errorf("authority with an approval: %v %v", r, err)
 	}
 	if _, err := e.Authorize(ctx, req); code(err) != codes.PermissionDenied {
 		t.Errorf("used approval: %v", err)
@@ -172,7 +172,7 @@ func TestShiftCashAndDay(t *testing.T) {
 
 	cur, err := e.GetCurrentShift(ctx, &staffv1.GetCurrentShiftRequest{})
 	if err != nil || cur.GetShift() != nil {
-		t.Fatalf("vardiya yokken: %v %v", cur, err)
+		t.Fatalf("without a shift: %v %v", cur, err)
 	}
 	// There is no cash movement or closing without a shift being opened.
 	if _, err := e.CloseShift(ctx, &staffv1.CloseShiftRequest{CashierId: "ayse"}); code(err) != codes.FailedPrecondition {
@@ -184,7 +184,7 @@ func TestShiftCashAndDay(t *testing.T) {
 		t.Fatalf("OpenShift: %v %v", open, err)
 	}
 	if _, err := e.OpenShift(ctx, &staffv1.OpenShiftRequest{CashierId: "ali"}); code(err) != codes.FailedPrecondition {
-		t.Errorf("ikinci vardiya: %v", err)
+		t.Errorf("second shift: %v", err)
 	}
 	if cur, _ := e.GetCurrentShift(ctx, &staffv1.GetCurrentShiftRequest{}); cur.GetShift().GetId() != open.GetShift().GetId() {
 		t.Errorf("current shift: %v", cur)
@@ -257,7 +257,7 @@ func TestShiftCashAndDay(t *testing.T) {
 		t.Errorf("manager sees the report: %v", err)
 	}
 	if _, err := e.GetShiftReport(ctx, &staffv1.GetShiftReportRequest{CashierId: "ayse", ShiftId: 999}); code(err) != codes.NotFound {
-		t.Errorf("olmayan vardiya: %v", err)
+		t.Errorf("shift that does not exist: %v", err)
 	}
 
 	// Reports and the end of day.

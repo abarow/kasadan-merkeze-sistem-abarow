@@ -97,7 +97,7 @@ func TestFullFlow(t *testing.T) {
 		t.Error("the token is not bound to the device key")
 	}
 	if want := o.fakeClock.Add(7 * 24 * time.Hour); !c.Expiry.Equal(want) {
-		t.Errorf("son kullanma %v, istenen %v", c.Expiry, want)
+		t.Errorf("expiry %v, want %v", c.Expiry, want)
 	}
 }
 
@@ -201,7 +201,7 @@ func TestApproveCode(t *testing.T) {
 	}
 	r, _ := o.store.Get(ctx, i.ID)
 	if r.Status != Pending || r.Attempts != 2 {
-		t.Errorf("durum %s, deneme %d", r.Status, r.Attempts)
+		t.Errorf("status %s, attempt %d", r.Status, r.Attempts)
 	}
 	// When the wrong codes exceed the limit the registration is rejected; the right code is of no use any more.
 	for n := 0; n < MaxCodeAttempts; n++ {

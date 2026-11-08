@@ -137,6 +137,6 @@ func TestValidate(t *testing.T) {
 		}
 	}
 	if (Void{SaleID: "v", RegisterID: "k", At: time.Now()}).Validate() != nil || (Void{SaleID: "v", At: time.Now()}).Validate() == nil {
-		t.Error("iptal denetimi")
+		t.Error("void check")
 	}
 }

@@ -64,21 +64,21 @@ func TestSaveAndReport(t *testing.T) {
 	}
 	if len(r.Payments) != 2 || r.Payments[0] != (ledger.PaymentTotal{Method: domain.Cash, Amount: 1500}) ||
 		r.Payments[1] != (ledger.PaymentTotal{Method: domain.Card, Amount: 1000}) {
-		t.Errorf("ödemeler %+v", r.Payments)
+		t.Errorf("payments %+v", r.Payments)
 	}
 	if len(r.Taxes) != 1 || r.Taxes[0] != in.Taxes[0] {
 		t.Errorf("KDV %+v", r.Taxes)
 	}
 	if len(r.Products) != 2 || r.Products[0] != (ledger.ProductTotal{ProductID: "p2", Name: "Domates", Qty: 1250, Total: 1300}) ||
 		r.Products[1] != (ledger.ProductTotal{ProductID: "p3", Name: "EKMEK", Qty: 1000, Total: 1200}) {
-		t.Errorf("ürünler %+v", r.Products)
+		t.Errorf("products %+v", r.Products)
 	}
 	if len(r.Registers) != 2 || r.Registers[0] != (ledger.GroupTotal{StoreID: "store-1", ID: "register-1", Receipts: 1, Total: 2500}) ||
 		r.Registers[1] != (ledger.GroupTotal{StoreID: "store-1", ID: "register-2", Voided: 1, VoidedTotal: 999}) {
 		t.Errorf("kasalar %+v", r.Registers)
 	}
 	if r.Hours[0].Receipts != 1 || len(r.Days) != 1 || r.Days[0].Date != "2026-10-26" {
-		t.Errorf("saatler ve günler: %+v %+v", r.Hours[0], r.Days)
+		t.Errorf("hours and days: %+v %+v", r.Hours[0], r.Days)
 	}
 }
 
@@ -106,13 +106,13 @@ func TestActivity(t *testing.T) {
 		t.Errorf("register-1: %+v", k1)
 	}
 	if len(k1.Missing) != 2 || k1.Missing[0] != (domain.ReceiptRange{From: 6, To: 6}) || k1.Missing[1] != (domain.ReceiptRange{From: 8, To: 9}) {
-		t.Errorf("register-1 eksik fişler: %+v", k1.Missing)
+		t.Errorf("register-1 missing receipts: %+v", k1.Missing)
 	}
 	if k2 := act["register-2"]; k2.Receipts != 2 || len(k2.Missing) != 0 {
 		t.Errorf("register-2: %+v", k2)
 	}
 	if _, ok := act["register-3"]; ok {
-		t.Error("satışı olmayan kasa listede")
+		t.Error("a register without sales is in the list")
 	}
 }
 
@@ -153,15 +153,15 @@ func TestShifts(t *testing.T) {
 	}
 	k1 := act["register-1"]
 	if k1.OpenShift == nil || k1.OpenShift.ID != 2 || k1.OpenShift.CashierName != "Kasiyer mert" || !k1.OpenShift.Open() {
-		t.Errorf("register-1 açık vardiya: %+v", k1.OpenShift)
+		t.Errorf("register-1 open shift: %+v", k1.OpenShift)
 	}
 	if lc := k1.LastClosed; lc == nil || lc.ID != 1 || lc.Difference != -100 || lc.ExpectedCash != 60000 || lc.CountedCash != 59900 ||
 		lc.Receipts != 12 || lc.ClosedBy != "ayse" || !lc.ClosedAt.Equal(at.Add(8*time.Hour)) {
-		t.Errorf("register-1 son kapanan: %+v", lc)
+		t.Errorf("register-1 last closed: %+v", lc)
 	}
 	k2 := act["register-2"]
 	if k2.OpenShift != nil || k2.LastClosed == nil || k2.LastClosed.ID != 7 {
-		t.Errorf("register-2: açık %+v, son kapanan %+v", k2.OpenShift, k2.LastClosed)
+		t.Errorf("register-2: open %+v, last closed %+v", k2.OpenShift, k2.LastClosed)
 	}
 }
 
@@ -195,10 +195,10 @@ func TestUnfinished(t *testing.T) {
 	got := act["register-1"].Unfinished
 	if len(got) != 1 || got[0].SaleID != "c1" || !got[0].Since.Equal(at) || !got[0].LastAttempt.Equal(at.Add(time.Minute)) ||
 		got[0].Reason != "yazıcı yanıt vermiyor" || got[0].Total != 12537 || got[0].CashierID != "ayse" {
-		t.Fatalf("register-1 bekleyen: %+v", got)
+		t.Fatalf("register-1 pending: %+v", got)
 	}
 	if len(act["register-2"].Unfinished) != 2 {
-		t.Fatalf("register-2 bekleyen: %+v", act["register-2"].Unfinished)
+		t.Fatalf("register-2 pending: %+v", act["register-2"].Unfinished)
 	}
 
 	// One is completed (receipt issued), one has its payment refunded and is cancelled.
@@ -212,6 +212,6 @@ func TestUnfinished(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(act["register-2"].Unfinished) != 0 || len(act["register-1"].Unfinished) != 1 {
-		t.Errorf("tamamlanan ve iade edilen satış hâlâ bekliyor: %+v", act["register-2"].Unfinished)
+		t.Errorf("a completed and refunded sale is still pending: %+v", act["register-2"].Unfinished)
 	}
 }

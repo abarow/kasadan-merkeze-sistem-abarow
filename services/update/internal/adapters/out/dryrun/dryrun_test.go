@@ -28,10 +28,10 @@ func TestRuntime(t *testing.T) {
 	ctx := context.Background()
 	cur, _ := r.Current(ctx)
 	if cur["abarow-sales"].Digest != d1 {
-		t.Fatalf("başlangıç: %+v", cur)
+		t.Fatalf("start: %+v", cur)
 	}
 	if ok, _ := r.Healthy(ctx, "abarow-sales"); !ok {
-		t.Fatal("başlangıçta sağlıksız")
+		t.Fatal("unhealthy at the start")
 	}
 	img := channel.Image{Unit: "abarow-sales", Repo: "ghcr.io/abarow/abarow-sales", Digest: d2}
 	if err := r.Pull(ctx, img); err != nil {
@@ -41,7 +41,7 @@ func TestRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	if ok, _ := r.Healthy(ctx, "abarow-sales"); ok {
-		t.Fatal("sağlıksız listedeki digest sağlıklı sayıldı")
+		t.Fatal("a digest on the unhealthy list was taken as healthy")
 	}
 	// The state persists in the file.
 	r2, err := dryrun.New(path, "", "")
@@ -49,13 +49,13 @@ func TestRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	if cur, _ := r2.Current(ctx); cur["abarow-sales"].Digest != d2 {
-		t.Fatalf("durum kalıcı değil: %+v", cur)
+		t.Fatalf("the state is not persisted: %+v", cur)
 	}
 	// Kurulu olmayan birim.
 	if err := r.Pull(ctx, channel.Image{Unit: "abarow-yok", Digest: d1}); err == nil {
-		t.Error("kurulu olmayan birim indirildi")
+		t.Error("a unit that is not installed was pulled")
 	}
 	if _, err := dryrun.New(filepath.Join(t.TempDir(), "x.json"), "bozuk", ""); err == nil {
-		t.Error("bozuk başlangıç kabul edildi")
+		t.Error("a broken start was accepted")
 	}
 }

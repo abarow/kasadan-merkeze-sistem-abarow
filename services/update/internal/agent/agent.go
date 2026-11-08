@@ -443,7 +443,7 @@ func (a *Agent) ensureToken(ctx context.Context) (time.Duration, error) {
 	return min(s.renewAt().Sub(now), maxApprovedGap), nil
 }
 
-// announce, yeni jetonu OnToken'a bir kez bildirir.
+// announce reports the new token to OnToken once.
 func (a *Agent) announce(t saved) {
 	if a.cfg.OnToken == nil || a.announced == t.Token {
 		return

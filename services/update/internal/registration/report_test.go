@@ -51,7 +51,7 @@ func TestSubmitReportStoresIt(t *testing.T) {
 		t.Fatal(err)
 	}
 	if r, _ := o.svc.Get(ctx, i.ID); r.Report == nil || r.Report.Version != "0.4.0" {
-		t.Errorf("iptal bildirimi sildi: %+v", r.Report)
+		t.Errorf("the cancel deleted the report: %+v", r.Report)
 	}
 }
 
@@ -76,7 +76,7 @@ func TestSubmitReportRejects(t *testing.T) {
 	bad := func(label string, in ReportInput) {
 		t.Helper()
 		if err := o.svc.SubmitReport(ctx, in); !errors.Is(err, ErrBadRequest) {
-			t.Errorf("%s: kabul edildi (%v)", label, err)
+			t.Errorf("%s: accepted (%v)", label, err)
 		}
 	}
 	// Signature with another device's key.

@@ -104,7 +104,7 @@ func TestRegister(t *testing.T) {
 	b.accept = "0"
 	b.mu.Unlock()
 	if _, err := c.Register(ctx, receipt("s2")); status.Code(err) != codes.FailedPrecondition {
-		t.Errorf("reddedilen sepet: %v", err)
+		t.Errorf("refused basket: %v", err)
 	}
 	// A VAT rate that is not mapped is an invalid request.
 	bad := receipt("s3")

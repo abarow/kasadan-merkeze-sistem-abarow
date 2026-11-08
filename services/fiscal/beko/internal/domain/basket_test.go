@@ -37,7 +37,7 @@ func TestNewBasket(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got["basketID"] != "s1" || got["documentType"] != 0.0 || got["isVoid"] != false || got["customerInfo"] != nil {
-		t.Errorf("sepet: %s", data)
+		t.Errorf("basket: %s", data)
 	}
 	items := got["items"].([]any)
 	first := items[0].(map[string]any)
@@ -93,7 +93,7 @@ func TestInvalid(t *testing.T) {
 	r = receipt()
 	r.Total = 4300
 	if _, err := NewBasket(r, cfg); !errors.Is(err, ErrInvalidReceipt) {
-		t.Errorf("toplam tutmuyor: %v", err)
+		t.Errorf("the total does not match: %v", err)
 	}
 	r = receipt()
 	r.Change = 100
@@ -108,12 +108,12 @@ func TestInvalid(t *testing.T) {
 func TestSaleStatus(t *testing.T) {
 	s, err := ParseSaleStatus([]byte(`{"basketID":"s1","documentType":0,"message":"OK","paymentCount":1,"receiptNo":2,"status":0,"zNo":12}`))
 	if err != nil || s.Status != StatusOK || s.FiscalNo() != "Z0012-000002" {
-		t.Errorf("durum: %+v %v", s, err)
+		t.Errorf("state: %+v %v", s, err)
 	}
 	if _, err := ParseSaleStatus([]byte(`{}`)); err == nil {
-		t.Error("sepet kimliksiz durum kabul edildi")
+		t.Error("a state without a basket id was accepted")
 	}
 	if _, err := ParseSaleStatus([]byte(`yok`)); err == nil {
-		t.Error("bozuk JSON kabul edildi")
+		t.Error("broken JSON was accepted")
 	}
 }

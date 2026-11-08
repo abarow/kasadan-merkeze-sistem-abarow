@@ -65,20 +65,20 @@ func TestRegisterBuildsReceipt(t *testing.T) {
 	}
 	r := srv.got.GetReceipt()
 	if r.GetSaleId() != "s1" || r.GetRegisterId() != "register-1" || r.GetTotalKurus() != int64(s.Total()) || r.GetChangeKurus() != int64(s.Change()) {
-		t.Errorf("fiş başlığı: %v", r)
+		t.Errorf("receipt header: %v", r)
 	}
 	if !r.GetIssuedAt().AsTime().Equal(issued) {
-		t.Errorf("düzenleme zamanı %v", r.GetIssuedAt().AsTime())
+		t.Errorf("issue time %v", r.GetIssuedAt().AsTime())
 	}
 	if len(r.GetLines()) != 2 || r.GetLines()[0].GetQtyMilli() != 2000 || r.GetLines()[0].GetTotalKurus() != 3000 {
-		t.Errorf("fiş satırları: %v", r.GetLines())
+		t.Errorf("receipt lines: %v", r.GetLines())
 	}
 	if len(r.GetTaxes()) != 2 {
-		t.Errorf("KDV dökümü: %v", r.GetTaxes())
+		t.Errorf("VAT breakdown: %v", r.GetTaxes())
 	}
 	if len(r.GetPayments()) != 1 || r.GetPayments()[0].GetMethod() != fiscalv1.PaymentMethod_PAYMENT_METHOD_CASH ||
 		r.GetPayments()[0].GetAmountKurus() != 5000 || !r.GetPayments()[0].GetCollect() {
-		t.Errorf("ödemeler: %v", r.GetPayments())
+		t.Errorf("payments: %v", r.GetPayments())
 	}
 }
 
@@ -98,15 +98,15 @@ func TestRegisterErrors(t *testing.T) {
 		conn := grpctest.Conn(t, func(s *grpc.Server) { fiscalv1.RegisterFiscalServiceServer(s, srv) })
 		_, err := fiscalgrpc.New(conn).Register(context.Background(), sale(t))
 		if err == nil {
-			t.Errorf("%s: hata yok", tc.name)
+			t.Errorf("%s: no error", tc.name)
 			continue
 		}
 		if got := errors.Is(err, app.ErrNotProcessed); got != tc.notProcessed {
-			t.Errorf("%s: ErrNotProcessed = %v, istenen %v (%v)", tc.name, got, tc.notProcessed, err)
+			t.Errorf("%s: ErrNotProcessed = %v, want %v (%v)", tc.name, got, tc.notProcessed, err)
 		}
 		// The device's own message (e.g. "paper out") is kept all the way to the cashier.
 		if want := status.Convert(tc.err).Message(); !strings.Contains(err.Error(), want) {
-			t.Errorf("%s: cihaz mesajı %q kayboldu: %v", tc.name, want, err)
+			t.Errorf("%s: the device message %q was lost: %v", tc.name, want, err)
 		}
 	}
 }

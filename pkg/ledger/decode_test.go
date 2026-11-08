@@ -80,7 +80,7 @@ func TestDecodeVoid(t *testing.T) {
 		t.Fatal(err)
 	}
 	if v.SaleID != "s9" || v.StoreID != "store-1" || v.RegisterID != "register-1" || v.CashierID != "mert" || v.Total != 999 || !v.Refunded || !v.At.Equal(at) {
-		t.Errorf("iptal %+v", v)
+		t.Errorf("void %+v", v)
 	}
 }
 
@@ -135,7 +135,7 @@ func TestDecodeShift(t *testing.T) {
 
 func TestDecodeRejects(t *testing.T) {
 	if _, err := decodeAs[Sale]("sale.completed.v1", "application/json", []byte(`{"sale_id":"s1"}`)); !errors.Is(err, ErrNotProtobuf) {
-		t.Errorf("JSON olay: %v", err)
+		t.Errorf("JSON event: %v", err)
 	}
 	if _, err := decodeAs[Void]("sale.voided.v1", "", nil); !errors.Is(err, ErrNotProtobuf) {
 		t.Errorf("no content type: %v", err)
@@ -151,6 +151,6 @@ func TestDecodeRejects(t *testing.T) {
 	}
 	// An event the ledger does not know is not decoded.
 	if v, err := Decode("node.heartbeat.v1", "application/json", []byte("{}")); v != nil || err != nil {
-		t.Errorf("bilinmeyen olay: %v %v", v, err)
+		t.Errorf("unknown event: %v %v", v, err)
 	}
 }

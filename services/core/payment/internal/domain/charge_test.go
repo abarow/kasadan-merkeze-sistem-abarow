@@ -51,7 +51,7 @@ func TestValidateRequest(t *testing.T) {
 			t.Errorf("%s: %v", tc.name, err)
 		}
 		if !tc.ok && !errors.Is(err, ErrInvalidRequest) {
-			t.Errorf("%s: kabul edildi: %v", tc.name, err)
+			t.Errorf("%s: accepted: %v", tc.name, err)
 		}
 	}
 }

@@ -41,7 +41,7 @@ func TestNewReceipt(t *testing.T) {
 		"aynı ürün iki kez": {"T", "1", []Line{{ProductID: "ekmek", Qty: 1000}, {ProductID: "ekmek", Qty: 1000}}, ErrDuplicateProduct},
 	} {
 		if _, err := NewReceipt("r", c.supplier, c.ref, "ali", at, c.lines, products); !errors.Is(err, c.want) {
-			t.Errorf("%s: %v, istenen %v", name, err, c.want)
+			t.Errorf("%s: %v, want %v", name, err, c.want)
 		}
 	}
 }
@@ -114,6 +114,6 @@ func TestTransfer(t *testing.T) {
 	}
 	tr.ReceivedAt = at
 	if _, err := NewTransferIn("m5", "store-1", "x", at, tr, nil, products); !errors.Is(err, ErrTransferReceived) {
-		t.Errorf("ikinci kez: %v", err)
+		t.Errorf("second time: %v", err)
 	}
 }

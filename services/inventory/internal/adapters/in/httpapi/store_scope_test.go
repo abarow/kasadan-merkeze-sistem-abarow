@@ -63,7 +63,7 @@ func TestShopStockAPI(t *testing.T) {
 	}
 	code, body := shopDo(t, http.MethodPost, srv.URL+"/api/stock/receipts", "Müdür Ali", `{"supplier":"Un Değirmeni","ref":"IRS-1","lines":[{"product_id":"ekmek","qty_milli":20000}]}`)
 	if code != http.StatusCreated || !strings.Contains(body, `"by":"Müdür Ali"`) {
-		t.Fatalf("mal kabul: %d %s", code, body)
+		t.Fatalf("goods receipt: %d %s", code, body)
 	}
 	if code, body := shopDo(t, http.MethodPost, srv.URL+"/api/stock/receipts", "Müdür Ali", `{"supplier":"Un Değirmeni","ref":"IRS-1","lines":[{"product_id":"ekmek","qty_milli":1000}]}`); code != http.StatusConflict {
 		t.Errorf("same delivery note: %d %s", code, body)
@@ -80,10 +80,10 @@ func TestShopStockAPI(t *testing.T) {
 		QtyMilli int64  `json:"qty_milli"`
 	}
 	if code != http.StatusOK || json.Unmarshal([]byte(body), &it) != nil || it.Name != "Ekmek 250 g" || it.QtyMilli != 18000 {
-		t.Errorf("barkod: %d %s", code, body)
+		t.Errorf("barcode: %d %s", code, body)
 	}
 	if code, _ := shopDo(t, http.MethodGet, srv.URL+"/api/stock/barcode/000", "Müdür Ali", ""); code != http.StatusNotFound {
-		t.Errorf("bilinmeyen barkod: %d", code)
+		t.Errorf("unknown barcode: %d", code)
 	}
 	code, body = shopDo(t, http.MethodGet, srv.URL+"/api/stock/products/ekmek/movements", "Müdür Ali", "")
 	if code != http.StatusOK || strings.Count(body, `"kind"`) != 2 || !strings.Contains(body, `"kind":"count"`) {
@@ -91,7 +91,7 @@ func TestShopStockAPI(t *testing.T) {
 	}
 	code, body = shopDo(t, http.MethodGet, srv.URL+"/api/stock?q="+url.QueryEscape("EKMEK"), "Müdür Ali", "")
 	if code != http.StatusOK || !strings.Contains(body, `"qty_milli":{"store-1":18000}`) {
-		t.Errorf("stok listesi: %d %s", code, body)
+		t.Errorf("stock list: %d %s", code, body)
 	}
 }
 
@@ -111,7 +111,7 @@ func TestShopTransferAPI(t *testing.T) {
 		t.Errorf("yerler: %d %s", code, body)
 	}
 	if code, body := shopDo(t, http.MethodPost, srv.URL+"/api/stock/transfers", "Müdür Ali", `{"to":"store-9","lines":[{"product_id":"ekmek","qty_milli":1000}]}`); code != http.StatusUnprocessableEntity {
-		t.Errorf("bilinmeyen yer: %d %s", code, body)
+		t.Errorf("unknown place: %d %s", code, body)
 	}
 	if code, body := shopDo(t, http.MethodPost, srv.URL+"/api/stock/transfers", "Müdür Ali", `{"to":"store-2","lines":[{"product_id":"ekmek","qty_milli":2000}]}`); code != http.StatusCreated || !strings.Contains(body, `"to":"store-2"`) {
 		t.Errorf("send: %d %s", code, body)
@@ -121,10 +121,10 @@ func TestShopTransferAPI(t *testing.T) {
 		t.Fatalf("teslim al: %d %s", code, body)
 	}
 	if code, _ := shopDo(t, http.MethodPost, srv.URL+"/api/stock/transfers/T-1/receive", "Müdür Ali", `{}`); code != http.StatusConflict {
-		t.Errorf("ikinci kez: %d", code)
+		t.Errorf("second time: %d", code)
 	}
 	if code, _ := shopDo(t, http.MethodPost, srv.URL+"/api/stock/transfers/T-9/receive", "Müdür Ali", `{}`); code != http.StatusNotFound {
-		t.Errorf("bilinmeyen transfer: %d", code)
+		t.Errorf("unknown transfer: %d", code)
 	}
 	code, body = shopDo(t, http.MethodGet, srv.URL+"/api/stock/transfers", "Müdür Ali", "")
 	if code != http.StatusOK || !strings.Contains(body, `"here":"store-1"`) || !strings.Contains(body, `"received_milli":5000`) || strings.Count(body, `"pending"`) != 2 {
@@ -132,6 +132,6 @@ func TestShopTransferAPI(t *testing.T) {
 	}
 	// The 2 sent was deducted, the 5 received was added.
 	if code, body := shopDo(t, http.MethodGet, srv.URL+"/api/stock/barcode/8690000000012", "Müdür Ali", ""); code != http.StatusOK || !strings.Contains(body, `"qty_milli":3000`) {
-		t.Errorf("stok: %d %s", code, body)
+		t.Errorf("stock: %d %s", code, body)
 	}
 }

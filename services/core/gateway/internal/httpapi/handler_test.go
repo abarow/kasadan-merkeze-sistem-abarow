@@ -238,7 +238,7 @@ func TestCheckoutTranslatesToSales(t *testing.T) {
 
 	code, body := do(t, http.MethodPost, srv.URL+"/api/sales/s1/checkout", "kasiyer", `{"payments":[{"method":"cash","amount_kurus":20000}]}`)
 	if code != http.StatusOK {
-		t.Fatalf("durum %d: %s", code, body)
+		t.Fatalf("status %d: %s", code, body)
 	}
 	var out map[string]any
 	_ = json.Unmarshal([]byte(body), &out)
@@ -269,7 +269,7 @@ func TestCheckoutErrors(t *testing.T) {
 			defer srv.Close()
 			code, body := do(t, http.MethodPost, srv.URL+"/api/sales/s1/checkout", "kasiyer", tt.body)
 			if code != tt.want || !strings.Contains(body, `"error"`) {
-				t.Errorf("durum %d (%s), istenen %d", code, body, tt.want)
+				t.Errorf("status %d (%s), want %d", code, body, tt.want)
 			}
 		})
 	}
@@ -301,7 +301,7 @@ func TestAuthorization(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if code, body := do(t, tt.method, srv.URL+tt.path, tt.token, ""); code != tt.want {
-				t.Errorf("durum %d (%s), istenen %d", code, body, tt.want)
+				t.Errorf("status %d (%s), want %d", code, body, tt.want)
 			}
 		})
 	}
@@ -328,7 +328,7 @@ func TestXReport(t *testing.T) {
 	code, body := do(t, http.MethodGet, srv.URL+"/api/reports/x", "kasiyer", "")
 	var out map[string]any
 	if err := json.Unmarshal([]byte(body), &out); err != nil || code != http.StatusOK {
-		t.Fatalf("durum %d: %s", code, body)
+		t.Fatalf("status %d: %s", code, body)
 	}
 	payments, _ := out["payments"].([]any)
 	if out["z_no"] != float64(3) || out["total_kurus"] != float64(17437) || out["opened_at"] == nil || out["closed_at"] != nil || len(payments) != 2 {
@@ -361,7 +361,7 @@ func TestShift(t *testing.T) {
 		t.Errorf("sale in the shift: %d %s", code, body)
 	}
 	if code, body := do(t, http.MethodPost, srv.URL+"/api/shift/open", "mudur", `{"opening_cash_kurus":0}`); code != http.StatusConflict || !strings.Contains(body, "açık vardiya") {
-		t.Errorf("ikinci vardiya: %d %s", code, body)
+		t.Errorf("second shift: %d %s", code, body)
 	}
 
 	// Closing is on behalf of the cashier in the session; the report carries the expected cash and the difference.
@@ -374,7 +374,7 @@ func TestShift(t *testing.T) {
 		t.Errorf("closing that went to staff: %v", staff.closed)
 	}
 	if out["expected_cash_kurus"] != float64(53500) || out["difference_kurus"] != float64(-100) || out["receipt_count"] != float64(2) {
-		t.Errorf("vardiya raporu: %v", out)
+		t.Errorf("shift report: %v", out)
 	}
 }
 
@@ -390,7 +390,7 @@ func TestCashMovement(t *testing.T) {
 	}
 	m := staff.movement
 	if m.GetCashierId() != "ali" || m.GetKind() != staffv1.CashMovementKind_CASH_MOVEMENT_KIND_OUT || m.GetAmountKurus() != 20000 || m.GetNote() != "Ara para" {
-		t.Errorf("staff'a giden hareket: %v", m)
+		t.Errorf("movement sent to staff: %v", m)
 	}
 	if code, _ := do(t, http.MethodPost, srv.URL+"/api/shift/cash", "mudur", `{"kind":"avans","amount_kurus":1,"note":"?"}`); code != http.StatusBadRequest {
 		t.Errorf("unknown direction: %d", code)
@@ -408,7 +408,7 @@ func TestShiftHistory(t *testing.T) {
 	// The list is requested on behalf of the cashier in the session; the limit is clamped to 1-100.
 	code, body := do(t, http.MethodGet, srv.URL+"/api/shifts?limit=500", "kasiyer", "")
 	if code != http.StatusOK || !strings.Contains(body, `"cashier_name":"Kasiyer Ayşe"`) {
-		t.Fatalf("liste: %d %s", code, body)
+		t.Fatalf("list: %d %s", code, body)
 	}
 	if staff.listed.GetCashierId() != "ayse" || staff.listed.GetLimit() != 100 {
 		t.Errorf("list request that went to staff: %v", staff.listed)
@@ -417,10 +417,10 @@ func TestShiftHistory(t *testing.T) {
 	code, body = do(t, http.MethodGet, srv.URL+"/api/shifts/7/report", "mudur", "")
 	var out map[string]any
 	if err := json.Unmarshal([]byte(body), &out); err != nil || code != http.StatusOK {
-		t.Fatalf("rapor: %d %s", code, body)
+		t.Fatalf("report: %d %s", code, body)
 	}
 	if out["expected_cash_kurus"] != float64(53500) || out["cash_in_kurus"] != float64(10000) {
-		t.Errorf("rapor: %v", out)
+		t.Errorf("report: %v", out)
 	}
 	if code, _ := do(t, http.MethodGet, srv.URL+"/api/shifts/7/report", "kasiyer", ""); code != http.StatusForbidden {
 		t.Errorf("someone else's report: %d", code)
@@ -441,7 +441,7 @@ func TestManagerApproval(t *testing.T) {
 	}
 	code, body := do(t, http.MethodPost, srv.URL+"/api/auth/approve", "kasiyer", `{"manager_id":"ali","pin":"9999","action":"close_day"}`)
 	if code != http.StatusOK || !strings.Contains(body, `"approval_token":"onay"`) {
-		t.Fatalf("onay: %d %s", code, body)
+		t.Fatalf("approval: %d %s", code, body)
 	}
 	if staff.approved.GetRequestedBy() != "ayse" || staff.approved.GetAction() != staffv1.Action_ACTION_CLOSE_DAY {
 		t.Errorf("approval request that went to staff: %v", staff.approved)
@@ -487,7 +487,7 @@ func TestListChargedSales(t *testing.T) {
 		t.Errorf("charged sales: %d %s", code, body)
 	}
 	if code, _ := do(t, http.MethodGet, srv.URL+"/api/sales?status=hepsi", "kasiyer", ""); code != http.StatusBadRequest {
-		t.Errorf("bilinmeyen durum: %d", code)
+		t.Errorf("unknown status: %d", code)
 	}
 	if code, _ := do(t, http.MethodGet, srv.URL+"/api/sales?status=charged", "mudur", ""); code != http.StatusConflict {
 		t.Errorf("cashier with no shift: %d", code)
@@ -518,7 +518,7 @@ func TestOpenDrawer(t *testing.T) {
 		t.Fatalf("drawer: %d", code)
 	}
 	if d := staff.drawer; d.GetCashierId() != "ayse" || d.GetApprovalToken() != "onay" || d.GetReason() != "Bozuk para" {
-		t.Errorf("staff'a giden istek: %v", d)
+		t.Errorf("request sent to staff: %v", d)
 	}
 }
 
@@ -559,7 +559,7 @@ func TestUpdateStatus(t *testing.T) {
 	defer degil.Close()
 
 	if code, _ := do(t, http.MethodGet, installed.URL+"/api/update/status", "", ""); code != http.StatusUnauthorized {
-		t.Errorf("oturumsuz durum %d, istenen 401", code)
+		t.Errorf("without a session status %d, want 401", code)
 	}
 	code, body := do(t, http.MethodGet, installed.URL+"/api/update/status", "kasiyer", "")
 	if code != http.StatusOK || !strings.Contains(body, `"code":"ABCD-2345"`) || !strings.Contains(body, `"path":"/api/update/status"`) {
@@ -604,7 +604,7 @@ func TestUpdateWriteNeedsManagerApproval(t *testing.T) {
 		t.Fatalf("manager approval: %d %s", code, body)
 	}
 	if got.path != "/api/update/apply" || got.user != "ali" || got.role != "manager" || got.secret != "gizli" || got.approval != "" {
-		t.Errorf("ajana giden: %+v", got)
+		t.Errorf("sent to the agent: %+v", got)
 	}
 	// A manager session can do it without approval too; skip and snooze follow the same rule.
 	for _, op := range []string{"skip", "snooze"} {

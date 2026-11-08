@@ -134,7 +134,7 @@ func TestDeliveryCleaner(t *testing.T) {
 	}
 	limit, has, err := delivery.LocalFloor(ctx, store)
 	if err != nil || !has || limit != 1 {
-		t.Fatalf("LocalFloor = %d, %v, %v; 1 beklenir", limit, has, err)
+		t.Fatalf("LocalFloor = %d, %v, %v; 1 expected", limit, has, err)
 	}
 	if n, err := c.Clean(ctx, limit, time.Now().Add(-maxAge)); err != nil || n != 1 || first() != 2 {
 		t.Fatalf("local limit 1: deleted=%d err=%v first=%d", n, err, first())
@@ -172,7 +172,7 @@ func TestDeliveryCleaner(t *testing.T) {
 	}
 	limit, _, _ = delivery.LocalFloor(ctx, store)
 	if n, err := c.Clean(ctx, limit, time.Now().Add(-maxAge)); err != nil || n != 1 {
-		t.Fatalf("e3 makbuzu geldikten sonra: silinen=%d err=%v", n, err)
+		t.Fatalf("after the receipt of e3: deleted=%d err=%v", n, err)
 	}
 	if info, _ := store.Info(ctx); info.State.Msgs != 2 {
 		t.Errorf("%d messages remain; only the new e4, e5 should remain", info.State.Msgs)

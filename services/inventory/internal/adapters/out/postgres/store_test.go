@@ -32,7 +32,7 @@ func testStore(t *testing.T) *Store {
 	t.Helper()
 	dsn := os.Getenv("ABAROW_TEST_POSTGRES")
 	if dsn == "" {
-		t.Skip("ABAROW_TEST_POSTGRES yok; PostgreSQL testleri atlandı")
+		t.Skip("ABAROW_TEST_POSTGRES is not set; the PostgreSQL tests are skipped")
 	}
 	ctx := context.Background()
 	admin, err := sql.Open("pgx", dsn)
@@ -79,11 +79,11 @@ func TestWarehouseAndStores(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := svc.Receive(ctx, "un değirmeni", "IRS-1", "Merkez", []stock.Line{{ProductID: "ekmek", Qty: 1000}}); !errors.Is(err, stock.ErrDuplicateReceipt) {
-		t.Errorf("aynı irsaliye: %v", err)
+		t.Errorf("the same delivery note: %v", err)
 	}
 	m, err := svc.Count(ctx, "D-1", "Merkez", []stock.Line{{ProductID: "ekmek", Counted: 98000}})
 	if err != nil || m.Lines[0].Qty != -2000 {
-		t.Fatalf("sayım: %+v %v", m, err)
+		t.Fatalf("count: %+v %v", m, err)
 	}
 	// Even if the store's movement comes twice it is counted once; the same delivery note
 	// is separate at another place.
@@ -97,7 +97,7 @@ func TestWarehouseAndStores(t *testing.T) {
 	rec := stock.Movement{ID: "r1", Kind: stock.Receipt, Ref: "IRS-1", Supplier: "Un Değirmeni", By: "Müdür", At: time.Now(),
 		Lines: []stock.Line{{ProductID: "ekmek", Name: "Ekmek 250 g", Qty: 5000}}}
 	if err := svc.ApplyStoreMovement(ctx, "store-2", rec); err != nil {
-		t.Fatalf("başka mağazada aynı irsaliye: %v", err)
+		t.Fatalf("the same delivery note at another store: %v", err)
 	}
 
 	all := func(string) bool { return true }
@@ -116,18 +116,18 @@ func TestWarehouseAndStores(t *testing.T) {
 		t.Errorf("ekmek: %v", q)
 	}
 	if c := byID["cay"]; c.Name != "Çay 1 kg" || c.Unit != stock.Kg || c.Qty["store-1"] != -1250 {
-		t.Errorf("mağazadan öğrenilen ürün: %+v", c)
+		t.Errorf("product learned from the store: %+v", c)
 	}
 	// A person who sees only store-1 does not see store-2; the headquarters warehouse is always visible.
 	locs, rows, _ = svc.Overview(ctx, "EKMEK", func(l string) bool { return l == "store-1" })
 	if fmt.Sprint(locs) != "[headquarters store-1]" || len(rows) != 1 || len(rows[0].Qty) != 2 {
-		t.Errorf("süzülmüş: %v %+v", locs, rows)
+		t.Errorf("filtered: %v %+v", locs, rows)
 	}
 	if it, err := svc.ByBarcode(ctx, "8690000000012"); err != nil || it.Qty != 98000 {
-		t.Errorf("barkod: %+v %v", it, err)
+		t.Errorf("barcode: %+v %v", it, err)
 	}
 	if h, err := svc.History(ctx, "store-1", "ekmek"); err != nil || len(h) != 1 || h[0].Lines[0].Qty != -3000 {
-		t.Errorf("geçmiş: %+v %v", h, err)
+		t.Errorf("history: %+v %v", h, err)
 	}
 }
 
@@ -164,7 +164,7 @@ func TestTransfers(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n, err := store.CountPending(ctx); err != nil || n != 1 {
-		t.Errorf("bekleyen: %d %v", n, err)
+		t.Errorf("pending: %d %v", n, err)
 	}
 
 	list, err := svc.Transfers(ctx, func(string) bool { return true })
@@ -173,19 +173,19 @@ func TestTransfers(t *testing.T) {
 	}
 	m, err := svc.ReceiveTransfer(ctx, "T-9", "Merkez", []stock.Line{{ProductID: "ekmek", Qty: 2000}})
 	if err != nil || m.Counterpart != "store-2" {
-		t.Fatalf("depo teslim aldı: %+v %v", m, err)
+		t.Fatalf("the warehouse received: %+v %v", m, err)
 	}
 	if _, err := svc.ReceiveTransfer(ctx, "T-9", "Merkez", nil); !errors.Is(err, stock.ErrTransferReceived) {
-		t.Errorf("ikinci kez: %v", err)
+		t.Errorf("second time: %v", err)
 	}
 	got, err := store.Transfer(ctx, "T-9")
 	if err != nil || got.Pending() || got.ReceivedBy != "Merkez" || len(got.Received) != 1 || got.Received[0].Qty != 2000 {
-		t.Errorf("teslim alındı: %+v %v", got, err)
+		t.Errorf("received: %+v %v", got, err)
 	}
 	// Warehouse: −10 sent, +2 received.
 	q, err := store.Quantities(ctx, "headquarters", []string{"ekmek"})
 	if err != nil || q["ekmek"] != -8000 {
-		t.Errorf("depo stoğu: %v %v", q, err)
+		t.Errorf("warehouse stock: %v %v", q, err)
 	}
 
 	in := stock.Movement{ID: "m2", Kind: stock.TransferIn, Ref: out.ID, Counterpart: "headquarters", By: "Ayşe", At: at,
@@ -194,10 +194,10 @@ func TestTransfers(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, err := store.Transfer(ctx, out.ID); err != nil || got.Pending() || got.ReceivedBy != "Ayşe" {
-		t.Errorf("mağaza teslim aldı: %+v %v", got, err)
+		t.Errorf("the store received: %+v %v", got, err)
 	}
 	if h, err := svc.History(ctx, "store-1", "ekmek"); err != nil || len(h) != 1 || h[0].Counterpart != "headquarters" || h[0].Kind != stock.TransferIn {
-		t.Errorf("mağaza geçmişi: %+v %v", h, err)
+		t.Errorf("store history: %+v %v", h, err)
 	}
 }
 
@@ -225,14 +225,14 @@ func TestShopScope(t *testing.T) {
 		t.Fatal(err)
 	}
 	if locs, err := svc.Locations(ctx); err != nil || len(locs) != 2 {
-		t.Errorf("gönderilebilecek yerler %v %v", locs, err)
+		t.Errorf("places it can be sent to %v %v", locs, err)
 	}
 	// The last state of the place list is valid.
 	if err := svc.ApplyLocations(ctx, []stock.Location{{ID: "headquarters", Name: "Merkez"}}); err != nil {
 		t.Fatal(err)
 	}
 	if locs, _ := svc.Locations(ctx); len(locs) != 1 {
-		t.Errorf("son hal: %v", locs)
+		t.Errorf("last state: %v", locs)
 	}
 
 	pending, err := store.Pending(ctx, 10)
@@ -241,11 +241,11 @@ func TestShopScope(t *testing.T) {
 	}
 	for _, p := range pending {
 		if p.StoreID != "store-1" {
-			t.Errorf("mesajın mağazası %q, istenen store-1", p.StoreID)
+			t.Errorf("the message's store %q, want store-1", p.StoreID)
 		}
 	}
 	// In the headquarters view the same warehouse reads with the headquarters id.
 	if headquartersPending, _ := store.Shop("").Pending(ctx, 10); len(headquartersPending) == 0 || headquartersPending[0].StoreID != app.Warehouse {
-		t.Errorf("merkez görünümü: %+v", headquartersPending)
+		t.Errorf("headquarters view: %+v", headquartersPending)
 	}
 }

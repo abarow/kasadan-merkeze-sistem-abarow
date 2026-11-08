@@ -96,7 +96,7 @@ func TestCatalogChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	if p.Version != 2 || len(p.Prices) != 2 || p.UpdatedBy != "mehmet" {
-		t.Errorf("fiyat takvimi %+v", p)
+		t.Errorf("price schedule %+v", p)
 	}
 	if c := repo.changes[len(repo.changes)-1]; c.By != "mehmet" || c.Action != app.ActionPriceScheduled || c.Detail != "fiyat 16,50 TL, 02.11.2026 00:00 itibarıyla" {
 		t.Errorf("change record %+v", c)
@@ -124,7 +124,7 @@ func TestCatalogChanges(t *testing.T) {
 	}
 	msg := repo.outbox[len(repo.outbox)-1]
 	if msg.Subject != "catalog.product.ekmek" || msg.Type != "com.abarow.catalog.product.v1" || msg.ContentType != "application/protobuf" || !msg.OccurredAt.Equal(now) {
-		t.Errorf("mesaj %+v", msg)
+		t.Errorf("message %+v", msg)
 	}
 	var state catalogv1.ProductState
 	if err := proto.Unmarshal(msg.Payload, &state); err != nil {
@@ -142,7 +142,7 @@ func TestCatalogChanges(t *testing.T) {
 	// A future-dated price is withdrawn.
 	p, err = svc.CancelPrice(ctx, "ayse", "ekmek", 4, monday)
 	if err != nil || len(p.Prices) != 1 {
-		t.Errorf("geri alma: %+v %v", p.Prices, err)
+		t.Errorf("undo: %+v %v", p.Prices, err)
 	}
 	if _, err := svc.SchedulePrice(ctx, "ayse", "yok", 1, 1, time.Time{}); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("non-existent product: %v", err)
@@ -213,7 +213,7 @@ func TestMenuAndImage(t *testing.T) {
 		t.Fatalf("menu product: %+v %v", p, err)
 	}
 	if _, err := svc.Update(ctx, "ayse", "kofte", 1, app.Info{Name: "Köfte", Unit: domain.Piece, Station: "salon"}); !errors.Is(err, domain.ErrInvalidProduct) {
-		t.Errorf("bilinmeyen istasyon: %v", err)
+		t.Errorf("unknown station: %v", err)
 	}
 	if _, err := svc.SetImage(ctx, "ayse", "kofte", 1, []byte("<svg/>")); !errors.Is(err, domain.ErrInvalidProduct) {
 		t.Errorf("SVG: %v", err)

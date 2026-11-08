@@ -359,7 +359,7 @@ func readStream(stream string) []string {
 	}
 }
 
-// role, bir NATS sunucusunun katmandaki yeridir.
+// role is a NATS server's place in the tiers.
 type role struct {
 	Title       string
 	Permissions map[string]permission

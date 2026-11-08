@@ -45,7 +45,7 @@ func TestEventID(t *testing.T) {
 		t.Errorf("Nats-Msg-Id should be the fallback: %q", got)
 	}
 	if got := EventID(nats.Header{}); got != "" {
-		t.Errorf("kimliksiz mesaj: %q", got)
+		t.Errorf("message without an id: %q", got)
 	}
 }
 
@@ -73,7 +73,7 @@ func TestOutboxMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 	if m.ID != "r1" || m.Type != ReceiptType || m.Subject != "receipt.register-1.abarow_sales" || m.ContentType != "application/json" {
-		t.Errorf("mesaj = %+v", m)
+		t.Errorf("message = %+v", m)
 	}
 	back, err := ParseReceipt(m.Payload)
 	if err != nil || back != r {
@@ -147,7 +147,7 @@ func TestCleanDeletesOnlyReceiptedOld(t *testing.T) {
 	}
 	// Receipt recorded and old: 1, 3, 4. e8 and e9 have receipts but are new; e2 e5 e6 are old but have no receipt.
 	if n != 3 {
-		t.Errorf("silinen %d; 3 beklenir (%v)", n, f.deleted)
+		t.Errorf("deleted %d; 3 expected (%v)", n, f.deleted)
 	}
 	for _, s := range []uint64{2, 5, 6, 7, 8, 9} {
 		if _, ok := f.entries[s]; !ok {
@@ -160,7 +160,7 @@ func TestCleanNoReceiptsDeletesNothing(t *testing.T) {
 	f := old(9)
 	c := &Cleaner{Log: f, Received: has()}
 	if n, err := c.Clean(context.Background(), 0, now); err != nil || n != 0 || len(f.entries) != 9 {
-		t.Fatalf("makbuz yokken n=%d err=%v kalan=%d", n, err, len(f.entries))
+		t.Fatalf("without a receipt n=%d err=%v left=%d", n, err, len(f.entries))
 	}
 }
 
@@ -169,7 +169,7 @@ func TestCleanRespectsLocalLimit(t *testing.T) {
 	c := &Cleaner{Log: f, Received: has("e1", "e2", "e3", "e4", "e5")}
 	// The local consumer has processed up to 3: 4 and 5 stay even though they have receipts and are old.
 	if n, err := c.Clean(context.Background(), 3, now); err != nil || n != 3 {
-		t.Fatalf("n=%d err=%v; 3 beklenir", n, err)
+		t.Fatalf("n=%d err=%v; 3 expected", n, err)
 	}
 	for _, s := range []uint64{4, 5} {
 		if _, ok := f.entries[s]; !ok {
@@ -186,7 +186,7 @@ func TestCleanSkipsMessagesWithoutEventID(t *testing.T) {
 		t.Fatalf("n=%d err=%v", n, err)
 	}
 	if _, ok := f.entries[2]; !ok {
-		t.Error("kimliksiz mesaj silindi")
+		t.Error("a message without an id was deleted")
 	}
 }
 
@@ -206,7 +206,7 @@ func TestCleanGapsAndBudgetResume(t *testing.T) {
 		total += n
 	}
 	if total != 3 {
-		t.Errorf("toplam %d silindi; 3 beklenir", total)
+		t.Errorf("%d deleted in all; 3 expected", total)
 	}
 }
 
@@ -222,11 +222,11 @@ func TestCleanLateReceiptIsPickedUp(t *testing.T) {
 	}}
 	cutoff := now.AddDate(0, 0, -1)
 	if n, _ := c.Clean(context.Background(), 0, cutoff); n != 0 {
-		t.Fatalf("makbuzsuz silindi: %d", n)
+		t.Fatalf("deleted without a receipt: %d", n)
 	}
 	got["e2"] = true // makbuz sonradan geldi
 	if n, err := c.Clean(context.Background(), 0, cutoff); err != nil || n != 1 {
-		t.Fatalf("sonradan gelen makbuz: n=%d err=%v", n, err)
+		t.Fatalf("a receipt that came later: n=%d err=%v", n, err)
 	}
 }
 

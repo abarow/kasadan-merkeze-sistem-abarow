@@ -165,7 +165,7 @@ func TestFailures(t *testing.T) {
 	}
 	d.status = domain.StatusOK
 	if _, err := svc.Register(context.Background(), receipt("s2")); err != nil || d.count("basket") != 2 {
-		t.Errorf("yeniden deneme: %v, sepet %d kez gitti", err, d.count("basket"))
+		t.Errorf("retry: %v, the basket went %d times", err, d.count("basket"))
 	}
 	d.status = domain.StatusVoided
 	if _, err := svc.Register(context.Background(), receipt("s3")); !errors.Is(err, ErrVoided) {
@@ -175,7 +175,7 @@ func TestFailures(t *testing.T) {
 	// Cihaz sepeti kabul etmezse.
 	d.accept = "0"
 	if _, err := svc.Register(context.Background(), receipt("s4")); !errors.Is(err, ErrRejected) {
-		t.Errorf("kabul edilmeyen sepet: %v", err)
+		t.Errorf("basket not accepted: %v", err)
 	}
 	d.accept = "1"
 

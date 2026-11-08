@@ -51,7 +51,7 @@ func TestCashiers(t *testing.T) {
 		{"ayse", "Ayşe", "1234", "patron", domain.ErrInvalidRole},
 	} {
 		if _, err := cashiers.Add(ctx, "mağaza", tc.id, tc.name, tc.role, tc.pin, ""); !errors.Is(err, tc.want) {
-			t.Errorf("%q %q %q %q: hata = %v, istenen %v", tc.id, tc.name, tc.pin, tc.role, err, tc.want)
+			t.Errorf("%q %q %q %q: error = %v, want %v", tc.id, tc.name, tc.pin, tc.role, err, tc.want)
 		}
 	}
 
@@ -70,25 +70,25 @@ func TestCashiers(t *testing.T) {
 		t.Fatalf("hesap kapatma: %+v %v", c, err)
 	}
 	if _, err := cashiers.SetDisabled(ctx, "mağaza", "yok", true); !errors.Is(err, domain.ErrCashierNotFound) {
-		t.Errorf("olmayan kasiyer: %v", err)
+		t.Errorf("cashier that does not exist: %v", err)
 	}
 	c, history, err := cashiers.Get(ctx, "zeynep")
 	if err != nil || c.Name != "Zeynep Kaya" || c.Role != domain.RoleManager || !c.Disabled ||
 		bcrypt.CompareHashAndPassword(c.PINHash, []byte("8642")) != nil {
-		t.Fatalf("kasiyer %+v %v", c, err)
+		t.Fatalf("cashier %+v %v", c, err)
 	}
 	wantHistory := []string{"hesap kapatıldı", "PIN değişti", "ad: Zeynep Demir → Zeynep Kaya; rol: kasiyer → müdür", "eklendi: Zeynep Demir (kasiyer)"}
 	if len(history) != len(wantHistory) {
-		t.Fatalf("geçmiş %+v", history)
+		t.Fatalf("history %+v", history)
 	}
 	for i, h := range history {
 		if h.Detail != wantHistory[i] || h.By != "mağaza" || !h.At.Equal(now) {
-			t.Errorf("geçmiş %d: %+v", i, h)
+			t.Errorf("history %d: %+v", i, h)
 		}
 	}
 	list, err := cashiers.List(ctx)
 	if err != nil || len(list) != 2 || list[0].ID != "cem" || list[1].ID != "zeynep" {
-		t.Errorf("liste (önce açık hesaplar): %+v %v", list, err)
+		t.Errorf("list (open accounts first): %+v %v", list, err)
 	}
 
 	// Loading from a file: an existing one is updated (a closed account stays closed), a missing one
@@ -97,21 +97,21 @@ func TestCashiers(t *testing.T) {
 		{ID: "ayse", Name: "Ayşe", Role: domain.RoleCashier, PIN: "1111"},
 		{ID: "ali", Name: "Ali", Role: domain.RoleManager, PIN: "99"},
 	}); !errors.Is(err, domain.ErrInvalidPIN) {
-		t.Errorf("hatalı dosya: %v", err)
+		t.Errorf("faulty file: %v", err)
 	}
 	if _, _, err := cashiers.Get(ctx, "ayse"); !errors.Is(err, domain.ErrCashierNotFound) {
-		t.Errorf("hatalı dosyadan kasiyer yüklendi: %v", err)
+		t.Errorf("cashiers were loaded from a faulty file: %v", err)
 	}
 	count, err := cashiers.Import(ctx, "kurulum", []app.SeedCashier{
 		{ID: "ayse", Name: "Kasiyer Ayşe", Role: domain.RoleCashier, PIN: "1111"},
 		{ID: "zeynep", Name: "Zeynep Kaya", Role: domain.RoleCashier, PIN: "2222"},
 	})
 	if err != nil || count != 2 {
-		t.Fatalf("yükleme: %d %v", count, err)
+		t.Fatalf("load: %d %v", count, err)
 	}
 	c, history, _ = cashiers.Get(ctx, "zeynep")
 	if !c.Disabled || c.Role != domain.RoleCashier || history[0].Detail != "dosyadan yüklendi: Zeynep Kaya (kasiyer)" || history[0].By != "kurulum" {
-		t.Errorf("dosyadan güncellenen: %+v %+v", c, history[0])
+		t.Errorf("updated from the file: %+v %+v", c, history[0])
 	}
 	names, err := cashiers.Names(ctx)
 	if err != nil || names["ayse"] != "Kasiyer Ayşe" || names["cem"] != "Cem Öz" {
@@ -125,7 +125,7 @@ func TestCashiers(t *testing.T) {
 	}
 	// 2 additions + 1 name/role + PIN + closing + 2 loads = 7 changes.
 	if len(pending) != 14 {
-		t.Fatalf("outbox'ta %d mesaj", len(pending))
+		t.Fatalf("%d messages in the outbox", len(pending))
 	}
 	cfg, ev := pending[len(pending)-2], pending[len(pending)-1]
 	if cfg.Subject != "config.cashier.zeynep" || cfg.Type != cashierproto.ConfigType || ev.Subject != "store.cashier.changed.v1" || ev.Type != cashierproto.EventType {
@@ -140,9 +140,9 @@ func TestCashiers(t *testing.T) {
 	}
 	if cs.GetCashierId() != "zeynep" || cs.GetName() != "Zeynep Kaya" || cs.GetRole() != "cashier" || !cs.GetDisabled() ||
 		cs.GetStoreId() != "store-1" || cs.GetUpdatedBy() != "kurulum" || bcrypt.CompareHashAndPassword(cs.GetPinHash(), []byte("2222")) != nil {
-		t.Errorf("kasalara giden %+v", &cs)
+		t.Errorf("sent to the registers %+v", &cs)
 	}
 	if len(es.GetPinHash()) != 0 || es.GetName() != "Zeynep Kaya" || !es.GetDisabled() || es.GetEventId() == cs.GetEventId() {
-		t.Errorf("merkeze giden %+v", &es)
+		t.Errorf("sent to headquarters %+v", &es)
 	}
 }

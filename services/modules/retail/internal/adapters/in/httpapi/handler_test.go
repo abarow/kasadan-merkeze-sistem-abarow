@@ -86,7 +86,7 @@ func TestBasketFlow(t *testing.T) {
 
 	code, b := call(t, srv, "POST", "/api/module/baskets", "")
 	if code != http.StatusCreated || b["id"] != "b1" || b["status"] != "open" {
-		t.Fatalf("yeni sepet: %d %v", code, b)
+		t.Fatalf("new basket: %d %v", code, b)
 	}
 	if lines, ok := b["lines"].([]any); !ok || len(lines) != 0 {
 		t.Fatalf("the lines of an empty basket should be an array: %v", b["lines"])
@@ -102,11 +102,11 @@ func TestBasketFlow(t *testing.T) {
 	}
 	code, b = call(t, srv, "GET", "/api/module/baskets/current", "")
 	if code != 200 || b["id"] != "b1" {
-		t.Fatalf("devam edilecek sepet: %d %v", code, b)
+		t.Fatalf("basket to continue: %d %v", code, b)
 	}
 	code, b = call(t, srv, "GET", "/api/module/baskets/b1", "")
 	if code != 200 || b["id"] != "b1" {
-		t.Fatalf("sepet okuma: %d %v", code, b)
+		t.Fatalf("reading the basket: %d %v", code, b)
 	}
 
 	code, b = call(t, srv, "POST", "/api/module/baskets/b1/checkout", "")
@@ -150,7 +150,7 @@ func TestBadRequests(t *testing.T) {
 	}
 	for _, tc := range tests {
 		if code, out := call(t, srv, tc.method, tc.path, tc.body); code != tc.want {
-			t.Errorf("%s: %d %v, istenen %d", tc.name, code, out, tc.want)
+			t.Errorf("%s: %d %v, want %d", tc.name, code, out, tc.want)
 		}
 	}
 	// An empty basket cannot be sent to the register.
@@ -177,7 +177,7 @@ func TestErrorStatus(t *testing.T) {
 		call(t, srv, "POST", "/api/module/baskets", "")
 		call(t, srv, "POST", "/api/module/baskets/b1/items", `{"barcode":"8690000000012"}`)
 		if code, _ := call(t, srv, "POST", "/api/module/baskets/b1/checkout", ""); code != tc.want {
-			t.Errorf("%s: %d, istenen %d", tc.name, code, tc.want)
+			t.Errorf("%s: %d, want %d", tc.name, code, tc.want)
 		}
 	}
 }

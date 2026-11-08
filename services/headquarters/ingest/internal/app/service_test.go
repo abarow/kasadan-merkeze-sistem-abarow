@@ -125,7 +125,7 @@ func TestRecord(t *testing.T) {
 		t.Errorf("event with no body: %v, %v", fresh, err)
 	}
 	if len(store.events) != 2 {
-		t.Errorf("saklanan olaylar: %+v", store.events)
+		t.Errorf("stored events: %+v", store.events)
 	}
 }
 

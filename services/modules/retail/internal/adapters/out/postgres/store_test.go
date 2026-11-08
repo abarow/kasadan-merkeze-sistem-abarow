@@ -47,7 +47,7 @@ func TestBasketsSurviveRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(got, b) {
-		t.Errorf("sepet değişti:\n%+v\nistenen\n%+v", got, b)
+		t.Errorf("the basket changed:\n%+v\nwant\n%+v", got, b)
 	}
 
 	// The state and the sale of a basket that went to payment are stored.
@@ -66,22 +66,22 @@ func TestBasketsSurviveRestart(t *testing.T) {
 	}
 	latest, err := st.Latest(ctx, "ayse", now)
 	if err != nil || latest.ID != "b1" || latest.Status != domain.CheckedOut || latest.SaleID != "sale-1" {
-		t.Errorf("son sepet: %+v, %v", latest, err)
+		t.Errorf("last basket: %+v, %v", latest, err)
 	}
 	if _, err := st.Latest(ctx, "mert", now); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("başka kasiyerin sepeti: %v", err)
+		t.Errorf("another cashier's basket: %v", err)
 	}
 	if _, err := st.Latest(ctx, "ayse", now.Add(time.Hour)); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("pencere dışı sepet: %v", err)
+		t.Errorf("basket outside the window: %v", err)
 	}
 
 	if err := st.DeleteBefore(ctx, now.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.Get(ctx, "b2"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("eski sepet silinmedi: %v", err)
+		t.Errorf("the old basket was not deleted: %v", err)
 	}
 	if _, err := st.Get(ctx, "b1"); err != nil {
-		t.Errorf("yeni sepet silindi: %v", err)
+		t.Errorf("the new basket was deleted: %v", err)
 	}
 }

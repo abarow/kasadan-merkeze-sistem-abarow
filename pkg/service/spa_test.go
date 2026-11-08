@@ -26,7 +26,7 @@ func TestSPA(t *testing.T) {
 	os.MkdirAll(filepath.Join(dir, "assets"), 0o755)
 	os.WriteFile(filepath.Join(dir, "assets", "app.js"), []byte("kod"), 0o644)
 	if code, body := get("/assets/app.js"); code != http.StatusOK || body != "kod" {
-		t.Errorf("dosya: %d %q", code, body)
+		t.Errorf("file: %d %q", code, body)
 	}
 	// An unknown path (the screen's own path) falls back to index.html.
 	if code, body := get("/raporlar/bugun"); code != http.StatusOK || body != "ana sayfa" {

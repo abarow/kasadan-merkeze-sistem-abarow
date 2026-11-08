@@ -27,7 +27,7 @@ func TestEffective(t *testing.T) {
 	} {
 		a, s, ok := Effective(headquarters, store, tt.at)
 		if !ok || int64(a) != tt.amount || s != tt.store {
-			t.Errorf("%v: %d %v %v; istenen %d %v", tt.at, a, s, ok, tt.amount, tt.store)
+			t.Errorf("%v: %d %v %v; want %d %v", tt.at, a, s, ok, tt.amount, tt.store)
 		}
 	}
 	// A product not yet in effect.
@@ -46,7 +46,7 @@ func TestPlanCancelPrune(t *testing.T) {
 	}
 	later := now.Add(24 * time.Hour)
 	if p, err = Plan(p, 950, false, later, now); err != nil || len(p) != 2 || p[1] != (Point{Amount: 950, From: later}) {
-		t.Fatalf("ileri tarih: %+v %v", p, err)
+		t.Fatalf("future date: %+v %v", p, err)
 	}
 	// A new record at the same moment takes the place of the old one.
 	if p, _ = Plan(p, 0, true, later, now); len(p) != 2 || !p[1].Clear {
@@ -59,17 +59,17 @@ func TestPlanCancelPrune(t *testing.T) {
 		t.Errorf("non-existent record: %v", err)
 	}
 	if p, err = Cancel(p, later, now); err != nil || !slices.Equal(p, []Point{{Amount: 900}}) {
-		t.Errorf("geri alma: %+v %v", p, err)
+		t.Errorf("undo: %+v %v", p, err)
 	}
 	if _, err := Plan(nil, -1, false, now, now); !errors.Is(err, ErrInvalid) {
-		t.Errorf("negatif fiyat: %v", err)
+		t.Errorf("negative price: %v", err)
 	}
 	// If the record in effect is a removal it drops out of the schedule.
 	if got := Prune([]Point{{Amount: 900}, {Clear: true, From: now.Add(-time.Minute)}}, now); len(got) != 0 {
 		t.Errorf("lifted exception: %+v", got)
 	}
 	if up := Upcoming([]Point{{Amount: 1, From: later}, {Amount: 2}, {Amount: 3, From: now.Add(time.Hour)}}, now); len(up) != 2 || up[0].Amount != 3 {
-		t.Errorf("ileri tarihliler: %+v", up)
+		t.Errorf("future-dated: %+v", up)
 	}
 }
 
@@ -79,7 +79,7 @@ func TestValidate(t *testing.T) {
 	}
 	for _, bad := range [][]Point{{{Amount: -1}}, {{Amount: 1, From: now}, {Amount: 2, From: now}}, {{Amount: 1}, {Amount: 2}}} {
 		if err := Validate(bad); !errors.Is(err, ErrInvalid) {
-			t.Errorf("%+v kabul edildi", bad)
+			t.Errorf("%+v was accepted", bad)
 		}
 	}
 }

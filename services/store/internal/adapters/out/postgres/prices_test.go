@@ -44,7 +44,7 @@ func TestStorePrices(t *testing.T) {
 	}
 	list, err := prices.List(ctx, "")
 	if err != nil || len(list) != 3 || list[0].Product.ID != "cips" || list[1].Product.ID != "cay" || list[2].Product.ID != "ekmek" {
-		t.Fatalf("liste (Türk alfabesi sırası: Cips, Çay, Ekmek) %+v %v", list, err)
+		t.Fatalf("list (Turkish alphabet order: Cips, Çay, Ekmek) %+v %v", list, err)
 	}
 	if list[2].Headquarters != 1500 || list[2].HasStore || len(list[2].HeadquartersUpcoming) != 1 {
 		t.Errorf("ekmek %+v", list[2])
@@ -58,24 +58,24 @@ func TestStorePrices(t *testing.T) {
 	// An immediately valid store price; removal at a future date.
 	pp, err := prices.SetPrice(ctx, "mağaza", "ekmek", 1800, time.Time{})
 	if err != nil || !pp.HasStore || pp.Store != 1800 || pp.Headquarters != 1500 {
-		t.Fatalf("mağaza fiyatı %+v %v", pp, err)
+		t.Fatalf("store price %+v %v", pp, err)
 	}
 	pp, err = prices.Clear(ctx, "mağaza", "ekmek", monday)
 	if err != nil || pp.Store != 1800 || len(pp.StoreUpcoming) != 1 || !pp.StoreUpcoming[0].Clear {
-		t.Fatalf("ileri tarihli kaldırma %+v %v", pp, err)
+		t.Fatalf("future-dated removal %+v %v", pp, err)
 	}
 	if _, err := prices.SetPrice(ctx, "mağaza", "yok", 1, time.Time{}); !errors.Is(err, domain.ErrProductNotFound) {
-		t.Errorf("olmayan ürün: %v", err)
+		t.Errorf("product that does not exist: %v", err)
 	}
 	if _, err := prices.SetPrice(ctx, "mağaza", "ekmek", -1, time.Time{}); !errors.Is(err, domain.ErrInvalidPrice) {
-		t.Errorf("negatif fiyat: %v", err)
+		t.Errorf("negative price: %v", err)
 	}
 	// The same schedule when reopened.
 	pp, history, err := prices.Get(ctx, "ekmek")
 	if err != nil || pp.Store != 1800 || len(pp.StorePoints) != 2 || len(history) != 2 ||
 		history[0].Detail != "mağaza fiyatı kaldırıldı, merkez fiyatı geçerli, 02.11.2026 00:00 itibarıyla" ||
 		history[1].Detail != "mağaza fiyatı 18,00 TL (hemen)" || history[1].By != "mağaza" {
-		t.Errorf("ürün %+v %+v %v", pp, history, err)
+		t.Errorf("product %+v %+v %v", pp, history, err)
 	}
 	// Pazartesi gelince istisna kalkar.
 	now = monday
@@ -90,7 +90,7 @@ func TestStorePrices(t *testing.T) {
 	// Every change is two messages: the store setting to the registers, the event to headquarters.
 	pending, err := st.Pending(ctx, 100)
 	if err != nil || len(pending) != 6 {
-		t.Fatalf("bekleyen %d mesaj; 6 olmalı (%v)", len(pending), err)
+		t.Fatalf("%d messages pending; 6 expected (%v)", len(pending), err)
 	}
 	if pending[0].Subject != "config.price.ekmek" || pending[1].Subject != "store.price.changed.v1" || pending[0].StoreID != "store-1" {
 		t.Errorf("konular %s %s", pending[0].Subject, pending[1].Subject)
@@ -101,12 +101,12 @@ func TestStorePrices(t *testing.T) {
 	}
 	if sp.GetProductId() != "ekmek" || sp.GetProductName() != "Ekmek 250 g" || sp.GetStoreId() != "store-1" || len(sp.GetPrices()) != 1 ||
 		sp.GetPrices()[0].GetUnitPriceKurus() != 1800 || sp.GetPrices()[0].GetFrom() != nil || sp.GetUpdatedBy() != "mağaza" {
-		t.Errorf("son mağaza ayarı %v", &sp)
+		t.Errorf("last store setting %v", &sp)
 	}
 	if err := st.MarkPublished(ctx, pending[0].Seq, now); err != nil {
 		t.Fatal(err)
 	}
 	if c, _ := st.CountPending(ctx); c != 5 {
-		t.Errorf("%d bekleyen; 5 olmalı", c)
+		t.Errorf("%d pending; 5 expected", c)
 	}
 }

@@ -106,7 +106,7 @@ func TestScanStream(t *testing.T) {
 		select {
 		case data := <-got:
 			if data != `{"code":"8690000000012"}` {
-				t.Errorf("olay verisi %s", data)
+				t.Errorf("event data %s", data)
 			}
 			if code, _ := do(t, http.MethodPost, srv.URL+"/api/device/scans", "kasiyer", `{"code":""}`); code != http.StatusUnprocessableEntity {
 				t.Errorf("invalid code: %d", code)
@@ -211,7 +211,7 @@ func TestPrinterStream(t *testing.T) {
 	}
 	wait(`printer {"message":"","state":"ready"}`)
 	if code, body := do(t, http.MethodPost, srv.URL+"/api/device/printer", "kasiyer", `{"state":"paper_out"}`); code != http.StatusNoContent {
-		t.Fatalf("durum taklidi: %d %s", code, body)
+		t.Fatalf("imitated status: %d %s", code, body)
 	}
 	wait(`printer {"message":"Kağıt bitti","state":"paper_out"}`)
 	for _, bad := range []string{`{"state":"unknown"}`, `{"state":"kağıt"}`} {

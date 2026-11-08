@@ -69,10 +69,10 @@ func TestScannerReadsEvents(t *testing.T) {
 		select {
 		case got := <-codes:
 			if got != want {
-				t.Errorf("kod %q, beklenen %q", got, want)
+				t.Errorf("kod %q, expected %q", got, want)
 			}
 		case <-time.After(5 * time.Second):
-			t.Fatalf("%q okunmadı", want)
+			t.Fatalf("%q was not read", want)
 		}
 	}
 	w.Close()
@@ -80,7 +80,7 @@ func TestScannerReadsEvents(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		t.Fatal("ctx bitince okuyucu durmadı")
+		t.Fatal("the reader did not stop when ctx ended")
 	}
 }
 

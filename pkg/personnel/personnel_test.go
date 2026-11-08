@@ -18,7 +18,7 @@ func TestRules(t *testing.T) {
 	}
 	for _, pin := range []string{"", "123", "123456789", "12a4", "١٢٣٤"} {
 		if !errors.Is(ValidatePIN(pin), ErrInvalidPIN) {
-			t.Errorf("%q kabul edildi", pin)
+			t.Errorf("%q was accepted", pin)
 		}
 	}
 	if ValidateID("ayse-1_x") != nil || !errors.Is(ValidateID("Ayşe"), ErrInvalidID) || !errors.Is(ValidateID(""), ErrInvalidID) {
@@ -47,12 +47,12 @@ func TestEncodeDecode(t *testing.T) {
 	}
 	got, err := Decode("application/protobuf", data)
 	if err != nil || !reflect.DeepEqual(got, c) {
-		t.Errorf("kasaya giden:\n%+v %v\nistenen\n%+v", got, err, c)
+		t.Errorf("sent to the register:\n%+v %v\nwant\n%+v", got, err, c)
 	}
 	// There is no PIN digest in the event that goes to headquarters.
 	data, _ = Encode(c, "e2", false)
 	if got, _ := Decode("application/protobuf", data); got.PINHash != nil || got.Name != "Ayşe" {
-		t.Errorf("merkeze giden: %+v", got)
+		t.Errorf("sent to headquarters: %+v", got)
 	}
 	if _, err := Decode("application/json", data); !errors.Is(err, ErrUndecodable) {
 		t.Errorf("JSON: %v", err)

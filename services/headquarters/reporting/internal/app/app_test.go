@@ -101,14 +101,14 @@ func TestAuth(t *testing.T) {
 		t.Fatalf("sign-in: %v %+v", err, u)
 	}
 	if u, err := auth.Session(ctx, token); err != nil || u.ID != "ayse" {
-		t.Errorf("oturum: %v %+v", err, u)
+		t.Errorf("session: %v %+v", err, u)
 	}
 	// The session is stored by the key's digest (someone who reads the database cannot open a session).
 	if _, ok, _ := users.Get(ctx, login.TokenHash(token), now); !ok {
 		t.Error("the session key was not stored by its digest")
 	}
 	if _, err := auth.Session(ctx, "uydurma"); !errors.Is(err, ErrNoSession) {
-		t.Errorf("uydurma oturum: %v", err)
+		t.Errorf("made-up session: %v", err)
 	}
 	// An expired session does not pass.
 	now = now.Add(SessionTTL)

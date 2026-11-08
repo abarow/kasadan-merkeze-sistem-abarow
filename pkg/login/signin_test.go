@@ -13,11 +13,11 @@ func TestDefault(t *testing.T) {
 	var tr Tries
 	for want := 4; want > 0; want-- {
 		if got := tr.Fail(now, Default); got != want {
-			t.Fatalf("kalan %d, istenen %d", got, want)
+			t.Fatalf("left %d, want %d", got, want)
 		}
 	}
 	if tr.Fail(now, Default) != 0 || !tr.Locked(now) || !tr.LockedUntil.Equal(now.Add(5*time.Minute)) {
-		t.Fatalf("kilit: %+v", tr)
+		t.Fatalf("lock: %+v", tr)
 	}
 	// The record is not forgotten until the longest lock duration (1 hour) has passed: someone waiting out the
 	// lock cannot reset the counter.
@@ -39,7 +39,7 @@ func TestDoubling(t *testing.T) {
 			tr.Fail(now, r)
 		}
 		if got := tr.LockedUntil.Sub(now); got != want*time.Minute {
-			t.Errorf("kilit %v, istenen %v dk", got, want)
+			t.Errorf("lock %v, want %v min", got, want)
 		}
 	}
 }

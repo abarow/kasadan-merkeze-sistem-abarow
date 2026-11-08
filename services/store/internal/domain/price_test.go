@@ -57,13 +57,13 @@ func TestStorePriceSchedule(t *testing.T) {
 	// A future-dated record is withdrawn; one that has taken effect cannot be.
 	points, err = CancelStorePrice(points, monday, now)
 	if err != nil || !slices.Equal(points, []PricePoint{{Amount: 1800}, {From: friday, Clear: true}}) {
-		t.Errorf("geri alma: %+v %v", points, err)
+		t.Errorf("undo: %+v %v", points, err)
 	}
 	if _, err := CancelStorePrice(points, now.Add(-time.Hour), now); !errors.Is(err, ErrInvalidPrice) {
 		t.Errorf("past record: %v", err)
 	}
 	if _, err := ScheduleStorePrice(nil, -1, false, monday, now); !errors.Is(err, ErrInvalidPrice) {
-		t.Errorf("negatif fiyat: %v", err)
+		t.Errorf("negative price: %v", err)
 	}
 
 	p := CatalogProduct{HeadquartersPrices: []PricePoint{{Amount: 1500}, {Amount: 1600, From: monday}}}

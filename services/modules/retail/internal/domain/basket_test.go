@@ -43,7 +43,7 @@ func TestParseScaleBarcode(t *testing.T) {
 func TestCheckDigit(t *testing.T) {
 	for _, code := range []string{"8690000000012", "8690000000104", "2700001012504", "4006381333931"} {
 		if got := CheckDigit(code[:12]); got != code[12] {
-			t.Errorf("CheckDigit(%s) = %c, istenen %c", code[:12], got, code[12])
+			t.Errorf("CheckDigit(%s) = %c, want %c", code[:12], got, code[12])
 		}
 	}
 }
@@ -70,7 +70,7 @@ func TestAddMergesPiecesButNotWeighedLines(t *testing.T) {
 	}
 	// 2 × 15,00 + 49,90 × 1,250 (62,375 → 62,38) + 49,90 × 0,800 (39,92)
 	if got := b.Total(); got != 3000+6238+3992 {
-		t.Errorf("Total = %d, istenen %d", got, 3000+6238+3992)
+		t.Errorf("Total = %d, want %d", got, 3000+6238+3992)
 	}
 }
 

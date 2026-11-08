@@ -68,7 +68,7 @@ func TestUsersAPI(t *testing.T) {
 	// stores; user management is off.
 	ali := signIn(t, h, "ali", "headquarters-test-2")
 	if rec := do(h, http.MethodGet, "/api/auth/session", "", ali); !strings.Contains(rec.Body.String(), `"role":"report","all_stores":false,"stores":["store-2"]`) {
-		t.Errorf("oturum: %s", rec.Body)
+		t.Errorf("session: %s", rec.Body)
 	}
 	var stores struct {
 		Stores []storeJSON `json:"stores"`
@@ -118,7 +118,7 @@ func TestUsersAPI(t *testing.T) {
 		t.Errorf("the new store did not show: %s", rec.Body)
 	}
 	if rec := do(h, http.MethodPost, "/api/users/ali/password", `{"password":"headquarters-test-4"}`, admin); rec.Code != http.StatusNoContent {
-		t.Errorf("parola: %d %s", rec.Code, rec.Body)
+		t.Errorf("password: %d %s", rec.Code, rec.Body)
 	}
 	rec = do(h, http.MethodGet, "/api/users/ali", "", admin)
 	var detail struct {
@@ -137,6 +137,6 @@ func TestUsersAPI(t *testing.T) {
 	}
 	rec = do(h, http.MethodGet, "/api/users", "", admin)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"username":"ali"`) || !strings.Contains(rec.Body.String(), `"username":"ayse","name":"Ayşe Yılmaz","role":"admin","all_stores":true,"stores":[]`) {
-		t.Errorf("liste: %d %s", rec.Code, rec.Body)
+		t.Errorf("list: %d %s", rec.Code, rec.Body)
 	}
 }

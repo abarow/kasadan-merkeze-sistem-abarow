@@ -35,10 +35,10 @@ func TestQueriesAreBoundedWithoutCallerDeadline(t *testing.T) {
 		select {
 		case err := <-done:
 			if err == nil {
-				t.Error("donmuş servis hata vermedi")
+				t.Error("the frozen service gave no error")
 			}
 		case <-time.After(queryTimeout + 3*time.Second):
-			t.Fatal("çağrı süre sınırında bitmedi")
+			t.Fatal("the call did not end within its time limit")
 		}
 	}
 }

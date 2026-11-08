@@ -40,7 +40,7 @@ func testStore(t *testing.T) *Store {
 	t.Helper()
 	dsn := os.Getenv("ABAROW_TEST_POSTGRES")
 	if dsn == "" {
-		t.Skip("ABAROW_TEST_POSTGRES yok; PostgreSQL testleri atlandı")
+		t.Skip("ABAROW_TEST_POSTGRES is not set; the PostgreSQL tests are skipped")
 	}
 	ctx := context.Background()
 	admin, err := sql.Open("pgx", dsn)
@@ -82,7 +82,7 @@ func testStore(t *testing.T) *Store {
 	}
 	db.Close()
 	if err != nil {
-		t.Fatalf("ingest ve catalog-admin şeması kurulamadı: %v", err)
+		t.Fatalf("could not set up the ingest and catalog-admin schema: %v", err)
 	}
 	store, err := Open(ctx, connStr)
 	if err != nil {
@@ -91,7 +91,7 @@ func testStore(t *testing.T) *Store {
 	t.Cleanup(func() {
 		store.Close()
 		if _, err := admin.ExecContext(ctx, "DROP DATABASE "+name+" WITH (FORCE)"); err != nil {
-			t.Errorf("test veritabanı silinemedi: %v", err)
+			t.Errorf("could not drop the test database: %v", err)
 		}
 		admin.Close()
 	})
@@ -197,11 +197,11 @@ func TestSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	if sum.Receipts != 3 || sum.Total != 21038 || sum.TaxTotal != 992 || sum.Voided != 1 || sum.VoidedTotal != 999 {
-		t.Errorf("toplam %+v", sum)
+		t.Errorf("total %+v", sum)
 	}
 	// Change deducted from cash: 140 + 24 - 3.62 = 160.38 TL; the total of payments equals the sale.
 	if !slices.Equal(sum.Payments, []ledger.PaymentTotal{{Method: "cash", Amount: 16038}, {Method: "card", Amount: 5000}}) {
-		t.Errorf("ödemeler %+v", sum.Payments)
+		t.Errorf("payments %+v", sum.Payments)
 	}
 	if !slices.Equal(sum.Taxes, []ledger.Tax{{Rate: 100, Gross: 16038, Tax: 159}, {Rate: 2000, Gross: 5000, Tax: 833}}) {
 		t.Errorf("KDV %+v", sum.Taxes)
@@ -210,18 +210,18 @@ func TestSummary(t *testing.T) {
 		{StoreID: "store-1", ID: "store-1", Receipts: 2, Total: 18638, Voided: 1, VoidedTotal: 999},
 		{StoreID: "store-2", ID: "store-2", Receipts: 1, Total: 2400},
 	}) || sum.StoreNames["store-1"] != "Kadıköy" || sum.StoreNames["store-2"] != "Moda" || sum.StoreNames["yok"] != "" {
-		t.Errorf("mağazalar %+v %v", sum.Stores, sum.StoreNames)
+		t.Errorf("stores %+v %v", sum.Stores, sum.StoreNames)
 	}
 	// Days with no sales come with zero too.
 	if !slices.Equal(sum.Days, []ledger.DayTotal{{Date: "2026-10-01", Receipts: 2, Total: 16038}, {Date: "2026-10-02"}, {Date: "2026-10-03", Receipts: 1, Total: 5000}}) {
-		t.Errorf("günler %+v", sum.Days)
+		t.Errorf("days %+v", sum.Days)
 	}
 	if !slices.Equal(sum.Products, []ledger.ProductTotal{
 		{ProductID: "p2", Name: "Domates", Qty: 1250, Total: 11238},
 		{ProductID: "p4", Name: "Deterjan", Qty: 1000, Total: 5000},
 		{ProductID: "p1", Name: "Ekmek", Qty: 4000, Total: 4800},
 	}) {
-		t.Errorf("ürünler %+v", sum.Products)
+		t.Errorf("products %+v", sum.Products)
 	}
 	if !slices.Equal(sum.Cashiers, []ledger.GroupTotal{
 		{StoreID: "store-1", ID: "ayse", Receipts: 1, Total: 13638},
@@ -235,10 +235,10 @@ func TestSummary(t *testing.T) {
 	// an empty list is none.
 	if all, err := s.Report(ctx, report.Filter{Start: start, End: end, Stores: []string{"store-1", "store-2"}, Location: ist}); err != nil ||
 		all.Receipts != sum.Receipts || all.Total != sum.Total || len(all.Products) != len(sum.Products) {
-		t.Errorf("iki mağaza: %+v %v", all, err)
+		t.Errorf("two stores: %+v %v", all, err)
 	}
 	if none, err := s.Report(ctx, report.Filter{Start: start, End: end, Stores: []string{}, Location: ist}); err != nil || none.Receipts != 0 || none.Voided != 0 || none.Stores != nil || none.Products != nil {
-		t.Errorf("mağazasız: %+v %v", none, err)
+		t.Errorf("no stores: %+v %v", none, err)
 	}
 	// A single store.
 	sum, err = s.Report(ctx, report.Filter{Start: start, End: end, Stores: []string{"store-2"}, Location: ist})
@@ -252,7 +252,7 @@ func TestSummary(t *testing.T) {
 	// A period with no sales.
 	start, end, _ = ledger.Period("2026-11-01", "2026-11-30", ist)
 	if sum, err := s.Report(ctx, report.Filter{Start: start, End: end, Location: ist}); err != nil || sum.Receipts != 0 || sum.Payments != nil || sum.Stores != nil {
-		t.Errorf("boş dönem: %+v %v", sum, err)
+		t.Errorf("empty period: %+v %v", sum, err)
 	}
 }
 
@@ -266,7 +266,7 @@ func TestStores(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(stores) != 2 {
-		t.Fatalf("mağazalar %+v", stores)
+		t.Fatalf("stores %+v", stores)
 	}
 	m1, m2 := stores[0], stores[1]
 	if m1.ID != "store-1" || m1.Name != "Kadıköy" || m1.Link != domain.LinkConnected || !m1.LastSeen.Equal(checked) || m1.Pending != 2 ||
@@ -293,10 +293,10 @@ func TestStoresMissingEvents(t *testing.T) {
 	}
 	if len(stores[0].MissingEvents) != 1 || stores[0].MissingEvents[0].Register != "register-1" || stores[0].MissingEvents[0].Producer != "sales" ||
 		stores[0].MissingEvents[0].From != 5 || stores[0].MissingEvents[0].To != 7 {
-		t.Errorf("store-1 eksik olaylar: %+v", stores[0].MissingEvents)
+		t.Errorf("store-1 missing events: %+v", stores[0].MissingEvents)
 	}
 	if len(stores[1].MissingEvents) != 0 {
-		t.Errorf("store-2 eksik olay göstermemeli: %+v", stores[1].MissingEvents)
+		t.Errorf("store-2 must show no missing events: %+v", stores[1].MissingEvents)
 	}
 }
 
@@ -316,21 +316,21 @@ func TestPeople(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, err := people.User(ctx, "ali"); err != nil || !reflect.DeepEqual(got, ali) {
-		t.Errorf("kullanıcı %+v %v", got, err)
+		t.Errorf("user %+v %v", got, err)
 	}
 	key := login.TokenHash("oturum")
 	if err := people.Put(ctx, key, login.Session{Subject: "ali", Expires: now.Add(time.Hour)}, now); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok, err := people.Get(ctx, key, now); err != nil || !ok {
-		t.Errorf("oturum: %v %v", ok, err)
+		t.Errorf("session: %v %v", ok, err)
 	}
 	req.New, req.CloseSessions = false, true
 	if err := people.Save(ctx, req); err != nil {
 		t.Fatal(err)
 	}
 	if _, ok, _ := people.Get(ctx, key, now); ok {
-		t.Error("kullanıcı kaydıyla birlikte oturumu silinmedi")
+		t.Error("the user's session was not deleted with the user")
 	}
 
 	// A user added before the role (migration) becomes an administrator.
@@ -338,7 +338,7 @@ func TestPeople(t *testing.T) {
 		t.Fatal(err)
 	}
 	if u, err := people.User(ctx, "eski"); err != nil || u.Role != personnel.RoleAdmin || !u.AllStores {
-		t.Errorf("eski kullanıcı %+v %v", u, err)
+		t.Errorf("old user %+v %v", u, err)
 	}
 }
 
@@ -360,21 +360,21 @@ func TestStorePrices(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(rows) != 1 {
-		t.Fatalf("satırlar %+v", rows)
+		t.Fatalf("rows %+v", rows)
 	}
 	r := rows[0]
 	if r.StoreName != "Kadıköy" || r.ProductName != "Ekmek 250 g" || r.UpdatedBy != "mağaza" || len(r.StorePrices) != 2 ||
 		r.StorePrices[0] != (domain.PricePoint{Amount: 1800}) || !r.StorePrices[1].Clear || !r.StorePrices[1].From.Equal(monday) ||
 		len(r.HeadquartersPrices) != 2 || r.HeadquartersPrices[1] != (domain.PricePoint{Amount: 1650, From: monday}) {
-		t.Errorf("satır %+v", r)
+		t.Errorf("row %+v", r)
 	}
 	all, err := s.StorePrices(ctx, "")
 	if err != nil || len(all) != 2 {
-		t.Fatalf("bütün satırlar %+v %v", all, err)
+		t.Fatalf("all rows %+v %v", all, err)
 	}
 	for _, r := range all {
 		if r.ProductID == "yok" && (r.StoreName != "store-2" || r.ProductName != "Katalogda Olmayan" || r.HeadquartersPrices != nil) {
-			t.Errorf("katalogda olmayan ürün %+v", r)
+			t.Errorf("product not in the catalog %+v", r)
 		}
 	}
 }

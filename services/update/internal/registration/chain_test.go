@@ -56,7 +56,7 @@ func TestPublisherToHeadquartersToUnitChain(t *testing.T) {
 		t.Fatal("no certificate was given to the approved headquarters")
 	}
 	if c, err := token.Verify(rootPub, mres.Token, fakeClock); err != nil || c.Tier != token.Headquarters || c.Issuer != token.PublisherIssuer {
-		t.Fatalf("merkez jetonu: %+v, %v", c, err)
+		t.Fatalf("headquarters token: %+v, %v", c, err)
 	}
 
 	// 2) The headquarters service approves its own units with the certificate and gives tokens.
@@ -76,7 +76,7 @@ func TestPublisherToHeadquartersToUnitChain(t *testing.T) {
 		t.Fatalf("the register token could not be verified with the publisher root: %v", err)
 	}
 	if c.Issuer != headquarters.ID || c.Device != register.ID || c.Tier != token.Register {
-		t.Errorf("kasa jetonu: %+v", c)
+		t.Errorf("register token: %+v", c)
 	}
 
 	// 3) Headquarters' own key signs tokens, but without the certificate or under another root they do not pass.
@@ -99,7 +99,7 @@ func TestHeadquartersTierRequiresSigningKey(t *testing.T) {
 	// A signing key cannot be given at a tier other than headquarters.
 	_, err := New(Config{Store: NewMemory(), Issuer: SigningIssuer{Key: rootPriv}, Allowed: []token.Tier{token.Headquarters}, TTL: time.Hour})
 	if err == nil {
-		t.Error("CertTTL'siz merkez hizmeti kuruldu")
+		t.Error("a headquarters service without CertTTL was set up")
 	}
 }
 

@@ -68,7 +68,7 @@ func TestSaveLoad(t *testing.T) {
 	}
 	// It is written sorted by id.
 	if len(got) != 2 || got[0].ID != "register-1" || got[0].DisplayName() != "Giriş" || got[1].DisplayName() != "register-2" {
-		t.Fatalf("okunan liste: %+v", got)
+		t.Fatalf("list read: %+v", got)
 	}
 
 	// When the same id is added again its key changes (the register was reinstalled).
@@ -89,7 +89,7 @@ func TestSaveLoad(t *testing.T) {
 	}
 	got, err = Load(path)
 	if err != nil || len(got) != 1 {
-		t.Fatalf("son liste: %+v %v", got, err)
+		t.Fatalf("last list: %+v %v", got, err)
 	}
 
 	// An invalid list is not written.

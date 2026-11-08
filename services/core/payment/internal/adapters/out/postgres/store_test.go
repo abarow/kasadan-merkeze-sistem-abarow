@@ -24,7 +24,7 @@ func TestSaveAndGet(t *testing.T) {
 	defer st.Close()
 
 	if _, err := st.Get(ctx, "s1"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("hata = %v, istenen %v", err, app.ErrNotFound)
+		t.Errorf("error = %v, want %v", err, app.ErrNotFound)
 	}
 	want := domain.Charge{
 		SaleID:   "s1",
@@ -39,9 +39,9 @@ func TestSaveAndGet(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !reflect.DeepEqual(*got, want) {
-		t.Errorf("okunan kayıt %+v, istenen %+v", *got, want)
+		t.Errorf("record read %+v, want %+v", *got, want)
 	}
 	if err := st.Save(ctx, want); err == nil {
-		t.Error("aynı satış için ikinci kayıt kabul edildi")
+		t.Error("a second record for the same sale was accepted")
 	}
 }

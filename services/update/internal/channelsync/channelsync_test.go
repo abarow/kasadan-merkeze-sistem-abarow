@@ -94,7 +94,7 @@ func TestSyncVerifiesAndWrites(t *testing.T) {
 	}
 	var got channel.Signed
 	if json.Unmarshal(raw, &got) != nil || got.Payload != signed.Payload {
-		t.Fatalf("dosya: %s", raw)
+		t.Fatalf("file: %s", raw)
 	}
 	// The same manifest counts as unchanged in the second round.
 	if res, err := s.Sync(context.Background()); err != nil || res["prod"] != channelsync.Unchanged {
@@ -103,7 +103,7 @@ func TestSyncVerifiesAndWrites(t *testing.T) {
 	// A newer sequence number replaces the file.
 	src.put("prod.json", mustSign(manifest("prod", 6, now.Add(24*time.Hour)), priv))
 	if res, err := s.Sync(context.Background()); err != nil || res["prod"] != channelsync.Updated {
-		t.Fatalf("yeni tur: %v %v", res, err)
+		t.Fatalf("new round: %v %v", res, err)
 	}
 }
 
@@ -124,7 +124,7 @@ func TestSyncTrustFnRotation(t *testing.T) {
 		return channel.Trust{channel.Prod: append(append([]ed25519.PublicKey{}, pubOld...), newPub)}, nil
 	}
 	if res, err := s.Sync(context.Background()); err != nil || res["prod"] != channelsync.Updated {
-		t.Fatalf("yeni anahtarla: %v %v", res, err)
+		t.Fatalf("with the new key: %v %v", res, err)
 	}
 	// The refresh failed: the last known (old) key still works.
 	failing = true
@@ -152,7 +152,7 @@ func TestSyncRejectsUntrustedStaleAndRollback(t *testing.T) {
 		src.put("prod.json", v)
 		res, err := s.Sync(context.Background())
 		if err == nil || res["prod"] != "" {
-			t.Errorf("%s: kabul edildi (%v, %v)", label, res, err)
+			t.Errorf("%s: accepted (%v, %v)", label, res, err)
 		}
 		after, _ := os.ReadFile(filepath.Join(dir, "prod.json"))
 		if string(after) != string(before) {

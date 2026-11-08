@@ -52,7 +52,7 @@ func TestWeigh(t *testing.T) {
 		}
 	}
 	if st := svc.Status(); st.Scale != "simulator" || st.Weighed != 1 {
-		t.Errorf("durum: %+v", st)
+		t.Errorf("state: %+v", st)
 	}
 
 	if _, err := scaleService(nil).Weigh(ctx); !errors.Is(err, domain.ErrNoScale) {

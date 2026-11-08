@@ -17,7 +17,7 @@ func TestUsername(t *testing.T) {
 	}
 	for _, bad := range []string{"", "a", "ayşe", "ırem", "-ayse", "ali veli", "a234567890123456789012345678901234"} {
 		if _, err := Username(bad); !errors.Is(err, ErrInvalidUsername) {
-			t.Errorf("Username(%q) kabul edildi", bad)
+			t.Errorf("Username(%q) was accepted", bad)
 		}
 	}
 	if ValidatePassword("kısa-parola") != nil || ValidatePassword("kısaparol") == nil {

@@ -98,7 +98,7 @@ func TestLoginStatuses(t *testing.T) {
 	} {
 		rec := do(h, "POST", "/api/auth/login", "application/json", `{"password":"`+c.password+`"}`, nil)
 		if rec.Code != c.code || !strings.Contains(rec.Body.String(), c.contains) {
-			t.Errorf("%s: %d %s; istenen %d %q", c.password, rec.Code, rec.Body, c.code, c.contains)
+			t.Errorf("%s: %d %s; want %d %q", c.password, rec.Code, rec.Body, c.code, c.contains)
 		}
 		if got := rec.Header().Get("Set-Cookie"); (c.code == 200) != (got != "") {
 			t.Errorf("%s: cookie %q", c.password, got)
@@ -119,7 +119,7 @@ func TestSessionRequireForward(t *testing.T) {
 	}
 	cookie := do(h, "POST", "/api/auth/login", "application/json", `{"password":"doğru"}`, nil).Result().Cookies()[0]
 	if rec := do(h, "GET", "/api/auth/session", "", "", cookie); rec.Code != 200 || !strings.Contains(rec.Body.String(), `"stores":[]`) {
-		t.Errorf("oturum: %d %s", rec.Code, rec.Body)
+		t.Errorf("session: %d %s", rec.Code, rec.Body)
 	}
 	if rec := do(h, "POST", "/yaz", "", "", nil); rec.Code != 401 {
 		t.Errorf("write without sign-in: %d", rec.Code)

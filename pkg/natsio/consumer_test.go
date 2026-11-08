@@ -50,7 +50,7 @@ func TestProcess(t *testing.T) {
 		m := &fakeMsg{}
 		c.process(context.Background(), m)
 		if m.outcome != tt.outcome || m.delay != tt.delay {
-			t.Errorf("%v: %s %v; istenen %s %v", tt.err, m.outcome, m.delay, tt.outcome, tt.delay)
+			t.Errorf("%v: %s %v; want %s %v", tt.err, m.outcome, m.delay, tt.outcome, tt.delay)
 		}
 	}
 	if Reject(nil) != nil {

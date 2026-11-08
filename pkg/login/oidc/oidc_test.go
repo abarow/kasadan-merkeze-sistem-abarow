@@ -274,7 +274,7 @@ func TestConfig(t *testing.T) {
 		c := good
 		mod(&c)
 		if _, err := New(c, open, login.Cookie{}); err == nil {
-			t.Errorf("%s: ayar kabul edildi", name)
+			t.Errorf("%s: the setting was accepted", name)
 		}
 	}
 	// For development HTTP is allowed on a loopback address.
@@ -313,7 +313,7 @@ func TestLoadConfig(t *testing.T) {
 	}
 	env["ABAROW_OIDC_CLIENT_ID"] = ""
 	if _, _, err := LoadConfig(get); err == nil {
-		t.Error("istemci kimliksiz ayar kabul edildi")
+		t.Error("a setting without a client id was accepted")
 	}
 	if _, on, err := LoadConfig(func(string) string { return "" }); on || err != nil {
 		t.Errorf("kurulu olmayan OIDC: %v %v", on, err)

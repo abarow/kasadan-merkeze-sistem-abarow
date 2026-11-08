@@ -88,7 +88,7 @@ func TestCashiersAPI(t *testing.T) {
 		t.Errorf("kapatma: %d %s", code, body)
 	}
 	if code, _ := call(http.MethodPost, "/api/cashiers/yok/disabled", `{"disabled":true}`); code != http.StatusNotFound {
-		t.Errorf("olmayan kasiyer: %d", code)
+		t.Errorf("cashier that does not exist: %d", code)
 	}
 	code, body = call(http.MethodGet, "/api/cashiers/zeynep", "")
 	var detail struct {
@@ -102,7 +102,7 @@ func TestCashiersAPI(t *testing.T) {
 		t.Errorf("detail %+v", detail)
 	}
 	if code, body := call(http.MethodGet, "/api/cashiers", ""); code != http.StatusOK || !strings.Contains(body, `"id":"zeynep"`) {
-		t.Errorf("liste: %d %s", code, body)
+		t.Errorf("list: %d %s", code, body)
 	}
 
 	// The cashier's name shows in the day report.
@@ -209,7 +209,7 @@ func TestManagerLogin(t *testing.T) {
 		t.Fatalf("manager sign-in: %d %s", code, body)
 	}
 	if code, body := call(ayse, http.MethodGet, "/api/auth/session", ""); code != http.StatusOK || !strings.Contains(body, `"name":"Ayşe Yılmaz"`) {
-		t.Errorf("oturum: %d %s", code, body)
+		t.Errorf("session: %d %s", code, body)
 	}
 	if code, body := call(ayse, http.MethodPost, "/api/cashiers/ali", `{"name":"Ali Demir","role":"cashier"}`); code != http.StatusOK || !strings.Contains(body, `"updated_by":"Ayşe Yılmaz"`) {
 		t.Errorf("who made the change: %d %s", code, body)

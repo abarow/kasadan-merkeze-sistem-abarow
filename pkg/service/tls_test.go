@@ -154,7 +154,7 @@ func TestTLSFromEnv(t *testing.T) {
 	}
 	t.Setenv("ABAROW_TLS_KEY", "/a.key")
 	if c, k, err := TLSFromEnv(); err != nil || c != "/a.pem" || k != "/a.key" {
-		t.Errorf("ikisi de dolu: %q %q %v", c, k, err)
+		t.Errorf("both filled: %q %q %v", c, k, err)
 	}
 }
 
@@ -197,7 +197,7 @@ func TestServeHTTPExtraServers(t *testing.T) {
 	}
 	for url, want := range map[string]string{"http://" + main + "/": "ana", "http://" + plain + "/": "admin", "https://" + secure + "/": "vekil"} {
 		if got := get(url); got != want {
-			t.Errorf("%s: %q, istenen %q", url, got, want)
+			t.Errorf("%s: %q, want %q", url, got, want)
 		}
 	}
 }

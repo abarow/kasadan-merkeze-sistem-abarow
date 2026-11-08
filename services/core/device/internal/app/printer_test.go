@@ -16,7 +16,7 @@ import (
 	"abarow.com/services/core/device/internal/domain"
 )
 
-// next, dinleyiciden bir sonraki durumu bekler.
+// next waits for the next state from the listener.
 func next(t *testing.T, ch <-chan domain.PrinterState) domain.PrinterState {
 	t.Helper()
 	select {
@@ -41,7 +41,7 @@ func TestPrinterState(t *testing.T) {
 	}
 	go svc.RunPrinterMonitor(ctx, time.Hour)
 	if st := next(t, watch); st != domain.PrinterReady {
-		t.Errorf("ilk soru: %v", st)
+		t.Errorf("first query: %v", st)
 	}
 
 	if err := svc.SimulatePrinter(ctx, domain.PrinterPaperOut); err != nil {
@@ -55,7 +55,7 @@ func TestPrinterState(t *testing.T) {
 		t.Errorf("printed without paper: %v", err)
 	}
 	if st := svc.Status(); st.PrinterState != domain.PrinterPaperOut || st.Printed != 0 {
-		t.Errorf("durum: %+v", st)
+		t.Errorf("state: %+v", st)
 	}
 
 	if err := svc.SimulatePrinter(ctx, domain.PrinterReady); err != nil {
@@ -70,7 +70,7 @@ func TestPrinterState(t *testing.T) {
 
 	// A new listener gets the current state immediately.
 	if st := next(t, svc.WatchPrinter(ctx)); st != domain.PrinterReady {
-		t.Errorf("yeni dinleyici: %v", st)
+		t.Errorf("new listener: %v", st)
 	}
 	if err := svc.SimulatePrinter(ctx, domain.PrinterState(42)); !errors.Is(err, domain.ErrInvalidPrinterState) {
 		t.Errorf("invalid state: %v", err)
@@ -98,7 +98,7 @@ func TestPrinterRecheckAfterFailure(t *testing.T) {
 	p.state <- domain.PrinterReady
 	go svc.RunPrinterMonitor(ctx, time.Hour)
 	if st := next(t, watch); st != domain.PrinterReady {
-		t.Fatalf("ilk soru: %v", st)
+		t.Fatalf("first query: %v", st)
 	}
 	// The cover opened: printing fails, the state comes without waiting for the hourly query.
 	sim.SetState(domain.PrinterCoverOpen)

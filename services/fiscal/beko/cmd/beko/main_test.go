@@ -12,7 +12,7 @@ func TestParseSections(t *testing.T) {
 	}
 	for _, bad := range []string{"", "  ", "1000", "x:1", "1000:y", "1000:0", "-5:1", "1000:1,"} {
 		if _, err := parseSections(bad); err == nil {
-			t.Errorf("%q kabul edildi", bad)
+			t.Errorf("%q was accepted", bad)
 		}
 	}
 }

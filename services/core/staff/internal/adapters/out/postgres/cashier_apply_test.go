@@ -36,21 +36,21 @@ func TestApplyCashier(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, _, _, err := auth.Login(ctx, "ayse", "1111"); !errors.Is(err, domain.ErrWrongPIN) {
-		t.Errorf("eski PIN: hata = %v", err)
+		t.Errorf("old PIN: error = %v", err)
 	}
 	_, c, _, err := auth.Login(ctx, "ayse", "2468")
 	if err != nil || c.Name != "Ayşe Yılmaz" || c.Origin != domain.FromStore {
-		t.Fatalf("operasyonun PIN'iyle giriş: %+v, %v", c, err)
+		t.Fatalf("sign-in with the store server's PIN: %+v, %v", c, err)
 	}
 	skipped, err := auth.Seed(ctx, []app.SeedCashier{
 		{ID: "ayse", Name: "Kasiyer Ayşe", Role: domain.RoleCashier, PIN: "1111"},
 		{ID: "ali", Name: "Müdür Ali", Role: domain.RoleManager, PIN: "9999"},
 	})
 	if err != nil || len(skipped) != 1 || skipped[0] != "ayse" {
-		t.Fatalf("dosya yeniden yüklenince atlanan: %v, %v", skipped, err)
+		t.Fatalf("skipped when the file was loaded again: %v, %v", skipped, err)
 	}
 	if _, _, _, err := auth.Login(ctx, "ayse", "2468"); err != nil {
-		t.Errorf("dosya operasyonun PIN'ini değiştirdi: %v", err)
+		t.Errorf("the file changed the store server's PIN: %v", err)
 	}
 
 	// Wrong attempts continue on an update that comes with the same PIN, they are
@@ -65,14 +65,14 @@ func TestApplyCashier(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, _, _, err := auth.Login(ctx, "ayse", "2468"); !errors.Is(err, domain.ErrLocked) {
-		t.Errorf("aynı PIN'le ad değişince kilit açılmamalı: %v", err)
+		t.Errorf("a name change with the same PIN must not unlock: %v", err)
 	}
 	if err := auth.ApplyCashier(ctx, domain.Cashier{ID: "ayse", Name: "Ayşe Y.", Role: domain.RoleCashier, PINHash: pinHash(t, "1357")}); err != nil {
 		t.Fatal(err)
 	}
 	token, _, _, err := auth.Login(ctx, "ayse", "1357")
 	if err != nil {
-		t.Fatalf("yeni PIN'le giriş: %v", err)
+		t.Fatalf("sign-in with the new PIN: %v", err)
 	}
 
 	// The account is closed: the session closes, they cannot sign in, they do not show in the list.
@@ -80,13 +80,13 @@ func TestApplyCashier(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := auth.Validate(ctx, token); !errors.Is(err, domain.ErrInvalidSession) {
-		t.Errorf("kapalı hesabın oturumu: %v", err)
+		t.Errorf("session of a closed account: %v", err)
 	}
 	if _, _, _, err := auth.Login(ctx, "ayse", "1357"); !errors.Is(err, domain.ErrDisabled) {
-		t.Errorf("kapalı hesapla giriş: %v", err)
+		t.Errorf("sign-in with a closed account: %v", err)
 	}
 	if list, err := auth.List(ctx); err != nil || len(list) != 1 || list[0].ID != "ali" {
-		t.Errorf("liste: %+v, %v", list, err)
+		t.Errorf("list: %+v, %v", list, err)
 	}
 
 	// A closed manager cannot give approval.
@@ -101,17 +101,17 @@ func TestApplyCashier(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := auth.Authorize(ctx, "ali", approval, domain.ActionRefundCharged); !errors.Is(err, domain.ErrDisabled) {
-		t.Errorf("kapalı müdürün onayı: %v", err)
+		t.Errorf("approval of a closed manager: %v", err)
 	}
 	if _, _, err := auth.Approve(ctx, "ali", "veli", "8642", domain.ActionRefundCharged); !errors.Is(err, domain.ErrDisabled) {
-		t.Errorf("kapalı müdür onay verdi: %v", err)
+		t.Errorf("a closed manager gave an approval: %v", err)
 	}
 
 	// A missing or invalid cashier is not applied.
 	if err := auth.ApplyCashier(ctx, domain.Cashier{ID: "x", Name: "X", Role: domain.RoleCashier}); !errors.Is(err, domain.ErrInvalidCashier) {
-		t.Errorf("PIN'siz kasiyer: %v", err)
+		t.Errorf("cashier without a PIN: %v", err)
 	}
 	if err := auth.ApplyCashier(ctx, domain.Cashier{ID: "x", Name: "X", Role: "patron", PINHash: pinHash(t, "1234")}); !errors.Is(err, domain.ErrInvalidRole) {
-		t.Errorf("bilinmeyen rol: %v", err)
+		t.Errorf("unknown role: %v", err)
 	}
 }

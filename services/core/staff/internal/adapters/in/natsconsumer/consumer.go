@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	// Stream, sales'in olay stream'idir.
+	// Stream is the event stream of sales.
 	Stream = "ABAROW_SALES"
 	// Durable is the name of staff's durable consumer; when staff restarts it
 	// continues where it left off.

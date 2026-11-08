@@ -81,7 +81,7 @@ func (s *server) approve(t *testing.T, device string) {
 	rec := httptest.NewRecorder()
 	s.adm.ServeHTTP(rec, req)
 	if rec.Code != 200 {
-		t.Fatalf("onay: %d %s", rec.Code, rec.Body)
+		t.Fatalf("approval: %d %s", rec.Code, rec.Body)
 	}
 }
 
@@ -119,15 +119,15 @@ func TestEnrollmentLifecycle(t *testing.T) {
 
 	st := a.Status()
 	if st.Device == "" || st.Code != identity.Code(st.Device) || st.Tier != "register" || st.Level != "pilot" {
-		t.Fatalf("ilk durum: %+v", st)
+		t.Fatalf("first state: %+v", st)
 	}
 
-	// Onay beklerken: kod ekranda, jeton yok.
+	// While waiting for approval: the code is on the screen, no token.
 	if wait := a.Step(ctx); wait != 15*time.Second {
 		t.Errorf("bekleme %v", wait)
 	}
 	if a.Status().State != agent.StatePending {
-		t.Fatalf("durum %s", a.Status().State)
+		t.Fatalf("status %s", a.Status().State)
 	}
 	if _, ok := a.Token(); ok {
 		t.Error("an unapproved agent has a token")
@@ -137,7 +137,7 @@ func TestEnrollmentLifecycle(t *testing.T) {
 	s.approve(t, st.Device)
 	wait := a.Step(ctx)
 	if a.Status().State != agent.StateApproved {
-		t.Fatalf("durum %s: %s", a.Status().State, a.Status().Error)
+		t.Fatalf("status %s: %s", a.Status().State, a.Status().Error)
 	}
 	raw, ok := a.Token()
 	if !ok {
@@ -176,7 +176,7 @@ func TestEnrollmentLifecycle(t *testing.T) {
 		t.Error("jeton yenilenmedi")
 	}
 	if c, err := token.Verify(s.rootPub, fresh, s.clock.Now()); err != nil || !c.Expiry.After(s.clock.Now().Add(8*time.Hour)) {
-		t.Errorf("yeni jeton: %+v, %v", c, err)
+		t.Errorf("new token: %+v, %v", c, err)
 	}
 
 	// Revocation: the agent shows the revoked state and does not try to get a token.
@@ -200,7 +200,7 @@ func TestRejectedAgent(t *testing.T) {
 	}
 	a.Step(ctx)
 	if a.Status().State != agent.StateRejected {
-		t.Errorf("durum %s", a.Status().State)
+		t.Errorf("status %s", a.Status().State)
 	}
 	if _, ok := a.Token(); ok {
 		t.Error("a rejected agent has a token")
@@ -217,7 +217,7 @@ func TestClonedDiskDoesNotRegister(t *testing.T) {
 	// The same directory (a copied disk) is opened on another machine.
 	b := newAgent(t, s, dir, token.Register, machine("makine-b"))
 	if b.Status().State != agent.StateIdentityMismatch || b.Status().Device != "" {
-		t.Fatalf("durum: %+v", b.Status())
+		t.Fatalf("state: %+v", b.Status())
 	}
 	if wait := b.Step(ctx); wait != 10*time.Minute {
 		t.Errorf("bekleme %v", wait)
@@ -252,7 +252,7 @@ func TestServerDownKeepsStateAndBacksOff(t *testing.T) {
 	}
 	st := a.Status()
 	if st.State != agent.StateApproved || st.Error == "" {
-		t.Errorf("durum: %+v", st)
+		t.Errorf("state: %+v", st)
 	}
 	// The token in hand can be used until it expires; being unable to reach the server does not stop the running system.
 	if got, ok := a.Token(); !ok || got != tok {
@@ -277,7 +277,7 @@ func TestHeadquartersGetsCertificateForItsSigningKey(t *testing.T) {
 	s.approve(t, a.Status().Device)
 	a.Step(ctx)
 	if a.Status().State != agent.StateApproved {
-		t.Fatalf("durum %s: %s", a.Status().State, a.Status().Error)
+		t.Fatalf("status %s: %s", a.Status().State, a.Status().Error)
 	}
 	cert, err := os.ReadFile(filepath.Join(dir, "certificate.jwt"))
 	if err != nil || len(cert) == 0 {
@@ -338,7 +338,7 @@ func TestClientRefusesPlainHTTPAndUntrustedTLS(t *testing.T) {
 		t.Error("plain HTTP was accepted without being explicitly allowed")
 	}
 	if _, err := httpclient.New(httpclient.Options{BaseURL: "https://server", CAPEM: []byte("pem değil")}); err == nil {
-		t.Error("bozuk CA kabul edildi")
+		t.Error("a broken CA was accepted")
 	}
 	// If no CA is given the server's (test) certificate cannot be verified with the system roots.
 	c, err := httpclient.New(httpclient.Options{BaseURL: s.dev.URL})
@@ -422,7 +422,7 @@ func TestAgentReportsRunningVersions(t *testing.T) {
 	}
 	r1 := got()
 	if r1 == nil || r1.Units["abarow-sales"] != units["abarow-sales"] || r1.Version != "" {
-		t.Fatalf("ilk bildirim: %+v", r1)
+		t.Fatalf("first report: %+v", r1)
 	}
 
 	// Not changed and the time is not up: it is not resent (the report moment stays the same even as the clock advances).

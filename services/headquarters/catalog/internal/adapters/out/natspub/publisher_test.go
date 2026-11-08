@@ -19,7 +19,7 @@ import (
 // by its id.
 func TestPublish(t *testing.T) {
 	if testing.Short() {
-		t.Skip("NATS sunucusu çalıştırır")
+		t.Skip("runs a NATS server")
 	}
 	srv, err := server.NewServer(&server.Options{Host: "127.0.0.1", Port: -1, JetStream: true, StoreDir: t.TempDir(), NoLog: true, NoSigs: true})
 	if err != nil {
@@ -27,7 +27,7 @@ func TestPublish(t *testing.T) {
 	}
 	go srv.Start()
 	if !srv.ReadyForConnections(10 * time.Second) {
-		t.Fatal("NATS açılmadı")
+		t.Fatal("NATS did not start")
 	}
 	defer srv.Shutdown()
 	nc, err := nats.Connect(srv.ClientURL())
@@ -55,13 +55,13 @@ func TestPublish(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n := stream.CachedInfo().State.Msgs; n != 2 {
-		t.Errorf("stream'de %d mesaj; ürün başına 1, toplam 2 olmalı", n)
+		t.Errorf("%d messages in the stream; 1 per product, 2 in all expected", n)
 	}
 	last, err := stream.GetLastMsgForSubject(ctx, "catalog.product.ekmek")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(last.Data) != "v2" || last.Header.Get("ce-id") != "e3" || last.Header.Get("ce-source") != "abarow/headquarters/" {
-		t.Errorf("son hal %s %v", last.Data, last.Header)
+		t.Errorf("last state %s %v", last.Data, last.Header)
 	}
 }

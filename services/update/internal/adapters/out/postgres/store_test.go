@@ -28,7 +28,7 @@ func open(t testing.TB) *Store {
 	t.Helper()
 	dsn := os.Getenv("ABAROW_TEST_POSTGRES")
 	if dsn == "" {
-		t.Skip("ABAROW_TEST_POSTGRES yok; PostgreSQL testleri atlandı")
+		t.Skip("ABAROW_TEST_POSTGRES is not set; the PostgreSQL tests are skipped")
 	}
 	ctx := context.Background()
 	admin, err := sql.Open("pgx", dsn)
@@ -77,7 +77,7 @@ func TestCreateGetList(t *testing.T) {
 	ctx := context.Background()
 
 	if _, err := s.Get(ctx, "yok"); !errors.Is(err, registration.ErrNotFound) {
-		t.Errorf("olmayan kayıt: %v", err)
+		t.Errorf("record that does not exist: %v", err)
 	}
 	a := request("ABRW-A", token.Register)
 	b := request("ABRW-B", token.Headquarters)
@@ -88,24 +88,24 @@ func TestCreateGetList(t *testing.T) {
 		}
 	}
 	if err := s.Create(ctx, a); !errors.Is(err, registration.ErrExists) {
-		t.Errorf("yinelenen kayıt: %v", err)
+		t.Errorf("repeated record: %v", err)
 	}
 	got, err := s.Get(ctx, "ABRW-B")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Tier != token.Headquarters || string(got.SigningKey) != string(b.SigningKey) || !got.CreatedAt.Equal(b.CreatedAt) || !got.DecidedAt.IsZero() || got.Level != token.Pilot {
-		t.Errorf("okunan kayıt: %+v", got)
+		t.Errorf("record read: %+v", got)
 	}
 	if g, _ := s.Get(ctx, "ABRW-A"); len(g.SigningKey) != 0 {
-		t.Errorf("merkez dışında imzalama anahtarı var: %x", g.SigningKey)
+		t.Errorf("there is a signing key outside headquarters: %x", g.SigningKey)
 	}
 	list, err := s.List(ctx, registration.Pending)
 	if err != nil || len(list) != 2 || list[0].Device != "ABRW-A" || list[1].Device != "ABRW-B" {
-		t.Errorf("liste: %+v, %v", list, err)
+		t.Errorf("list: %+v, %v", list, err)
 	}
 	if other, _ := s.List(ctx, registration.Approved); len(other) != 0 {
-		t.Errorf("onaylı liste: %+v", other)
+		t.Errorf("approved list: %+v", other)
 	}
 }
 
@@ -123,19 +123,19 @@ func TestUpdateIsCompareAndSwap(t *testing.T) {
 	}
 	got, _ := s.Get(ctx, "ABRW-A")
 	if got.Status != registration.Approved || got.DecidedBy != "yonetici" || !got.DecidedAt.Equal(approval.DecidedAt) {
-		t.Errorf("güncel kayıt: %+v", got)
+		t.Errorf("current record: %+v", got)
 	}
 	// The second update with the old view conflicts and the first decision is not overwritten.
 	revoked := r
 	revoked.Status = registration.Revoked
 	if err := s.Update(ctx, r, revoked); !errors.Is(err, registration.ErrConflict) {
-		t.Errorf("eski görüntüyle güncelleme: %v", err)
+		t.Errorf("update with an old view: %v", err)
 	}
 	if got, _ := s.Get(ctx, "ABRW-A"); got.Status != registration.Approved {
-		t.Errorf("çakışan güncelleme kaydı ezdi: %s", got.Status)
+		t.Errorf("a conflicting update overwrote the record: %s", got.Status)
 	}
 	if err := s.Update(ctx, request("ABRW-YOK", token.Register), approval); !errors.Is(err, registration.ErrNotFound) {
-		t.Errorf("olmayan kaydı güncelleme: %v", err)
+		t.Errorf("updating a record that does not exist: %v", err)
 	}
 }
 
@@ -163,7 +163,7 @@ func TestConcurrentAttemptsLoseNoCounterUpdate(t *testing.T) {
 	wg.Wait()
 	got, _ := s.Get(ctx, "ABRW-A")
 	if ok.Load() != 1 || got.Attempts != 1 {
-		t.Errorf("aynı eski görüntüyle %d güncelleme başarılı, sayaç %d; yalnızca biri geçmeliydi", ok.Load(), got.Attempts)
+		t.Errorf("%d updates with the same old view succeeded, counter %d; only one should have", ok.Load(), got.Attempts)
 	}
 }
 
@@ -213,6 +213,6 @@ func TestServiceOverPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := svc.Challenge(ctx, i.ID); !errors.Is(err, registration.ErrRevoked) {
-		t.Errorf("iptal sonrası: %v", err)
+		t.Errorf("after the cancel: %v", err)
 	}
 }

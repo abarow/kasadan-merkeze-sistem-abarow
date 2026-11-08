@@ -78,7 +78,7 @@ func TestIssueIsIdempotent(t *testing.T) {
 			newID := func() string { n++; return fmt.Sprintf("receipt-%d", n) }
 			first, err := s.Issue(ctx, d.db, "store-1", "ABAROW_STORE", "e1", newID, now)
 			if err != nil || !first.New || first.ReceiptID != "receipt-1" || first.EventID != "e1" {
-				t.Fatalf("ilk makbuz = %+v, %v", first, err)
+				t.Fatalf("first receipt = %+v, %v", first, err)
 			}
 			// The same event comes again: the same receipt id, not new.
 			again, err := s.Issue(ctx, d.db, "store-1", "ABAROW_STORE", "e1", newID, now.Add(time.Hour))
@@ -87,7 +87,7 @@ func TestIssueIsIdempotent(t *testing.T) {
 			}
 			other, err := s.Issue(ctx, d.db, "store-1", "ABAROW_STORE", "e2", newID, now)
 			if err != nil || !other.New || other.ReceiptID == first.ReceiptID {
-				t.Fatalf("ikinci olay = %+v, %v", other, err)
+				t.Fatalf("second event = %+v, %v", other, err)
 			}
 		})
 	}
@@ -130,7 +130,7 @@ func TestReceivedRoundTrip(t *testing.T) {
 			}
 			// If the same event's receipt comes again the first is valid.
 			if ok, err := s.SaveReceived(ctx, d.db, delivery.Receipt{EventID: "e1", ReceiptID: "r1b", At: now}, now); err != nil || ok {
-				t.Fatalf("tekrar SaveReceived = %v, %v; false beklenir", ok, err)
+				t.Fatalf("SaveReceived again = %v, %v; false expected", ok, err)
 			}
 			got, err := s.Received(ctx, d.db, []string{"e1", "e2", "e3"})
 			if err != nil || !got["e1"] || got["e2"] || got["e3"] || len(got) != 1 {

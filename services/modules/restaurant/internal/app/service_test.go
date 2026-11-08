@@ -185,7 +185,7 @@ func TestOrderFlow(t *testing.T) {
 	}
 	_, rest, err := svc.Pay(ctx, o.ID, o.Version, nil, ali)
 	if err != nil || len(sales.lines[rest]) != 2 {
-		t.Fatalf("kalan: %+v %v", sales.lines[rest], err)
+		t.Fatalf("left: %+v %v", sales.lines[rest], err)
 	}
 	sales.status[rest] = app.SalePaid
 	areas, err := svc.Floor(ctx)
@@ -274,7 +274,7 @@ func TestEvents(t *testing.T) {
 	select {
 	case e := <-events:
 		if e.Type != "order" || e.OrderID != o.ID || e.TableID != "1" {
-			t.Errorf("olay %+v", e)
+			t.Errorf("event %+v", e)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("the event did not come")

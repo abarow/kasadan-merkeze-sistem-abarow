@@ -20,7 +20,7 @@ func TestContractsAgree(t *testing.T) {
 	for _, name := range []string{paymethod.Cash, paymethod.Card, paymethod.MealCard} {
 		n := paymethod.Number(name)
 		if n == 0 || paymethod.Name(n) != name {
-			t.Fatalf("%s: numara %d", name, n)
+			t.Fatalf("%s: number %d", name, n)
 		}
 		for contract, got := range map[string]string{
 			"sales":   salesv1.PaymentMethod(n).String(),

@@ -76,7 +76,7 @@ func TestCheckImage(t *testing.T) {
 		t.Fatalf("%s %s %v", ct, sum, err)
 	}
 	if _, _, err := CheckImage([]byte("<svg xmlns='http://www.w3.org/2000/svg'></svg>")); !errors.Is(err, ErrImage) {
-		t.Errorf("SVG kabul edildi: %v", err)
+		t.Errorf("SVG was accepted: %v", err)
 	}
 	if _, _, err := CheckImage(make([]byte, MaxImageBytes+1)); !errors.Is(err, ErrImage) {
 		t.Errorf("large file: %v", err)

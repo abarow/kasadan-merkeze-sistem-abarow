@@ -34,7 +34,7 @@ func TestLimitDefaultAndEnv(t *testing.T) {
 		t.Setenv(pgpool.EnvMax, env)
 		db := open(t)
 		if n := pgpool.Limit(db, 8); n != want || db.Stats().MaxOpenConnections != want {
-			t.Errorf("%s: %d, havuz %d, istenen %d", env, n, db.Stats().MaxOpenConnections, want)
+			t.Errorf("%s: %d, havuz %d, want %d", env, n, db.Stats().MaxOpenConnections, want)
 		}
 	}
 }

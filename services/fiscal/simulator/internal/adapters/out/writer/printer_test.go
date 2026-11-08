@@ -20,12 +20,12 @@ func TestWriterPrinterAndDrawer(t *testing.T) {
 		t.Fatal(err)
 	}
 	if buf.String() != "satır 1\nsatır 2\n" {
-		t.Errorf("çıktı %q", buf.String())
+		t.Errorf("output %q", buf.String())
 	}
 
 	var logs bytes.Buffer
 	writer.Drawer{Log: slog.New(slog.NewTextHandler(&logs, nil))}.Open(context.Background(), "nakit satış")
 	if !strings.Contains(logs.String(), "nakit satış") {
-		t.Errorf("günlük: %q", logs.String())
+		t.Errorf("log: %q", logs.String())
 	}
 }

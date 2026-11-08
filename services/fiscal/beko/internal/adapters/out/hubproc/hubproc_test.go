@@ -86,7 +86,7 @@ func next(t *testing.T, p *Process) app.Event {
 	case ev := <-p.Events():
 		return ev
 	case <-time.After(5 * time.Second):
-		t.Fatal("olay gelmedi")
+		t.Fatal("no event came")
 		return app.Event{}
 	}
 }
@@ -97,23 +97,23 @@ func TestCallAndEvents(t *testing.T) {
 	defer cancel()
 	go p.Run(ctx)
 	if ev := next(t, p); ev.Kind != "ready" {
-		t.Fatalf("ilk olay %+v", ev)
+		t.Fatalf("first event %+v", ev)
 	}
 	// The body is binary safe: line endings and Turkish characters are preserved.
 	body := "ilk satır\nikinci ş ğ İ\x00son"
 	out, err := p.Call(ctx, "echo", []byte(body))
 	if err != nil || string(out) != body {
-		t.Errorf("yankı: %q %v", out, err)
+		t.Errorf("echo: %q %v", out, err)
 	}
 	if _, err := p.Call(ctx, "fail", nil); err == nil || err.Error() != "cihaz yok" {
-		t.Errorf("hata yanıtı: %v", err)
+		t.Errorf("error answer: %v", err)
 	}
 	// The event comes before the operation's response and is read from a separate channel.
 	if _, err := p.Call(ctx, "event", nil); err != nil {
 		t.Fatal(err)
 	}
 	if ev := next(t, p); ev.Kind != "state" || ev.Ref != "1" || string(ev.Payload) != "X30TR" {
-		t.Errorf("durum olayı: %+v", ev)
+		t.Errorf("state event: %+v", ev)
 	}
 }
 
@@ -126,16 +126,16 @@ func TestRestart(t *testing.T) {
 	// When the bridge dies the pending call gets an error, an "exit" event comes, the bridge
 	// reopens.
 	if _, err := p.Call(ctx, "crash", nil); err == nil {
-		t.Error("çöken köprüden yanıt geldi")
+		t.Error("an answer came from the crashed bridge")
 	}
 	if ev := next(t, p); ev.Kind != "exit" {
-		t.Errorf("çöküş olayı: %+v", ev)
+		t.Errorf("crash event: %+v", ev)
 	}
 	if ev := next(t, p); ev.Kind != "ready" {
-		t.Errorf("yeniden açılış: %+v", ev)
+		t.Errorf("reopening: %+v", ev)
 	}
 	if out, err := p.Call(ctx, "echo", []byte("tamam")); err != nil || string(out) != "tamam" {
-		t.Errorf("yeniden açılan köprü: %q %v", out, err)
+		t.Errorf("reopened bridge: %q %v", out, err)
 	}
 	cancel()
 	for range 5 { // a call after the close event is rejected
@@ -152,10 +152,10 @@ func TestRestart(t *testing.T) {
 func TestRealBridge(t *testing.T) {
 	path := os.Getenv("ABAROW_BEKO_HELPER")
 	if path == "" {
-		t.Skip("ABAROW_BEKO_HELPER yok (make -C services/fiscal/beko/hub fake)")
+		t.Skip("ABAROW_BEKO_HELPER is not set (make -C services/fiscal/beko/hub fake)")
 	}
 	if runtime.GOOS != "linux" {
-		t.Skip("köprü yalnızca Linux'ta çalışır")
+		t.Skip("the bridge runs only on Linux")
 	}
 	if _, err := exec.LookPath(path); err != nil {
 		t.Fatal(err)
@@ -182,7 +182,7 @@ func TestRealBridge(t *testing.T) {
 		Lines: []domain.Line{{Name: "ŞEKER", Qty: 1000, UnitPrice: 1500, Total: 1500, TaxRate: 2000}}}
 	no, err := svc.Register(ctx, r)
 	if err != nil || no != "Z0007-000001" {
-		t.Fatalf("fiş: %q %v", no, err)
+		t.Fatalf("receipt: %q %v", no, err)
 	}
 	out, err := p.Call(ctx, "device", nil)
 	if err != nil || string(out) != "0" {
@@ -193,7 +193,7 @@ func TestRealBridge(t *testing.T) {
 	r2.SaleID = "satis-2"
 	r2.Lines = []domain.Line{{Name: "RED ürünü", Qty: 1000, UnitPrice: 1500, Total: 1500, TaxRate: 2000}}
 	if _, err := svc.Register(ctx, r2); err == nil || !strings.Contains(err.Error(), "RED") {
-		t.Errorf("reddedilen satış: %v", err)
+		t.Errorf("refused sale: %v", err)
 	}
 }
 
@@ -202,7 +202,7 @@ func TestRealBridge(t *testing.T) {
 func TestRealBridgeEncoding(t *testing.T) {
 	path := os.Getenv("ABAROW_BEKO_HELPER")
 	if path == "" || runtime.GOOS != "linux" {
-		t.Skip("ABAROW_BEKO_HELPER yok ya da Linux değil")
+		t.Skip("ABAROW_BEKO_HELPER is not set or this is not Linux")
 	}
 	abs, _ := filepath.Abs(path)
 	p := New(quiet(), abs, "test")
@@ -213,7 +213,7 @@ func TestRealBridgeEncoding(t *testing.T) {
 	}
 	out, err := p.Call(ctx, "basket", []byte(`{"basketID":"k1","items":[{"name":"ŞEKER ş İ"}]}`))
 	if err != nil || string(out) != "1" {
-		t.Fatalf("sepet: %q %v", out, err)
+		t.Fatalf("basket: %q %v", out, err)
 	}
 	for {
 		ev := next(t, p)
@@ -224,7 +224,7 @@ func TestRealBridgeEncoding(t *testing.T) {
 		_ = want // it must not be the UTF-8 form
 		latin5 := hex.EncodeToString([]byte{0xde, 'E', 'K', 'E', 'R', ' ', 0xfe, ' ', 0xdd})
 		if !strings.Contains(string(ev.Payload), latin5) || strings.Contains(string(ev.Payload), want) {
-			t.Errorf("cihaza giden bayt dizisi ISO-8859-9 değil: %s", ev.Payload)
+			t.Errorf("the bytes sent to the device are not ISO-8859-9: %s", ev.Payload)
 		}
 		return
 	}

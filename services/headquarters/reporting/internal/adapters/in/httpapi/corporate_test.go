@@ -115,13 +115,13 @@ func TestCorporateLogin(t *testing.T) {
 	rec = ali.do(http.MethodGet, "/api/auth/session", "")
 	if !strings.Contains(rec.Body.String(), `"username":"ali"`) || !strings.Contains(rec.Body.String(), `"role":"report"`) ||
 		!strings.Contains(rec.Body.String(), `"stores":["store-1"]`) || !strings.Contains(rec.Body.String(), `"all_stores":false`) {
-		t.Errorf("oturum: %s", rec.Body)
+		t.Errorf("session: %s", rec.Body)
 	}
 	if rec := ali.do(http.MethodGet, "/api/users", ""); rec.Code != http.StatusForbidden {
 		t.Errorf("a report user saw the users: %d", rec.Code)
 	}
 	if rec := ali.do(http.MethodGet, "/api/reports/summary?from=2026-10-01&to=2026-10-03", ""); rec.Code != http.StatusOK {
-		t.Errorf("rapor: %d", rec.Code)
+		t.Errorf("report: %d", rec.Code)
 	}
 
 	// The administrator sees the user: the address and the link state; removes the identity link.

@@ -24,7 +24,7 @@ import (
 func TestRealPodmanPull(t *testing.T) {
 	url, mirror, repo, digest := os.Getenv("ABAROW_TEST_PODMAN_URL"), os.Getenv("ABAROW_TEST_PODMAN_MIRROR"), os.Getenv("ABAROW_TEST_PODMAN_REPO"), os.Getenv("ABAROW_TEST_PODMAN_DIGEST")
 	if url == "" || mirror == "" || repo == "" || digest == "" {
-		t.Skip("gerçek Podman için ABAROW_TEST_PODMAN_* verilmedi")
+		t.Skip("ABAROW_TEST_PODMAN_* is not set for a real Podman")
 	}
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "abarow-x.container"), []byte("[Container]\nContainerName=abarow-x\nImage=ghcr.io/abarow/abarow-x:0.1\n"), 0o644); err != nil {
@@ -40,7 +40,7 @@ func TestRealPodmanPull(t *testing.T) {
 	img := channel.Image{Unit: "abarow-x", Repo: "ghcr.io/abarow/" + repo, Digest: digest}
 	ctx := context.Background()
 	if err := rt.Pull(ctx, img); err != nil {
-		t.Fatalf("gerçek Podman çekmesi: %v", err)
+		t.Fatalf("real Podman pull: %v", err)
 	}
 	// With no running container Current uses the pinned digest: pin with Switch first.
 	if err := rt.Switch(ctx, img); err != nil {
@@ -57,6 +57,6 @@ func TestRealPodmanPull(t *testing.T) {
 	bad := img
 	bad.Digest = "sha256:" + strings.Repeat("0", 64)
 	if err := rt.Pull(ctx, bad); err == nil {
-		t.Error("olmayan digest çekildi")
+		t.Error("a digest that does not exist was pulled")
 	}
 }

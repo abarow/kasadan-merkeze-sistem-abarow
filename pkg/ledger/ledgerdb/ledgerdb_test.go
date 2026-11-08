@@ -293,7 +293,7 @@ func TestUnfinishedAndShifts(t *testing.T) {
 				t.Fatal(err)
 			}
 			if !reflect.DeepEqual(got, closed) {
-				t.Errorf("vardiya:\n%+v\nistenen\n%+v", got, closed)
+				t.Errorf("shift:\n%+v\nwant\n%+v", got, closed)
 			}
 		})
 	}

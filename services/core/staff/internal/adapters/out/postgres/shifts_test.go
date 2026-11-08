@@ -48,7 +48,7 @@ func TestShifts(t *testing.T) {
 	start := *now
 
 	if _, err := shifts.Current(ctx); !errors.Is(err, domain.ErrNoShift) {
-		t.Fatalf("başlangıçta açık vardiya var: %v", err)
+		t.Fatalf("a shift is open at the start: %v", err)
 	}
 	sh, err := shifts.Open(ctx, "ayse", 50000)
 	if err != nil {
@@ -57,10 +57,10 @@ func TestShifts(t *testing.T) {
 	// A single drawer at the register: a second shift is not opened, the day is not closed.
 	var open domain.ShiftOpenError
 	if _, err := shifts.Open(ctx, "ali", 0); !errors.As(err, &open) || open.CashierName != "Kasiyer Ayşe" {
-		t.Errorf("ikinci vardiya açılabildi: %v", err)
+		t.Errorf("a second shift could be opened: %v", err)
 	}
 	if _, err := svc.CloseDay(ctx, "ali"); !errors.As(err, &open) {
-		t.Errorf("açık vardiyayla Z alındı: %v", err)
+		t.Errorf("Z was taken with an open shift: %v", err)
 	}
 
 	// Sales in the shift: after 1 s and 1 ns (the fixed-width time format keeps the
@@ -86,7 +86,7 @@ func TestShifts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := shifts.RecordCashMovement(ctx, "ayse", domain.CashOut, 20000, "Ara para"); !errors.Is(err, domain.ErrCashOutNotManager) {
-		t.Errorf("kasiyer para alabildi: %v", err)
+		t.Errorf("a cashier could take money out: %v", err)
 	}
 	m, err := shifts.RecordCashMovement(ctx, "ali", domain.CashOut, 20000, " Ara para ")
 	if err != nil || m.ID == 0 || m.Note != "Ara para" || m.By != "ali" {
@@ -95,15 +95,15 @@ func TestShifts(t *testing.T) {
 
 	// Opening the drawer without a sale: it is not opened when there is no drawer; the manager opens it, it is recorded.
 	if _, err := shifts.OpenDrawer(ctx, "ali", "ayse", "Bozuk para"); !errors.Is(err, app.ErrNoDrawer) {
-		t.Errorf("çekmece yokken: %v", err)
+		t.Errorf("without a drawer: %v", err)
 	}
 	drawer := &fakeDrawer{}
 	shifts.Drawer = drawer
 	if _, err := shifts.OpenDrawer(ctx, "ayse", "ayse", "Bozuk para"); !errors.Is(err, domain.ErrDrawerNotManager) || len(drawer.reasons) != 0 {
-		t.Errorf("kasiyer çekmeceyi açtı: %v", err)
+		t.Errorf("the cashier opened the drawer: %v", err)
 	}
 	if d, err := shifts.OpenDrawer(ctx, "ali", "ayse", "Bozuk para"); err != nil || d.ID == 0 || len(drawer.reasons) != 1 {
-		t.Fatalf("müdür açılışı: %+v, %v", d, err)
+		t.Fatalf("opening by the manager: %+v, %v", d, err)
 	}
 
 	*now = start.Add(8 * time.Hour)
@@ -111,47 +111,47 @@ func TestShifts(t *testing.T) {
 	stuck := app.NewShiftService(st, st, app.Events{Sources: []app.EventBacklog{fixedBacklog(1)}})
 	var pending domain.EventsPendingError
 	if _, err := stuck.Close(ctx, "ayse", 0); !errors.As(err, &pending) || pending.Pending != 1 {
-		t.Errorf("bekleyen olaylarla kapanış: %v", err)
+		t.Errorf("closing with pending events: %v", err)
 	}
 	if _, err := shifts.Current(ctx); err != nil {
-		t.Fatalf("bekleyen olaylarla vardiya kapandı: %v", err)
+		t.Fatalf("the shift closed with pending events: %v", err)
 	}
 	// An unknown cashier cannot close (that another cashier cannot close is in the domain
 	// test); a manager can close someone else's shift.
 	if _, err := shifts.Close(ctx, "mert", 0); !errors.Is(err, domain.ErrUnknownCashier) {
-		t.Errorf("tanımsız kasiyer kapatabildi: %v", err)
+		t.Errorf("an unknown cashier could close: %v", err)
 	}
 	r, err := shifts.Close(ctx, "ali", 43400)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if r.ID != sh.ID || r.ClosedBy != "ali" || r.ReceiptCount != 2 || r.Total != 3500 || r.VoidedCount != 1 {
-		t.Errorf("vardiya raporu yanlış: %+v", r)
+		t.Errorf("the shift report is wrong: %+v", r)
 	}
 	// Expected 500.00 + 35.00 + 100.00 − 200.00 = 435.00; counted 434.00.
 	if r.CashIn != 10000 || r.CashOut != 20000 || r.ExpectedCash != 43500 || r.Difference != -100 || r.DrawerOpens != 1 {
-		t.Errorf("konan %d, alınan %d, beklenen %d, fark %d; istenen 10000, 20000, 43500, -100",
+		t.Errorf("put in %d, taken out %d, expected %d, difference %d; want 10000, 20000, 43500, -100",
 			r.CashIn, r.CashOut, r.ExpectedCash, r.Difference)
 	}
 	if _, err := shifts.Close(ctx, "ali", 0); !errors.Is(err, domain.ErrNoShift) {
-		t.Errorf("kapalı vardiya ikinci kez kapandı: %v", err)
+		t.Errorf("a closed shift was closed a second time: %v", err)
 	}
 	// History: the report is recomputed from the records, it is the same as at closing.
 	again, err := shifts.Report(ctx, "ali", sh.ID)
 	if err != nil || again.ExpectedCash != r.ExpectedCash || again.CountedCash != 43400 || again.ClosedAt.IsZero() || again.CashierName != "Kasiyer Ayşe" {
-		t.Errorf("geçmiş rapor: %+v, %v", again, err)
+		t.Errorf("past report: %+v, %v", again, err)
 	}
 	if _, err := shifts.Report(ctx, "ali", 999); !errors.Is(err, domain.ErrUnknownShift) {
-		t.Errorf("olmayan vardiya: %v", err)
+		t.Errorf("shift that does not exist: %v", err)
 	}
 	history, err := shifts.History(ctx, "ayse", 10)
 	if err != nil || len(history) != 1 || history[0].ID != sh.ID {
-		t.Errorf("Ayşe'nin geçmişi: %+v, %v", history, err)
+		t.Errorf("Ayşe's history: %+v, %v", history, err)
 	}
 
 	// No movement is written to a closed shift (the adapter checks too).
 	if _, err := st.AddCashMovement(ctx, domain.CashMovement{ShiftID: sh.ID, Kind: domain.CashIn, Amount: 100, Note: "geç", By: "ali", At: *now}); !errors.Is(err, domain.ErrNoShift) {
-		t.Errorf("kapalı vardiyaya hareket yazıldı: %v", err)
+		t.Errorf("a movement was written to a closed shift: %v", err)
 	}
 
 	// Even if the event comes late the sale goes into the shift it was made in; a sale
@@ -168,14 +168,14 @@ func TestShifts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(completed) != 3 || completed[2].SaleID != "s3" {
-		t.Errorf("vardiyaya giren satışlar yanlış: %+v", completed)
+		t.Errorf("the sales in the shift are wrong: %+v", completed)
 	}
 
 	// When the shift closes the day can be closed (if the events were processed); a new
 	// shift can be opened.
 	stuckDay := app.NewService(st, st, st, app.Events{Sources: []app.EventBacklog{fixedBacklog(2)}})
 	if _, err := stuckDay.CloseDay(ctx, "ali"); !errors.As(err, &pending) || pending.Pending != 2 {
-		t.Errorf("bekleyen olaylarla Z: %v", err)
+		t.Errorf("Z with pending events: %v", err)
 	}
 	if _, err := svc.CloseDay(ctx, "ali"); err != nil {
 		t.Fatal(err)
@@ -187,20 +187,20 @@ func TestShifts(t *testing.T) {
 	// The report of an open shift is not given (blind count); a cashier cannot see
 	// someone else's report, and does not see anyone else's in their own history.
 	if _, err := shifts.Report(ctx, "ali", ali.ID); !errors.Is(err, domain.ErrShiftNotClosed) {
-		t.Errorf("açık vardiyanın raporu: %v", err)
+		t.Errorf("report of the open shift: %v", err)
 	}
 	*now = now.Add(time.Hour)
 	if _, err := shifts.Close(ctx, "ali", 0); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := shifts.Report(ctx, "ayse", ali.ID); !errors.Is(err, domain.ErrNotShiftOwner) {
-		t.Errorf("kasiyer başkasının raporunu gördü: %v", err)
+		t.Errorf("a cashier saw someone else's report: %v", err)
 	}
 	if history, _ := shifts.History(ctx, "ayse", 10); len(history) != 1 {
-		t.Errorf("Ayşe'nin geçmişinde %d vardiya, istenen 1", len(history))
+		t.Errorf("%d shifts in Ayşe's history, want 1", len(history))
 	}
 	if history, _ := shifts.History(ctx, "ali", 10); len(history) != 2 || history[0].ID != ali.ID {
-		t.Errorf("müdürün geçmişi yeniden eskiye değil: %+v", history)
+		t.Errorf("the manager's history is not newest first: %+v", history)
 	}
 }
 
@@ -234,7 +234,7 @@ func TestPrintReports(t *testing.T) {
 	}
 	// The report of an open shift is not printed (blind count).
 	if err := print.PrintShift(ctx, "ali", sh.ID); !errors.Is(err, domain.ErrShiftNotClosed) {
-		t.Errorf("açık vardiya basıldı: %v", err)
+		t.Errorf("an open shift was printed: %v", err)
 	}
 	*now = now.Add(time.Hour)
 	if _, err := shifts.Close(ctx, "ayse", 50000); err != nil {
@@ -258,9 +258,9 @@ func TestPrintReports(t *testing.T) {
 	}
 	want := []string{fmt.Sprintf("Vardiya raporu %d", sh.ID), "X raporu (Z no 1)", "Z raporu 1"}
 	if !slices.Equal(out.titles, want) {
-		t.Errorf("basılanlar %q, istenen %q", out.titles, want)
+		t.Errorf("printed %q, want %q", out.titles, want)
 	}
 	if strings.TrimSpace(out.lines[2][0]) != "Z RAPORU" {
-		t.Errorf("Z raporunun ilk satırı: %q", out.lines[2][0])
+		t.Errorf("first line of the Z report: %q", out.lines[2][0])
 	}
 }

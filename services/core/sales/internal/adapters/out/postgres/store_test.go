@@ -81,7 +81,7 @@ func TestSaveAndGet(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 	if !reflect.DeepEqual(got.Snapshot(), s.Snapshot()) {
-		t.Errorf("okunan satış farklı:\n%+v\nistenen\n%+v", got.Snapshot(), s.Snapshot())
+		t.Errorf("the sale read differs:\n%+v\nwant\n%+v", got.Snapshot(), s.Snapshot())
 	}
 
 	// Updates: first the state with payment taken (charged), then closed (paid).
@@ -100,7 +100,7 @@ func TestSaveAndGet(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !reflect.DeepEqual(got.Snapshot(), s.Snapshot()) {
-			t.Errorf("güncellenen satış farklı:\n%+v\nistenen\n%+v", got.Snapshot(), s.Snapshot())
+			t.Errorf("the updated sale differs:\n%+v\nwant\n%+v", got.Snapshot(), s.Snapshot())
 		}
 	}
 }
@@ -108,7 +108,7 @@ func TestSaveAndGet(t *testing.T) {
 func TestGetNotFound(t *testing.T) {
 	st, _ := openStore(t)
 	if _, err := st.Get(context.Background(), "yok"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("hata = %v, istenen %v", err, app.ErrNotFound)
+		t.Errorf("error = %v, want %v", err, app.ErrNotFound)
 	}
 }
 
@@ -126,7 +126,7 @@ func TestNextReceiptNoIsSequential(t *testing.T) {
 			t.Fatal(err)
 		}
 		if got != want {
-			t.Errorf("fiş no = %d, istenen %d", got, want)
+			t.Errorf("receipt no = %d, want %d", got, want)
 		}
 	}
 }
@@ -150,13 +150,13 @@ func TestInTxRollsBackOnError(t *testing.T) {
 		return boom
 	})
 	if !errors.Is(err, boom) {
-		t.Fatalf("hata = %v, istenen %v", err, boom)
+		t.Fatalf("error = %v, want %v", err, boom)
 	}
 	if _, err := st.Get(ctx, "s1"); !errors.Is(err, app.ErrNotFound) {
-		t.Errorf("geri alınan satış kalmış: %v", err)
+		t.Errorf("a rolled-back sale stayed: %v", err)
 	}
 	if n := countOutbox(t, st); n != 0 {
-		t.Errorf("outbox'ta %d satır, istenen 0", n)
+		t.Errorf("%d rows in the outbox, want 0", n)
 	}
 	var no int64
 	_ = st.InTx(ctx, func(tx app.Tx) error {
@@ -165,7 +165,7 @@ func TestInTxRollsBackOnError(t *testing.T) {
 		return err
 	})
 	if no != 1 {
-		t.Errorf("geri almadan sonra fiş no = %d, istenen 1", no)
+		t.Errorf("receipt no after the rollback = %d, want 1", no)
 	}
 }
 
@@ -185,7 +185,7 @@ func TestOutboxPendingAndMarkPublished(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(pending) != 2 || !reflect.DeepEqual(pending[0].Message, msgs[0]) || !reflect.DeepEqual(pending[1].Message, msgs[1]) {
-		t.Fatalf("bekleyen mesajlar yanlış: %+v", pending)
+		t.Fatalf("the pending messages are wrong: %+v", pending)
 	}
 	if err := st.MarkPublished(ctx, pending[0].Seq, apptest.Now); err != nil {
 		t.Fatal(err)
@@ -195,10 +195,10 @@ func TestOutboxPendingAndMarkPublished(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(pending) != 1 || pending[0].ID != "e2" {
-		t.Errorf("işaretlemeden sonra bekleyenler: %+v", pending)
+		t.Errorf("pending after marking: %+v", pending)
 	}
 	if n, err := st.CountPending(ctx); err != nil || n != 1 {
-		t.Errorf("CountPending = %d, %v; istenen 1", n, err)
+		t.Errorf("CountPending = %d, %v; want 1", n, err)
 	}
 }
 
@@ -221,13 +221,13 @@ func TestCheckoutWritesSaleAndOutboxTogether(t *testing.T) {
 	fiscal.Err = errors.New("yazıcıda kağıt yok")
 	cash := []domain.Payment{{Method: domain.PaymentCash, Amount: 20000}}
 	if _, err := svc.Checkout(ctx, sale.ID(), cash); err == nil {
-		t.Fatal("mali kayıt hatası dönmedi")
+		t.Fatal("the fiscal record error was not returned")
 	}
 	if stored, err := st.Get(ctx, sale.ID()); err != nil || stored.Status() != domain.StatusCharged {
-		t.Fatalf("satış charged olmalı: %+v, %v", stored, err)
+		t.Fatalf("the sale should be charged: %+v, %v", stored, err)
 	}
 	if n := countOutbox(t, st); n != 1 {
-		t.Errorf("başarısız checkout sonrası outbox'ta %d satır, istenen 1 (sale.charged.v1)", n)
+		t.Errorf("%d rows in the outbox after a failed checkout, want 1 (sale.charged.v1)", n)
 	}
 
 	// Retry: it closes with the same payment; the sale, the receipt number and the event
@@ -238,11 +238,11 @@ func TestCheckoutWritesSaleAndOutboxTogether(t *testing.T) {
 		t.Fatalf("Checkout: %v", err)
 	}
 	if payments.Calls != 1 {
-		t.Errorf("ödeme %d kez alındı, istenen 1", payments.Calls)
+		t.Errorf("payment taken %d times, want 1", payments.Calls)
 	}
 	stored, err := st.Get(ctx, done.ID())
 	if err != nil || stored.Status() != domain.StatusPaid || stored.ReceiptNo() != 1 {
-		t.Fatalf("kaydedilen satış: %+v, %v", stored, err)
+		t.Fatalf("saved sale: %+v, %v", stored, err)
 	}
 
 	var typ, subject, storeID, registerID string
@@ -250,16 +250,16 @@ func TestCheckoutWritesSaleAndOutboxTogether(t *testing.T) {
 	err = st.db.QueryRow(`SELECT type, subject, store_id, register_id, payload FROM outbox WHERE published_at IS NULL AND subject = 'sale.completed.v1'`).
 		Scan(&typ, &subject, &storeID, &registerID, &payload)
 	if err != nil {
-		t.Fatalf("outbox okunamadı: %v", err)
+		t.Fatalf("could not read the outbox: %v", err)
 	}
 	if typ != "com.abarow.sale.completed.v1" || subject != "sale.completed.v1" || storeID != "store-1" || registerID != "register-1" {
-		t.Errorf("outbox satırı yanlış: %s %s %s %s", typ, subject, storeID, registerID)
+		t.Errorf("outbox row is wrong: %s %s %s %s", typ, subject, storeID, registerID)
 	}
 	var ev domain.SaleCompleted
 	if err := json.Unmarshal(payload, &ev); err != nil {
 		t.Fatal(err)
 	}
 	if ev.ReceiptNo != 1 || ev.Total != 12537 {
-		t.Errorf("payload yanlış: %+v", ev)
+		t.Errorf("payload is wrong: %+v", ev)
 	}
 }

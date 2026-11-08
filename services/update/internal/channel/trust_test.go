@@ -86,7 +86,7 @@ func TestManifestKeyRotationWindow(t *testing.T) {
 			t.Fatalf("%s: %v", tc.name, err)
 		}
 		if has(tr, oldK) != tc.old || has(tr, newK) != tc.new {
-			t.Errorf("%s: eski=%v yeni=%v, istenen %v/%v", tc.name, has(tr, oldK), has(tr, newK), tc.old, tc.new)
+			t.Errorf("%s: old=%v new=%v, want %v/%v", tc.name, has(tr, oldK), has(tr, newK), tc.old, tc.new)
 		}
 	}
 }
@@ -123,7 +123,7 @@ func TestTrustRejectsMistakes(t *testing.T) {
 	} {
 		if _, err := channel.ParseTrustAt([]byte(raw), now); err == nil {
 			if _, err := channel.CosignAt([]byte(raw), now); err == nil {
-				t.Errorf("%s: kabul edildi", name)
+				t.Errorf("%s: accepted", name)
 			}
 		}
 	}
@@ -204,6 +204,6 @@ func TestInspectReportsStates(t *testing.T) {
 		t.Errorf("order: %+v", infos[0])
 	}
 	if _, err := channel.Inspect([]byte(`{"prod":["kısa"]}`), now); err == nil {
-		t.Error("bozuk anahtar kabul edildi")
+		t.Error("a broken key was accepted")
 	}
 }
