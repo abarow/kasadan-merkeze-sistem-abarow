@@ -73,11 +73,11 @@ func (s *Store) SaveAttempts(ctx context.Context, c domain.Cashier) error {
 	return err
 }
 
-func lockedUntil(c domain.Cashier) sql.NullString {
+func lockedUntil(c domain.Cashier) sql.NullTime {
 	if c.LockedUntil.IsZero() {
-		return sql.NullString{}
+		return sql.NullTime{}
 	}
-	return sql.NullString{String: formatTime(c.LockedUntil), Valid: true}
+	return sql.NullTime{Time: formatTime(c.LockedUntil), Valid: true}
 }
 
 func (s *Store) DeleteCashierSessions(ctx context.Context, cashierID string) error {

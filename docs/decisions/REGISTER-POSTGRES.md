@@ -27,4 +27,4 @@ Servislerin kendi SQLite önbellekleri ortadan kalktığı için toplam zirve az
 - **Quadlet kurulumu gerçek Podman'da denenmedi.** CI ve yerel simülasyonlar Docker Compose kullanır. `abarow-register-db.container` ve `register-install.sh` değişikliği yalnızca sözdizimi ve ayar testiyle doğrulandı.
 - **Ana sürüm yükseltmesi** (`pg_upgrade`) artık kasalar için de güncelleme sürecinin bir konusudur; otomatik yolu yoktur.
 - **Elektrik kesintisinde toparlanma** PostgreSQL'in WAL kurtarmasına bağlıdır; ayrıca test edilmedi.
-- `staff` servisinde zaman sütunları sabit genişlikli UTC metin olarak kaldı (`COLLATE "C"`: bayt sırası zaman sırasıdır). Diğer servisler `TIMESTAMPTZ` kullanır.
+- `staff` servisinde zaman sütunları sabit genişlikli UTC metin olarak kaldı (`COLLATE "C"`: bayt sırası zaman sırasıdır). Diğer servisler `TIMESTAMPTZ` kullanır. (12.11.2026: `staff` da `TIMESTAMPTZ`'ye geçti, migration `00004_timestamptz.sql`.)

@@ -22,11 +22,6 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// timeLayout is the form of times in the database: fixed-width UTC. Thanks to
-// the fixed width text comparison is the same as time order (session expiry and shift
-// boundaries are compared in SQL).
-const timeLayout = "2006-01-02T15:04:05.000000000Z07:00"
-
 // Store implements app.Store with PostgreSQL.
 type Store struct {
 	db *sql.DB
@@ -225,8 +220,10 @@ func (s *Store) inTx(ctx context.Context, fn func(*sql.Tx) error) error {
 	return tx.Commit()
 }
 
-func formatTime(t time.Time) string { return t.UTC().Format(timeLayout) }
+// formatTime is a time as it is written to the database: the time columns are
+// TIMESTAMPTZ (migration 00004; before it fixed-width UTC text).
+func formatTime(t time.Time) time.Time { return t.UTC() }
 
-// parseTime decodes the time in the database. The first versions wrote RFC3339Nano
-// (trailing zeros dropped); those records are decoded too.
+// parseTime decodes a time read into a string: database/sql writes a TIMESTAMPTZ as
+// RFC 3339 with nanoseconds.
 func parseTime(s string) (time.Time, error) { return time.Parse(time.RFC3339Nano, s) }
