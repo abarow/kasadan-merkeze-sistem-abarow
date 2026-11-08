@@ -6,7 +6,7 @@
 # of the store) and connects the registers to it (as root, from the repository root):
 #
 #   sudo deploy/install/store-install.sh --store-id store-1 --address 192.168.1.10[,store.local] [--password-file file]
-#        [--headquarters tls://headquarters.example.com:7422 --headquarters-ca ca.pem] [--backup-target /mnt/backup/abarow|user@server[:/path]]
+#        [--headquarters tls://headquarters.example.com:7422[,tls://hq2...:7422,tls://hq3...:7422] --headquarters-ca ca.pem] [--backup-target /mnt/backup/abarow|user@server[:/path]]
 #        [--update-url https://headquarters.example.com:8443 [--level test|pilot|prod] [--publisher-key root.pub] [--channel-keys channel.json]]
 #        [--login local,oidc --oidc-issuer https://idp.example.com/realms/example --oidc-client abarow-store
 #         --oidc-url https://store.example.com [--oidc-secret-file file]]
@@ -576,7 +576,7 @@ install)
 	printf '\n    sudo deploy/install/store-install.sh cashiers-load /path/seed/cashiers.json\n\n'
 	if [ -n "$headquarters" ]; then
 		key=$("${natsauth[@]}" -out /auth -show-leaf-key | tr -d '\r' | tail -n 1)
-		say "Add this store to headquarters (on headquarters, from the repository root):"
+		say "Add this store to headquarters (on headquarters, from the repository root; headquarters on three machines: on all three):"
 		printf '\n    sudo deploy/install/headquarters-install.sh store-add %s %s\n\n' "$store_id" "$key"
 		say "Until the store is added to headquarters it keeps working; sales accumulate at the store server."
 	fi

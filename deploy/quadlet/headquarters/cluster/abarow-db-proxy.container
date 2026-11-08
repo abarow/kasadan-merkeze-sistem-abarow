@@ -1,0 +1,31 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Headquarters on three machines (docs/decisions/HA-HEADQUARTERS.md): the machine's HAProxy. It
+# takes the place of the single-machine database: headquarters-install.sh --cluster installs this
+# file as abarow-db.container, so the services keep connecting to abarow-db:5432 and their units
+# do not change. HAProxy asks Patroni on the three machines which one is primary and sends the
+# connections there; when the primary changes it cuts the connections to the old one. The
+# connection itself is TLS from the service to the primary (sslmode=verify-ca). The install
+# writes the configuration (~/abarow/headquarters/haproxy.cfg).
+
+[Unit]
+Description=abarow headquarters database address (HAProxy to the primary; three machines)
+
+[Container]
+ContainerName=abarow-db
+Image=docker.io/library/haproxy:3.2-alpine
+Network=abarow-headquarters.network
+Volume=%h/abarow/headquarters/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro,Z
+Secret=abarow-headquarters-tls-ca,type=mount,target=/etc/abarow/tls/ca.pem
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=60
+
+[Quadlet]
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

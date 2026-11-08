@@ -1,0 +1,47 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Headquarters on three machines (docs/decisions/HA-HEADQUARTERS.md): this machine's PostgreSQL,
+# run by Patroni (deploy/container/patroni.Containerfile). One machine is primary, the others are
+# synchronous replicas. The services do not connect here but to abarow-db, the machine's
+# HAProxy, which sends them to the primary. headquarters-install.sh --cluster writes the
+# machine's name and the etcd addresses (abarow-patroni.container.d/node.conf) and the database
+# settings by the number of stores (tune.conf; reporting pgtune --machines 3).
+
+[Unit]
+Description=abarow headquarters database on three machines (PostgreSQL with Patroni)
+Wants=abarow-etcd.service
+After=abarow-etcd.service
+
+[Container]
+ContainerName=abarow-patroni
+Image=ghcr.io/abarow/abarow-patroni:0.1
+Network=abarow-headquarters.network
+Volume=abarow-patroni-data:/var/lib/postgresql
+Secret=abarow-db-password,type=mount,target=/run/secrets/db-password
+Secret=abarow-db-replication-password,type=mount,target=/run/secrets/replication-password
+Secret=abarow-db-restapi-password,type=mount,target=/run/secrets/restapi-password
+Secret=abarow-headquarters-tls-ca,type=mount,target=/etc/abarow/tls/ca.pem
+Secret=abarow-headquarters-tls-cert,type=mount,target=/etc/abarow/tls/server.pem
+Secret=abarow-headquarters-tls-key,type=mount,target=/etc/abarow/tls/server.key
+# Healthy when PostgreSQL accepts connections (as primary or replica). Until two of the three
+# machines are up there is no database; the unit still runs and waits.
+HealthCmd=pg_isready -h /var/run/postgresql -U abarow -d postgres
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# Opened only to the other two headquarters machines (firewall): replication and Patroni's REST API.
+PublishPort=5432:5432
+PublishPort=8008:8008
+PodmanArgs=--memory=256m
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Quadlet]
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

@@ -454,16 +454,22 @@ backup_copy_command() {
 # the first base backup is taken right away, so a restore to a moment works from the
 # install day on.
 weekly_db_jobs_install() {
-	local dir=$1 units=$2 prefix=$3 job
+	# db: the database container the jobs run in (on headquarters on three machines
+	# abarow-patroni, every machine's own database); start=false: the first base backup is not
+	# taken now (the database is not open yet).
+	local dir=$1 units=$2 prefix=$3 db=${4:-} start=${5:-true} job
 	install -o "$user" -g "$user" -m 0755 "$here/deploy/quadlet/backup/basebackup.sh" "$dir/basebackup.sh"
 	install -o "$user" -g "$user" -m 0755 "$here/deploy/quadlet/backup/dbmaint.sh" "$dir/dbmaint.sh"
 	install -o "$user" -g "$user" -m 0644 "$here/deploy/quadlet/backup/pitr-restore.sh" "$dir/pitr-restore.sh"
 	for job in basebackup dbmaint; do
 		install -o "$user" -g "$user" -m 0644 "$units/$prefix-$job.service" "$units/$prefix-$job.timer" "$home/.config/systemd/user/"
+		# Only the container name (abarow-db followed by a space, a dot or the line's end), not
+		# abarow-dbmaint.
+		[ -z "$db" ] || sed -i "s/$prefix-db\([ .]\|$\)/$db\1/g" "$home/.config/systemd/user/$prefix-$job.service"
 	done
 	as systemctl --user daemon-reload
 	as systemctl --user enable --now "$prefix-basebackup.timer" "$prefix-dbmaint.timer"
-	if ! ls "$dir"/backups/base-*.tar.gz >/dev/null 2>&1; then
+	if [ "$start" = true ] && ! ls "$dir"/backups/base-*.tar.gz >/dev/null 2>&1; then
 		as systemctl --user start "$prefix-basebackup.service" ||
 			die "could not take the first base backup (journalctl --user -u $prefix-basebackup)"
 		say "Weekly base backup and maintenance set up (the first base backup was taken; the WAL archive is on)"

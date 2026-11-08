@@ -108,6 +108,8 @@ jobs:
           units=$(grep -c '^---abarow-' /tmp/quadlet.out)
           echo "$files Quadlet files, $units units"
           [ "$files" -eq "$units" ] || { echo "::error::$files Quadlet files produced $units units"; exit 1; }
+      - name: Headquarters on three machines, the units the install writes
+        run: bash scripts/hq-cluster-units-test.sh
 
   e2e:
     name: End-to-end (${{ matrix.scenario }})

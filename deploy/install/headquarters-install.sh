@@ -17,6 +17,8 @@
 #   sudo deploy/install/headquarters-install.sh reprocess
 #   sudo deploy/install/headquarters-install.sh catalog-load <catalog.json>
 #   sudo deploy/install/headquarters-install.sh backup-copy
+#   sudo deploy/install/headquarters-install.sh --address hq1.example.com --cluster hq1.example.com,hq2.example.com,hq3.example.com --node 1 [--vip 192.168.1.50/24 [--vip-interface eth0]] [other options]
+#   sudo deploy/install/headquarters-install.sh cluster-export <file>                     (on the first machine; then on the 2nd and 3rd: --node 2|3 --cluster-import <file>)
 #
 # What the install does (running it again is safe; it does not break what exists):
 #   1. Checks that Podman 5, aardvark-dns and nftables are present.
@@ -74,17 +76,31 @@
 # plain HTTP. For remote access use --domain (HTTPS; the domain must point to
 # this machine and ports 80 and 443 must be open) or a VPN (see
 # deploy/quadlet/README.md); to open it to a trusted local network use --screen 0.0.0.0:9090.
+#
+# Headquarters on three machines (--cluster; docs/decisions/HA-HEADQUARTERS.md): every
+# machine runs the same services; NATS is a cluster, the database is run by Patroni and etcd
+# with synchronous replicas, every machine's HAProxy sends the services to the primary. The
+# first machine is installed first (--node 1); cluster-export there writes the shared keys, the
+# CA and the passwords to a file, which is given to the 2nd and 3rd machines with
+# --cluster-import. The database opens when two of the three machines are installed. Between
+# the three machines (only) 2379, 2380, 5432, 6222 and 8008 must be open. --vip gives the screen
+# and the stores one address held by one of the machines (keepalived; the machines must be in
+# the same network); without it the stores get the three addresses. store-add and store-remove
+# are run on all three machines. restore and restore-to are not run on a cluster (see
+# HA-HEADQUARTERS.md).
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")/../.." && pwd)
 # shellcheck source-path=SCRIPTDIR source=common.sh
 . "$here/deploy/install/common.sh"
+# shellcheck source-path=SCRIPTDIR source=headquarters-cluster.sh
+. "$here/deploy/install/headquarters-cluster.sh"
 
 quadlet="$here/deploy/quadlet/headquarters"
 [ -f "$quadlet/abarow-ingest.container" ] || die "Quadlet files not found: $quadlet"
 
 usage() {
-	sed -n '9,18p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '9,21p' "$0" | sed 's/^# \{0,1\}//'
 	exit 2
 }
 
@@ -109,10 +125,15 @@ level=prod
 account=
 password_file=
 confirmed=
+cluster=
+node=
+cluster_import=
+vip=
+vip_interface=
 command=install
 
 case "${1:-}" in
-store-add | store-remove | account | restore | restore-to | reprocess | catalog-load | backup-copy)
+store-add | store-remove | account | restore | restore-to | reprocess | catalog-load | backup-copy | cluster-export)
 	command=$1
 	shift
 	;;
@@ -141,6 +162,11 @@ while [ $# -gt 0 ]; do
 	--channel) channel=$2; shift 2 ;;
 	--ghcr-user) ghcr_user=$2; shift 2 ;;
 	--ghcr-token-file) ghcr_token_file=$2; shift 2 ;;
+	--cluster) cluster=$2; shift 2 ;;
+	--node) node=$2; shift 2 ;;
+	--cluster-import) cluster_import=$2; shift 2 ;;
+	--vip) vip=$2; shift 2 ;;
+	--vip-interface) vip_interface=$2; shift 2 ;;
 	--yes) confirmed=1; shift ;;
 	-h | --help) usage ;;
 	--*) echo "unknown option: $1" >&2; usage ;;
@@ -176,6 +202,12 @@ if [ "$command" = install ]; then
 	esac
 	oidc_validate "$login" "$oidc_issuer" "$oidc_client" "https://$domain"
 	[ -z "$oidc_secret_file" ] || [ -n "$oidc_issuer" ] || die "--oidc-secret-file is only given with the corporate sign-in (--login oidc)."
+	if [ -n "$cluster" ]; then
+		cluster_validate
+		hosts=$(cluster_hosts)
+	elif [ -n "$node" ] || [ -n "$cluster_import" ] || [ -n "$vip" ] || [ -n "$vip_interface" ]; then
+		die "--node, --cluster-import, --vip and --vip-interface are only used with --cluster."
+	fi
 fi
 
 preflight
@@ -206,6 +238,10 @@ level=$level
 login=$login
 oidc_issuer=$oidc_issuer
 oidc_client=$oidc_client
+cluster=$cluster
+node=$node
+vip=$vip
+vip_interface=$vip_interface
 EOF
 else
 	[ -f "$settings" ] || die "headquarters is not installed: first run headquarters-install.sh --address ..."
@@ -221,6 +257,10 @@ else
 	login=$(setting login)
 	oidc_issuer=$(setting oidc_issuer)
 	oidc_client=$(setting oidc_client)
+	cluster=$(setting cluster)
+	node=$(setting node)
+	vip=$(setting vip)
+	vip_interface=$(setting vip_interface)
 fi
 [ "$command" != install ] || ghcr_login
 
@@ -250,6 +290,17 @@ replay() {
 	as systemctl --user is-active --quiet abarow-ingest.service || die "abarow-ingest is not running."
 	as podman exec abarow-ingest /service replay
 }
+
+if [ "$command" = cluster-export ]; then
+	[ $# -eq 1 ] || die "usage: headquarters-install.sh cluster-export <file>"
+	[ -n "$cluster" ] || die "this headquarters is not installed with --cluster."
+	cluster_export "$1"
+	exit 0
+fi
+
+if [ -n "$cluster" ] && { [ "$command" = restore ] || [ "$command" = restore-to ]; }; then
+	die "$command is not run on headquarters on three machines: the other machines' services keep writing. See docs/decisions/HA-HEADQUARTERS.md (restoring a cluster)."
+fi
 
 if [ "$command" = backup-copy ]; then
 	[ $# -eq 0 ] || die "usage: headquarters-install.sh backup-copy"
@@ -372,6 +423,12 @@ install)
 		oidc_secret abarow-headquarters-oidc-secret "$oidc_secret_file"
 		say "Corporate sign-in client secret saved"
 	fi
+	# Headquarters on three machines: the 2nd and 3rd machines take the first one's keys, CA and
+	# passwords before anything is made here.
+	[ -z "$cluster_import" ] || cluster_import "$cluster_import"
+	if [ -n "$cluster" ] && [ "$node" != 1 ] && ! as test -s "$auth/tls/ca.pem"; then
+		die "machine $node needs the first machine's keys: run cluster-export there and give the file with --cluster-import."
+	fi
 	# 3. Database password: generated at random, kept when the install is
 	# repeated (the database is created with this password on its first start).
 	if ! as test -s "$auth/db-password"; then
@@ -382,7 +439,11 @@ install)
 	fi
 	db_password=$(as cat "$auth/db-password")
 	secret abarow-db-password "$auth/db-password"
-	printf 'postgres://abarow:%s@abarow-db:5432/abarow?sslmode=disable' "$db_password" | as podman secret create --replace abarow-db-url - >/dev/null
+	if [ -n "$cluster" ]; then
+		cluster_db_url "$db_password" | as podman secret create --replace abarow-db-url - >/dev/null
+	else
+		printf 'postgres://abarow:%s@abarow-db:5432/abarow?sslmode=disable' "$db_password" | as podman secret create --replace abarow-db-url - >/dev/null
+	fi
 	unset db_password
 	;;
 esac
@@ -390,8 +451,11 @@ esac
 # 4. NATS configuration and the leaf TLS (regenerated when the store list
 # changes too; the keys and the CA are kept).
 before=$( (cat "$auth/nats.conf" 2>/dev/null || true) | sha256sum)
-"${natsauth[@]}" -role headquarters -out /auth -conf-dir /etc/nats -users ingest,catalog,inventory -server-name headquarters \
+nats_names=(-server-name headquarters)
+[ -z "$cluster" ] || nats_names=(-server-name "headquarters-$node" -domain headquarters -routes "$(cluster_routes)")
+"${natsauth[@]}" -role headquarters -out /auth -conf-dir /etc/nats -users ingest,catalog,inventory "${nats_names[@]}" \
 	-stores /config/stores.json -leaf-hosts "$hosts"
+[ -z "$cluster" ] || [ "$command" != install ] || cluster_secrets
 secret abarow-headquarters-nats-conf "$auth/nats.conf"
 secret abarow-headquarters-tls-cert "$auth/tls/server.pem"
 secret abarow-headquarters-tls-key "$auth/tls/server.key"
@@ -408,6 +472,7 @@ units_dir="$home/.config/containers/systemd"
 dropins_before=$(dropin_digest)
 install_units "$quadlet"
 install_units "$quadlet/backup"
+[ -z "$cluster" ] || cluster_units
 # Update (optional): the agent registers with the publisher; the server approves the store and register registrations.
 # Nothing updates by itself.
 update_units=
@@ -458,7 +523,14 @@ oidc_dropin headquarters-install.sh "$units_dir/abarow-reporting.container.d/oid
 # and max_connections do not change without a restart). The values in the Quadlet
 # file are the base for a single store.
 db_dropin="$units_dir/abarow-db.container.d"
-tune=$(as podman run --rm --network none -v "$config:/config:ro,Z" "ghcr.io/abarow/abarow-reporting:$channel" pgtune) ||
+machines=1
+if [ -n "$cluster" ]; then
+	# On three machines the database is abarow-patroni; abarow-db is HAProxy.
+	as rm -f "$db_dropin/tune.conf"
+	db_dropin="$units_dir/abarow-patroni.container.d"
+	machines=3
+fi
+tune=$(as podman run --rm --network none -v "$config:/config:ro,Z" "ghcr.io/abarow/abarow-reporting:$channel" pgtune --machines "$machines") ||
 	die "could not compute the database settings (reporting pgtune)"
 db_memory=$(printf '%s\n' "$tune" | sed -n 's/^MEMORY_MB=//p')
 db_flags=$(printf '%s\n' "$tune" | sed -n 's/^ARGS=//p')
@@ -466,17 +538,24 @@ db_shm=$(printf '%s\n' "$tune" | sed -n 's/^SHM_MB=//p')
 [ -n "$db_memory" ] && [ -n "$db_flags" ] || die "could not read the database settings: $tune"
 tune_before=$( (cat "$db_dropin/tune.conf" 2>/dev/null || true) | sha256sum)
 as mkdir -p "$db_dropin"
+# The single-machine database is started as "postgres -c ...", Patroni's image takes the
+# "-c ..." list alone (on three machines it is used when the cluster is created; later
+# changes go through cluster_tune_apply).
+db_exec="postgres $db_flags"
+[ -z "$cluster" ] || db_exec=$db_flags
 as tee "$db_dropin/tune.conf" >/dev/null <<EOF
 # written by headquarters-install.sh: database settings according to the number
 # of connected stores (reporting pgtune; pkg/pgtune.ForHeadquarters). Rewritten when a store is added or removed.
 [Container]
-Exec=postgres $db_flags
+Exec=$db_exec
 PodmanArgs=--memory=${db_memory}m --shm-size=${db_shm:-64}m
 EOF
 tune_changed=false
 [ "$tune_before" = "$( (cat "$db_dropin/tune.conf" 2>/dev/null || true) | sha256sum)" ] || tune_changed=true
 as systemctl --user daemon-reload
-if $tune_changed && as systemctl --user is-active --quiet abarow-db.service; then
+if $tune_changed && [ -n "$cluster" ]; then
+	cluster_tune_apply "$db_flags"
+elif $tune_changed && as systemctl --user is-active --quiet abarow-db.service; then
 	as systemctl --user restart abarow-db.service || true
 fi
 if [ "$dropins_before" != "$(dropin_digest)" ] && as systemctl --user is-active --quiet abarow-reporting.service; then
@@ -489,8 +568,17 @@ if [ "$before" != "$(sha256sum <"$auth/nats.conf")" ] || [ "$command" != install
 		fi
 	done
 fi
+cluster_units_started=
+[ -z "$cluster" ] || cluster_units_started="abarow-etcd.service abarow-patroni.service"
 # shellcheck disable=SC2046,SC2086 # unit names contain no spaces
-start_units $(unit_names "$quadlet") $update_units
+start_units $cluster_units_started $(unit_names "$quadlet") $update_units
+# On three machines the database opens when two machines are installed; until then the first
+# backups and the account wait.
+db_ready=true
+if [ -n "$cluster" ] && ! cluster_db_ready; then
+	db_ready=false
+	say "The database is not open yet: it opens when two of the three machines are installed (this is machine $node)"
+fi
 
 # 5b. HTTPS for the screen (--domain): Caddy, in front of abarow-reporting.
 caddy_unit="$units_dir/abarow-caddy.container"
@@ -535,12 +623,28 @@ elif [ -f "$caddy_unit" ]; then
 fi
 if [ "$command" = install ]; then
 	as systemctl --user enable --now abarow-backup.timer
-	# The first backup is taken right away: that the backup works is seen at install time.
-	as systemctl --user start abarow-backup.service ||
-		die "could not take the database backup (journalctl --user -u abarow-backup)"
-	say "Daily backup set up ($backups; the first backup was taken)"
-	# The weekly base backup (restore-to) and the database maintenance.
-	weekly_db_jobs_install "$headquarters" "$quadlet/backup" abarow
+	if $db_ready; then
+		# The first backup is taken right away: that the backup works is seen at install time.
+		as systemctl --user start abarow-backup.service ||
+			die "could not take the database backup (journalctl --user -u abarow-backup)"
+		say "Daily backup set up ($backups; the first backup was taken)"
+	else
+		say "Daily backup set up ($backups); the first one is taken on schedule, once the database is open"
+	fi
+	# The weekly base backup (restore-to) and the database maintenance; on three machines
+	# every machine backs up and maintains its own database (abarow-patroni).
+	if [ -n "$cluster" ]; then
+		weekly_db_jobs_install "$headquarters" "$quadlet/backup" abarow abarow-patroni "$db_ready"
+	else
+		weekly_db_jobs_install "$headquarters" "$quadlet/backup" abarow
+	fi
+fi
+
+# 5d. The screen's and the stores' single address (--vip, keepalived).
+if [ "$command" = install ] && [ -n "$cluster" ] && [ -n "$vip" ]; then
+	keepalived_install
+elif [ "$command" = install ]; then
+	keepalived_remove
 fi
 
 # 5c. Copying the backups off the machine (--backup-target): after every
@@ -554,7 +658,9 @@ if [ "$command" = install ]; then
 fi
 
 # 6. The first account
-if [ -n "$account" ]; then
+if [ -n "$account" ] && [ "${db_ready:-true}" = false ]; then
+	say "The account $account was not created: the database is not open yet. Repeat the install with --account once two machines are installed."
+elif [ -n "$account" ]; then
 	if reporting list </dev/null | cut -f1 | grep -qx "$(printf '%s' "$account" | tr '[:upper:]' '[:lower:]')"; then
 		read_password "New password for $account" | reporting passwd "$account"
 	else
@@ -597,8 +703,17 @@ install)
 	say "To connect the stores, copy the CA certificate to the store server: $headquarters/ca.pem"
 	say "The digest of the CA certificate (it must be the same at the store server): $(sha256sum <"$headquarters/ca.pem" | cut -d' ' -f1)"
 	say "At the store server (from the repository root; --store-id and --address are the store's):"
-	printf '\n    sudo deploy/install/store-install.sh --store-id store-1 --address 192.168.1.10 --headquarters tls://%s:7422 --headquarters-ca ca.pem\n\n' "$first"
+	leaf="tls://$first:7422"
+	if [ -n "$cluster" ] && [ -n "$vip" ]; then
+		leaf="tls://${vip%/*}:7422"
+	elif [ -n "$cluster" ]; then
+		leaf=$(cluster_names | sed 's|^\(.*\)$|tls://\1:7422|' | paste -sd, -)
+	fi
+	printf '\n    sudo deploy/install/store-install.sh --store-id store-1 --address 192.168.1.10 --headquarters %s --headquarters-ca ca.pem\n\n' "$leaf"
+	if [ -n "$cluster" ] && [ "$node" = 1 ]; then
+		say "The other two machines take this machine's keys: sudo deploy/install/headquarters-install.sh cluster-export /root/abarow-cluster.tar.gz"
+	fi
 	;;
-store-add) say "$1 was added; the store connects within a few seconds and its accumulated sales arrive" ;;
-store-remove) say "$1 was removed; the store can no longer connect" ;;
+store-add) say "$1 was added; the store connects within a few seconds and its accumulated sales arrive${cluster:+ (run store-add on the other two machines too)}" ;;
+store-remove) say "$1 was removed; the store can no longer connect${cluster:+ (run store-remove on the other two machines too)}" ;;
 esac

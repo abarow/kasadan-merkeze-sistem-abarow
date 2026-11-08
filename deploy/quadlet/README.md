@@ -383,6 +383,36 @@ Rapor: `journalctl --user -u abarow-dbmaint` (`abarow` kullanıcısıyla). Ayrı
 
 Sürüm `/version` ucundadır. Her HTTP isteği bir istek kimliği alır (`X-Request-ID`; gelen kimlik korunur) ve gRPC çağrılarıyla taşınır. 5xx dönen istek ve iç hata veren çağrı bu kimlikle günlüğe yazılır; bir hatanın kasada hangi servislerden geçtiği `journalctl --user | grep <kimlik>` ile izlenir. Katmanlar arasında bağlantıyı olay kimliği (`ce-id`) sağlar: işlenemeyen olay bu kimlikle günlüğe yazılır.
 
+### 8. Üç makinede merkez
+
+Merkez kesintisiz çalışsın diye üç makineye kurulabilir ([HA-HEADQUARTERS.md](../../docs/decisions/HA-HEADQUARTERS.md)). Her makinede aynı servisler çalışır:
+
+- NATS üç makinelik bir kümedir; merkezin stream'leri üç kopyadır.
+- Veritabanını Patroni ve etcd yönetir: bir makine birincil, diğerleri senkron replikadır. Bir commit en az bir replikaya yazılmadan tamamlanmaz.
+- Her makinenin HAProxy'si (`abarow-db`) servisleri birincile gönderir.
+- `ingest`, `catalog-admin` ve `inventory`'nin arka plan işlerini bir kopya yapar.
+
+Bir makine giderse veritabanı yaklaşık 30 saniyede başka makineye geçer; onaylanmış hiçbir yazma kaybolmaz.
+
+Makineler arasında (yalnızca birbirlerine) 2379, 2380 (etcd), 5432, 8008 (PostgreSQL, Patroni) ve 6222 (NATS kümesi) açık olmalıdır. Aradaki her bağlantı merkezin CA'sıyla TLS'dir.
+
+```sh
+# 1. makine
+sudo deploy/install/headquarters-install.sh --address hq1.example.com   --cluster hq1.example.com,hq2.example.com,hq3.example.com --node 1 [--vip 192.168.1.50/24]
+sudo deploy/install/headquarters-install.sh cluster-export /root/abarow-cluster.tar.gz
+# dosyayı güvenli bir yoldan 2. ve 3. makineye kopyalayın, sonra silin
+
+# 2. ve 3. makine
+sudo deploy/install/headquarters-install.sh --address hq2.example.com   --cluster hq1.example.com,hq2.example.com,hq3.example.com --node 2 [--vip 192.168.1.50/24]   --cluster-import /root/abarow-cluster.tar.gz
+```
+
+- **Veritabanının açılması:** veritabanı iki makine kurulunca açılır. İlk makinenin kurulumu bunu bekler. İlk yedek ve `--account` hesabı veritabanı açıldıktan sonra yapılır; hesap için kurulum o zaman `--account` ile tekrarlanır.
+- **`--vip`:** ekrana ve mağazalara tek bir adres verir. Adres o an çalışan makinelerden birinde durur (keepalived) ve makine dönünce geri taşınmaz. Bunun için makineler aynı yerel ağda olmalıdır. `--vip` yoksa mağazalara üç adres verilir (`--headquarters tls://hq1...:7422,tls://hq2...:7422,tls://hq3...:7422`).
+- **Mağaza ekleme ve çıkarma:** `store-add` ve `store-remove` üç makinede de çalıştırılır.
+- **Yedekler:** her makine günlük `pg_dump` yedeğini birincilden alır. Haftalık fiziksel yedeği ve bakımı kendi veritabanından alır; replikada bakım yalnız arşivi denetler. Her makine WAL'i kendi arşivler (`archive_mode=always`).
+- **Geri yükleme:** `restore` ve `restore-to` üç makinede çalıştırılmaz; diğer makinelerin servisleri yazmayı sürdürürdü. Adımlar için [HA-HEADQUARTERS.md](../../docs/decisions/HA-HEADQUARTERS.md) "Kümede geri yükleme" bölümüne bakın.
+- **Tek makineden geçiş:** tek makineli merkezin verisi Patroni'nin klasörüne taşınmaz. Kümeye geçerken günlük yedek (`pg_dump`) yeni kümeye `pg_restore` ile yüklenir, ardından `reprocess` çalıştırılır.
+
 ## PostgreSQL ana sürüm yükseltmesi
 
 Veritabanı imajının ana sürümü (18) birim dosyalarında sabittir; onaylanan güncellemeler yalnızca 18.x yamalarını getirir. Bir sonraki ana sürüm (19) verinin yeni bir biçimde yazılmasını ister. Bunun için henüz betik yok: PostgreSQL 19 imajı yayımlanınca betik ve CI testi yazılacak. Yöntem:

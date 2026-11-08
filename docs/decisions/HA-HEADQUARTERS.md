@@ -61,7 +61,32 @@ Mehmet ERGULCU: ikinci seviye yapılacak, yük devri **otomatik** (seçenek B).
    - Bilinen davranış: replika beklenirken iptal edilen bir yazma (bağlantı kopması, zaman aşımı) birincilde yerel olarak kalabilir ve replikalar dönünce onlara da gider. İstemci bunu hata olarak görür; `ingest` olayı yeniden işler ve var olan olayı atlar, makbuz yalnızca başarılı commit'ten sonra gider.
 3. **Tek çalışan kopya (13.11.2026'da yapıldı):** `pkg/leader`. Servisin kendi bağlantı havuzundan bir bağlantıda danışma kilidi tutulur (yeni bağlantı açılmaz; mağaza sunucusunun 20 bağlantılık bütçesi değişmez). Kilidi tutan kopya her 2 sn'de kilidin hâlâ kendisinde olduğuna bakar; kaybederse işini durdurur. Kilidi yeni alan kopya işe başlamadan 10 sn bekler: kilit kesin bir çit değildir, eski sahibin durmasına süre bırakılır. Kilit bırakılırken bağlantı havuza dönmez, kapatılır. Kapsam: merkezde `ingest` (tüketici, makbuz outbox'ı, mağaza bağlantı durumu, saklama), `catalog-admin` (outbox, saklama) ve `inventory` (tüketiciler, outbox, saklama); ekran ve HTTP istekleri her kopyada karşılanır. Mağaza sunucusunda (tek makine) kilit kullanılmaz. Test: iki kopya, çalışanın kilit bağlantısı kesiliyor, diğeri devralıyor, hiçbir anda ikisi birden çalışmıyor (`pkg/leader`, 10 tekrar).
 4. **Makineler arası TLS (13.11.2026'da yapıldı):** her makinenin sertifikası, NATS için zaten ürettiği merkez CA'sının imzaladığı sertifikadır (`natsauth -role headquarters`; sunucu ve istemci kullanımı). etcd istemci ve eş bağlantıları karşılıklı TLS; Patroni'nin REST API'si HTTPS, değiştiren uçları (yeniden başlatma, devir) parolalı, okuma parolasız; HAProxy `/primary` sorusunu HTTPS ile sorar ve sertifikayı CA ile doğrular; replikasyon ve servis bağlantıları `sslmode=verify-ca`, `pg_hba` yalnız `hostssl` kabul eder. `archive_mode=always`: replikalar da aldıkları WAL'i arşivler, birincil değişince her makinede kesintisiz arşiv kalır. Docker testi bunları da sınar: servis bağlantısı ve iki replikasyon TLS, şifresiz bağlantı reddediliyor; yük devri TLS ile de ~31 sn, 2.542 onaylı yazmadan kayıp yok.
-5. Kurulum betiği: Caddy ve keepalived (sanal IP); bağlantı bütçesi: üç makinenin servis havuzları birincile bağlanır, merkezin `max_connections` değeri (30) makine sayısıyla büyür (`pgtune`); ilk makinede anahtarların ve CA'nın dışa aktarılması, diğer makinelerde içe alınması; mağaza ekleme üç makinede; Patroni, etcd ve HAProxy için Quadlet birimleri; yedek ve bakım betiklerinin birincile göre çalışması.
-6. Tatbikat: üç makineli Docker düzeneğinde her parçanın sırayla kapatılması.
+5. **Kurulum betiği (13.11.2026'da yapıldı):** `headquarters-install.sh --cluster h1,h2,h3 --node N [--vip adres/önek]`, `cluster-export` ve `--cluster-import` ([deploy/quadlet/README.md](../../deploy/quadlet/README.md) "Üç makinede merkez"). Ayrıntılar:
+   - **Ortak dosyalar:** ilk makine anahtarları, CA'yı ve parolaları üretir; diğer iki makine bunları dışa aktarılan dosyadan alır. Başka bir CA'sı olan makinenin üzerine yazılmaz.
+   - **Birimler:** Patroni, etcd ve HAProxy için Quadlet birimleri (`deploy/quadlet/headquarters/cluster`). HAProxy `abarow-db` adıyla kurulur; servislerin adresi ve birimleri değişmez, yalnız bağlantı TLS olur (`sslmode=verify-ca`).
+   - **Bağlantı bütçesi:** üç makinenin havuzları ve Patroni'nin bağlantıları (`pgtune --machines 3`; 50 mağazada 30 yerine 72). Sonraki ayar değişiklikleri `patronictl edit-config` ile ortak ayara yazılır ve gerekirse makineler sırayla yeniden başlatılır.
+   - **Tek adres:** `--vip` ile keepalived. Adres, ekranı (reporting) ve NATS portu (7422) cevap veren makinededir. Makine dönünce adres geri taşınmaz (`nopreempt`); diğer makinelere doğrudan (unicast) duyurulur.
+   - **Yedek ve bakım:** her makinenin haftalık fiziksel yedeği ve bakımı kendi Patroni container'ında çalışır; günlük `pg_dump` HAProxy üzerinden birincilden TLS ile alınır.
+   - **Kurulum sırası:** veritabanı iki makine kurulunca açılır; o zamana kadar ilk yedek ve hesap ertelenir.
+   - **Test:** `scripts/hq-cluster-units-test.sh` (CI'da) kurulumun yazdığı birimleri ve ek dosyaları Podman'ın Quadlet üreticisinden, HAProxy yapılandırmasını `haproxy -c`'den geçirir; dışa ve içe aktarmanın aynı dosyaları verdiğini ve başka CA'nın üzerine yazılmadığını dener. Kurulum betiği gerçek üç makinede **denenmedi** (aşağıdaki "Denenmemiş olanlar").
+6. Tatbikat: üç sanal ya da gerçek makinede kurulum ve her parçanın (makine, ağ bağlantısı, etcd, Patroni, NATS düğümü) sırayla kapatılması.
 
-Bu adımlar bitene kadar kurulum betiği tek makinelidir.
+### Kümede geri yükleme
+
+`restore` ve `restore-to` kümede çalışmaz: tek makinede servisler durdurulsa bile diğer makinelerin `ingest` kopyaları yazmayı sürdürür. Günlük yedekten (`pg_dump`) geri yükleme elle yapılır:
+
+1. Üç makinede, `abarow` kullanıcısıyla: `systemctl --user stop abarow-ingest abarow-catalog-admin abarow-inventory-headquarters abarow-reporting`.
+2. Herhangi bir makinede: `podman exec abarow-patroni patronictl -c /tmp/patroni.yml list` ile birincili görün. Yedeği HAProxy üzerinden TLS ile yükleyin: `psql` ile `DROP DATABASE abarow WITH (FORCE)` ve `CREATE DATABASE abarow`, ardından `pg_restore -h abarow-db`. Bağlantıda `sslmode=verify-ca` ve merkezin CA'sı kullanılır. Yazılanlar replikalara da gider.
+3. Üç makinede servisleri başlatın; bir makinede `headquarters-install.sh reprocess`.
+
+Belirli bir ana dönüş (WAL arşivi, `restore-to`) kümede henüz yok. Gerekirse Patroni'nin yedekten kurma yöntemiyle (custom bootstrap) yapılmalıdır; bu iş açık.
+
+### Denenmemiş olanlar
+
+Docker testleri her parçayı ayrı ayrı sınıyor: NATS kümesi, Patroni, etcd, HAProxy, TLS, yük devri, yedek ve bakım. Kurulumun yazdığı dosyalar da doğrulanıyor. Gerçek üç makinede ise henüz denenmedi:
+
+- **Rootless Podman'da kendi adresine bağlanma:** etcd'nin duyurduğu adresler makinenin dış adıdır. Patroni kendi makinesindeki etcd'ye bu dış adla da bağlanabilir. Bu, container'dan aynı makinenin yayımlanmış portuna gitmek demektir (pasta). HAProxy ve Patroni kendi makineleri için container adını kullanıyor; etcd'nin üye listesi ise dış adı veriyor.
+- **keepalived:** ağ arayüzünün bulunması, unicast duyurusu ve adresin taşınma süresi.
+- **Caddy ve `--domain`:** her makinede Caddy çalışır. Sertifikayı yalnız adresi o an tutan makine alabilir. Adres taşınınca yeni makine sertifikayı ilk istekte alır ve bu birkaç saniye sürer.
+
+Bu noktalar 6. adımdaki tatbikatta görülecek.
