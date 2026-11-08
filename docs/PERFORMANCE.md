@@ -466,7 +466,16 @@ Kasa başına 20 saniyede 1 satış (`-rate 0.05`); 50 mağaza × 2 kasa = merke
 
 - Aylık rapor gerçekçi yükte de stres testindeki kadar sürüyor (5,9–6,8 sn). Süreyi satış hızı değil, aynı anda rapor isteyen ekran sayısı belirliyor; tek kullanıcıda aylık rapor 1,8 sn.
 - Kayıt işleme gerçekçi yükte geride kalmıyor: kuyruk en çok 2 olay, kapasite (260 satış/sn) kullanılanın 50 katı.
-- 1 ve 3 ekranlı ölçüm yapılamadı (Docker Desktop ölçüm sırasında durdu); ekran sayısına göre süre bu yüzden yalnızca iki uçta biliniyor: 1 ekran 1,8 sn, 11 ekran 6,8 sn.
+
+**Ekran sayısına göre aylık rapor** (aynı yük ve veri, 120 sn, 1 tur; 11 ekran yukarıdaki iki tur):
+
+| Rapor ekranı | Aylık p50 / p95 | Ürün sıralaması p50 / p95 | Tüm mağazalar günlük p50 | Kayıt p95 |
+|---|---|---|---|---|
+| 1 | 1,79 / 1,82 sn | 1,80 / 1,82 sn | 187 ms | 22,0 ms |
+| 3 | 2,53 / 3,38 sn | 2,76 / 3,58 sn | 278 ms | 17,1 ms |
+| 11 | 6,75–6,87 / 7,48–8,64 sn | 5,76–6,09 / 8,44–9,35 sn | 777–814 ms | 13,8–16,5 ms |
+
+Merkezde aynı anda 1–3 rapor ekranı açık kalıyor (Mehmet ERGULCU, 13.11.2026). Bu aralıkta aylık rapor 1,8–2,5 sn; özet tablolar ([REVIEW.md](REVIEW.md) P1) yapılmadı.
 
 ## Ölçülmeyenler: ölçüm planı (12.11.2026)
 
