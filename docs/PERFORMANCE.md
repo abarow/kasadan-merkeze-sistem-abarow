@@ -2,6 +2,8 @@
 
 > Tarih: 05.11.2026. Üç katmanlı simülasyonun (`scripts/store-sim.sh`) 28 container'ı ayaktayken ölçüldü. Bu bir **geliştirici bilgisayarı ölçümüdür**; gerçek mağaza donanımının değerini vermez, garanti de değildir (bkz. "Sınırlar").
 
+> **Yük oranı (13.11.2026):** Merkez ölçümlerinde 13.11.2026'dan önce kasa başına saniyede 0,2 satış (50 mağazada 20 satış/sn) kullanıldı. Bir satış en az 30 saniye sürdüğü için bu oran gerçek üst sınırın yaklaşık 6 katıdır; bu tablolar **stres testi**dir. Gerçekçi yük kasa başına 20 saniyede 1 satıştır (0,05/sn, 50 mağazada 5 satış/sn); sonuçlar "Gerçekçi yük" bölümündedir.
+
 ## Güncelleme: HTTPS sonrası yeniden ölçüm (06.11.2026)
 
 Operasyon ekranı HTTPS'e geçti (karar 06.11.2026) ve veritabanı migration'ları tek dosyada birleşti; bu yüzden ölçümler yeniden alındı. Aşağıdaki değerler güncel olandır; sonraki bölümler 05.11.2026 ölçümüdür ve tarihsel kayıt olarak kalır. Aynı makine ve aynı yük üreteci; **Dependency-Track container'ları koşumdan önce durduruldu**. Ana makinede abarow dışı birkaç boşta container (ve boşta bir `abarow-pgtest`) çalışıyordu, ölçüme alınmadı.
@@ -274,7 +276,7 @@ Değişen ayarlar yalnızca 10 kasadan sonra ya da bellek sınırında kendini g
 
 - Araç: `services/headquarters/ingest/cmd/headquartersbench` ve `scripts/bench-headquarters.sh`. Gerçek kod yolları: ingest'in `Store.Record`'u (olay + satış defteri + sayaçlar + makbuz + sıra numarası) ve reporting'in kullandığı satış defteri raporu (`pkg/ledger`) ile mağaza durumu sorgusu. Mağazalar ve NATS yoktur; olaylar doğrudan yazılır. Veritabanı boş bir `postgres:18-alpine` container'ıdır; ayarları `reporting pgtune --stores N` verir (`pkg/pgtune.ForHeadquarters`).
 - **Veri mağaza sayısıyla katlanır:** mağaza başına 2 kasa × 30 gün × 300 satış = 18 000 satış (satış başına bir ham olay, 4 satır, ödeme, 2 KDV satırı, makbuz; yüzde biri iptal; günde bir vardiya). 1 mağaza: 18 bin satış / 49 MB; 50 mağaza: 900 bin satış / 2,1 GB.
-- **Yük (60 sn):** her kasa saniyede 0,2 satış gönderir (50 mağazada 100 kasa = 20 satış/sn); olaylar tek işçide sırayla işlenir. Ekranlar (mağaza sayısı/5 + 1): her 10 sn'de mağaza durumu, ingest etkinliği, tüm mağazaların günlük özeti ve bir mağazanın günlük özeti; her 30 sn'de aylık özet ve ürün sıralaması.
+- **Yük (60 sn, stres testi):** her kasa saniyede 0,2 satış gönderir (50 mağazada 100 kasa = 20 satış/sn; gerçekçi yükün 4 katı); olaylar tek işçide sırayla işlenir. Ekranlar (mağaza sayısı/5 + 1): her 10 sn'de mağaza durumu, ingest etkinliği, tüm mağazaların günlük özeti ve bir mağazanın günlük özeti; her 30 sn'de aylık özet ve ürün sıralaması.
 - Bağlantı havuzu sınırlıdır (reporting 8, ingest 4, catalog-admin 4, envanter 4); `max_connections` 30.
 
 ### Sonuç (son ayarlar; yenilendi 08.11.2026)
@@ -400,7 +402,7 @@ Yalnızca `sale_lines` anahtarının kapsayıcı olduğu, taze veride doğrulama
 
 **Tek kullanıcı, yük yok (50 mağaza, 900 bin satış, SQL süresi):** aylık rapor 6,3 → 3,2 sn. Ödemeler 823 → 323 ms, KDV 1185 → 349 ms, ürün sıralaması 2455 → 712 ms. Satışlar sorgusu (1,8 sn, 900 bin satır döner) paralelleşmiyor. RAM'i 1792'den 4096 MB'a çıkarmak süreyi değiştirmedi (6,3 → 6,1 sn). `work_mem` 256 MB'ta planlayıcı ürün sıralamasında paralel planı bırakıyor (712 → 2355 ms), bu yüzden `work_mem` artırılmadı.
 
-**Yük altında (50 mağaza, 20 satış/sn, 11 ekran; araç veritabanıyla aynı Docker ağında, 2 tur):**
+**Stres testi (50 mağaza, 20 satış/sn, 11 ekran; araç veritabanıyla aynı Docker ağında, 2 tur):**
 
 | Ayar | Aylık p50 | Ürün sıralaması p50 | Kayıt işleme p50 | Kayıt işleme p95 | Kuyruk en çok | Hata |
 |---|---|---|---|---|---|---|
@@ -428,16 +430,16 @@ Yalnızca `sale_lines` anahtarının kapsayıcı olduğu, taze veride doğrulama
 | 50 mağaza, 4 işçi | Düzeltmeden önce | `GROUPING SETS` | `GROUPING SETS` + özel plan |
 |---|---|---|---|
 | Aylık rapor, tek kullanıcı (uygulama üzerinden) | 6,6 sn (paralel kapalı) | 7,2–7,7 sn | **1,8 sn** |
-| Aylık rapor p50, yük altında (11 ekran, 20 satış/sn) | 11,6–12,0 sn | 5,5–6,7 sn | 5,9–6,8 sn |
-| Ürün sıralaması p50, yük altında | 12,2–13,5 sn | 5,8–7,2 sn | 5,2–6,4 sn |
-| Kayıt işleme p50 / p95, yük altında | 19–21 ms / 539–1180 ms | 8–12 ms / 32–34 ms | 13 ms / 39–43 ms |
+| Aylık rapor p50, stres testi (11 ekran, 20 satış/sn) | 11,6–12,0 sn | 5,5–6,7 sn | 5,9–6,8 sn |
+| Ürün sıralaması p50, stres testi | 12,2–13,5 sn | 5,8–7,2 sn | 5,2–6,4 sn |
+| Kayıt işleme p50 / p95, stres testi | 19–21 ms / 539–1180 ms | 8–12 ms / 32–34 ms | 13 ms / 39–43 ms |
 | Kuyruk en çok | 34–40 | 4–5 | 4–7 |
 
 Yukarıdaki "Paralel sorgu" tablosu ve eski merkez tabloları bu iki düzeltmeden önce ölçülmüştür. Tek kullanıcı süresi uygulama yolundan, her biri 3–4 çalıştırmanın medyanıdır. Yük altındaki süreler 11 ekranın aynı anda rapor istediği durumdur, 3 sn hedefinin altında değildir.
 
 ## Merkez kaydı: toplu yazma (12.11.2026)
 
-[REVIEW.md](REVIEW.md) P2. `ingest` bekleyen olayları tek veritabanı işleminde yazıyor; önceden her olay iki commit'le (olay ve sıra numarası) yazılıyordu. 50 mağaza, 900 bin satış, kasa başına saniyede 0,2 satış (toplam 20/sn) ve 11 rapor ekranı; araç veritabanıyla aynı Docker ağında; sıra: tek tek, toplu, tek tek, toplu.
+[REVIEW.md](REVIEW.md) P2. `ingest` bekleyen olayları tek veritabanı işleminde yazıyor; önceden her olay iki commit'le (olay ve sıra numarası) yazılıyordu. 50 mağaza, 900 bin satış, kasa başına saniyede 0,2 satış (toplam 20/sn, stres testi) ve 11 rapor ekranı; araç veritabanıyla aynı Docker ağında; sıra: tek tek, toplu, tek tek, toplu.
 
 | | Kapasite (satış/sn) | Kayıt p50 / p95 | Aylık rapor p50 |
 |---|---|---|---|
@@ -445,6 +447,26 @@ Yukarıdaki "Paralel sorgu" tablosu ve eski merkez tabloları bu iki düzeltmede
 | Toplu (`-batch 100`) | 260 / 280 | 7,9 / 14,2 ms; 6,5 / 12,1 ms | 4,9 / 5,0 sn |
 
 Kapasite, kuyruk dolu tutularak 5 saniyede yazılabilen satış sayısıdır. Tek tek yazmada iki tur arasındaki fark büyüktür; ilk tur soğuk önbellekle başlamış olabilir. Normal yükte kuyruk 2–3 olayda kaldığı için gruplar küçüktür ve gecikme farkı azdır. Kazanç, yoğun anda ve bağlantı dönüşünde biriken olaylar işlenirken ortaya çıkar.
+
+## Gerçekçi yük (13.11.2026)
+
+Kasa başına 20 saniyede 1 satış (`-rate 0.05`); 50 mağaza × 2 kasa = merkeze 5 satış/sn. 900 bin satış, 4 paralel işçi, toplu kayıt (`-batch 100`), 11 rapor ekranı, 120 sn; araç veritabanıyla aynı Docker ağında, 2 tur. Her ekran 10 saniyede bir mağaza durumu, ingest etkinliği ve günlük özetleri, 30 saniyede bir aylık özeti ve ürün sıralamasını ister.
+
+| | 1. tur | 2. tur |
+|---|---|---|
+| Kayıt işleme p50 / p95 | 9,8 / 16,5 ms | 8,1 / 13,8 ms |
+| Kayıt hızı, kuyruk en çok | 5,2/sn, 2 | 5,2/sn, 2 |
+| Aylık rapor p50 / p95 (44 istek) | 6,75 / 7,48 sn | 6,87 / 8,64 sn |
+| Ürün sıralaması p50 / p95 | 6,09 / 9,35 sn | 5,76 / 8,44 sn |
+| Tüm mağazalar günlük p50 / p95 | 0,78 / 1,23 sn | 0,81 / 1,21 sn |
+| Bir mağaza günlük p50 / p95 | 44 / 936 ms | 46 / 535 ms |
+| Hata | 0 | 0 |
+
+**Bulgular:**
+
+- Aylık rapor gerçekçi yükte de stres testindeki kadar sürüyor (5,9–6,8 sn). Süreyi satış hızı değil, aynı anda rapor isteyen ekran sayısı belirliyor; tek kullanıcıda aylık rapor 1,8 sn.
+- Kayıt işleme gerçekçi yükte geride kalmıyor: kuyruk en çok 2 olay, kapasite (260 satış/sn) kullanılanın 50 katı.
+- 1 ve 3 ekranlı ölçüm yapılamadı (Docker Desktop ölçüm sırasında durdu); ekran sayısına göre süre bu yüzden yalnızca iki uçta biliniyor: 1 ekran 1,8 sn, 11 ekran 6,8 sn.
 
 ## Ölçülmeyenler: ölçüm planı (12.11.2026)
 

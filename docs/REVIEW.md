@@ -42,7 +42,8 @@ Bulgular aşağıda yazıldıkları gibi duruyor; yapılanlar bu tabloda izleniy
 | D4 | Çözüldü (12.11.2026) | CI, temel committe var olan bir migration dosyası değişirse başarısız oluyor (`scripts/check-migrations.sh`). |
 | D5 | Çözüldü (12.11.2026) | `staff` şemasında dört indeks (`00002_fk_indexes.sql`). |
 | D6 | Çözüldü (12.11.2026) | `plan_cache_mode` sunucu ayarı değil, yalnız rapor işleminde `SET LOCAL`. |
-| P2 | Çözüldü (12.11.2026) | `ingest`, bekleyen olayları (en çok 100) tek veritabanı işleminde yazıyor, onayı commit'ten sonra gönderiyor. Bir sorun olursa olayları eskisi gibi tek tek işliyor. 50 mağazada, aynı ağda ölçülen kapasite: tek tek 102–190, toplu 260–280 satış/sn ([PERFORMANCE.md](PERFORMANCE.md)). İncelemedeki 44–60 satış/sn, Windows'tan port üzerinden yapılan ölçümdendi. Birden fazla `ingest` örneği (yatay ölçek) yapılmadı; bkz. M3 planı. |
+| P2 | Çözüldü (12.11.2026) | `ingest`, bekleyen olayları (en çok 100) tek veritabanı işleminde yazıyor, onayı commit'ten sonra gönderiyor. Bir sorun olursa olayları eskisi gibi tek tek işliyor. 50 mağazada, aynı ağda ölçülen kapasite: tek tek 102–190, toplu 260–280 satış/sn ([PERFORMANCE.md](PERFORMANCE.md)). Gerçekçi yük 5 satış/sn; kuyruk en çok 2 olay. İncelemedeki 44–60 satış/sn, Windows'tan port üzerinden yapılan ölçümdendi. Birden fazla `ingest` örneği (yatay ölçek) yapılmadı; bkz. M3 planı. |
+| P1 | Ölçüldü, karar bekliyor (13.11.2026) | Gerçekçi yükte (kasa başına 20 sn'de 1 satış) aylık rapor 11 ekranla 6,8 sn, tek kullanıcıyla 1,8 sn ([PERFORMANCE.md](PERFORMANCE.md) "Gerçekçi yük"). Yavaşlığın sebebi satış hızı değil, aynı anda rapor isteyen ekranlar. Özet tablolar ancak merkezde aynı anda çok sayıda rapor ekranı açık kalacaksa gerekli. |
 | P3 | Çözüldü (12.11.2026) | Merkezde ham olay içeriği 90 gün sonra boşaltılıyor (D1). |
 | P5 | Ölçüldü, değişmedi (12.11.2026) | `hash_mem_multiplier = 1` ile yarım `/dev/shm` yük altında raporların yarısına yakınında hata verdi ([PERFORMANCE.md](PERFORMANCE.md)); 24 × `work_mem` pay korunuyor. |
 | M1 | Kısmen çözüldü (12.11.2026) | Her servis sağlık portunda `/metrics` (HTTP ve gRPC sayı ve süreleri, Go belleği; Prometheus kütüphanesi yerine küçük bir yazıcı, `pkg/metrics`). İstek kimliği HTTP'den gRPC'ye taşınıyor, hatalı istek bu kimlikle günlüğe yazılıyor; olay işleme hatası olay kimliğiyle yazılıyor. OpenTelemetry izi ve bir metrik toplayıcının kurulumu yok. |
@@ -216,13 +217,13 @@ Bağlantı kopunca kasa ve mağaza çalışmayı sürdürüyor, olaylar birikip 
 - Aylık rapor 50 mağazada tek kullanıcıyla 1,8 sn.
 
 **P1 — Orta: Dönem raporları her istekte ham satırlardan hesaplanıyor.**
-- 50 mağaza, 11 ekran ve kayıt yükü altında aylık rapor 5,9–6,8 sn.
+- 50 mağaza, 11 ekran ve kayıt yükü altında aylık rapor 5,9–6,8 sn. Gerçekçi satış yükünde (13.11.2026) de aynı: süreyi ekran sayısı belirliyor.
 - Veri büyüdükçe süre doğrusal artar (D1 ile birleşince yıllar içinde ağırlaşır).
 - Önceden toplanmış günlük özet tablosu yok ([PERFORMANCE.md](PERFORMANCE.md)'de açık bırakılan konu).
 
 **P2 — Orta: Merkez `ingest` tek işçi.**
 - JetStream tüketicisi iletileri sırayla işliyor (`pkg/natsio/consumer.go:122`).
-- Ölçülen kapasite 44–60 satış/sn. 100 kasalı yükte (20 satış/sn) yaklaşık %40 doluluk; yoğun saat ya da mağaza artışında sınır yakın.
+- Ölçülen kapasite 44–60 satış/sn. 100 kasalı stres yükünde (20 satış/sn) yaklaşık %40 doluluk. Gerçekçi yük (kasa başına 20 sn'de 1 satış) 5 satış/sn'dir; yaklaşık %10 doluluk.
 - Yatay ölçek için birden fazla `ingest` örneği çalıştırma, sıra numarası takibi açısından denenmedi.
 
 **P3 — Düşük: Çift depolama.** `events` tablosundaki ham olay içeriği disk, yedek süresi ve önbellek baskısı ekliyor (D1).
