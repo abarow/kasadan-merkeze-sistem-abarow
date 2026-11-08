@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 # pitr-test.sh tries the point-in-time restore of the store server and headquarters
-# database with Docker: the WAL archive settings of pkg/pgtune, a base backup with
+# database with Docker (and then the weekly maintenance, dbmaint.sh): the WAL archive settings of pkg/pgtune, a base backup with
 # deploy/quadlet/backup/basebackup.sh and a restore with pitr-restore.sh to a moment
 # between two writes. The row written before the moment must be there, the one after
 # it must not, and the restored database must accept writes.
@@ -84,3 +84,20 @@ if docker exec "$db" grep -q restore_command /var/lib/postgresql/18/docker/postg
 	exit 1
 fi
 echo "point-in-time restore OK (rows $got at $moment, writes accepted)"
+
+# The weekly maintenance runs on the restored database: a bloated index (most of its
+# rows deleted) is rebuilt, the report is printed and the archive is found working.
+sql "CREATE TABLE bloat AS SELECT g AS id FROM generate_series(1, 200000) g" >/dev/null
+sql "CREATE INDEX bloat_id ON bloat (id)" >/dev/null
+sql "DELETE FROM bloat WHERE id % 10 <> 0" >/dev/null
+sql "VACUUM bloat" >/dev/null
+before=$(sql "SELECT pg_relation_size('bloat_id')")
+CONTAINER=docker ABAROW_REINDEX_MIN_MB=1 sh deploy/quadlet/backup/dbmaint.sh "$db" >"$work/dbmaint.out"
+after=$(sql "SELECT pg_relation_size('bloat_id')")
+if ! grep -q "reindex: public.bloat_id" "$work/dbmaint.out" || [ "$after" -ge "$before" ] ||
+	! grep -q "the statements that took the most time" "$work/dbmaint.out"; then
+	cat "$work/dbmaint.out" >&2
+	echo "the maintenance did not rebuild the bloated index ($before -> $after bytes)" >&2
+	exit 1
+fi
+echo "weekly maintenance OK (bloated index $before -> $after bytes)"

@@ -1,0 +1,17 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The weekly maintenance of the store server database and its report (dbmaint.sh): bloated
+# indexes are rebuilt without stopping the writes; the slowest statements, the largest
+# tables and the WAL archive are printed (journalctl --user -u abarow-store-dbmaint). It fails
+# if the WAL archive is failing. It is not a Quadlet unit: it is installed as a systemd
+# user unit (~/.config/systemd/user).
+[Unit]
+Description=abarow store server weekly database maintenance
+Wants=abarow-store-db.service
+After=abarow-store-db.service abarow-store-basebackup.service
+
+[Service]
+Type=oneshot
+ExecStart=%h/abarow/store/dbmaint.sh abarow-store-db
+TimeoutStartSec=6h

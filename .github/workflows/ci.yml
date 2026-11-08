@@ -48,7 +48,7 @@ jobs:
       - name: Beko bridge (built with the fake SDK)
         run: make -C services/fiscal/beko/hub fake
       - run: bash scripts/check.sh
-      - name: Point-in-time restore (WAL archive, base backup, restore-to)
+      - name: Base backup, point-in-time restore and weekly maintenance (Docker)
         run: bash scripts/pitr-test.sh
 
   contracts:

@@ -364,6 +364,16 @@ Sınırlar:
 - Arşiv diski kullanır. Yoğun bir merkezde günde birkaç yüz MB ile birkaç GB arası WAL birikebilir; ölçülmedi.
 - Mekanizma CI'da Docker'la uçtan uca denenir (`scripts/pitr-test.sh`): yedek, iki yazma arasındaki bir ana dönüş, yazmanın açılması. Kurulum betiğindeki `restore-to` komutu gerçek bir Podman makinesinde denenmedi.
 
+### 7. Veritabanı bakımı ve izleme
+
+Her pazar 05:30'da (fiziksel yedekten sonra) haftalık bakım çalışır (`abarow-dbmaint.timer`, operasyonda `abarow-store-dbmaint.timer`):
+
+- yaprak sayfaları yarıdan az dolu, 8 MB ve üstü indeksleri yazmaları durdurmadan yeniden kurar (`REINDEX CONCURRENTLY`),
+- haftanın en çok süre alan 10 sorgusunu, en büyük tabloları (ölü satır ve son autovacuum ile) ve WAL arşivinin durumunu yazar,
+- arşivleme takılmışsa hata verir: o zaman WAL veri klasöründe birikir ve diski doldurur.
+
+Rapor: `journalctl --user -u abarow-dbmaint` (`abarow` kullanıcısıyla). Ayrıca veritabanı günlüğü her katmanda 1 saniyeyi aşan sorguları, 1 saniyeden uzun kilit beklemelerini ve 10 saniyeyi aşan autovacuum çalışmalarını yazar (`journalctl --user -u abarow-db`).
+
 Ayarlar `/etc/abarow/headquarters.env`'de (root); anahtarlar, CA ve veritabanı parolası `~abarow/abarow/headquarters/auth`'ta (yalnızca `abarow`); mağaza listesi `~abarow/abarow/headquarters/config/stores.json`'dadır. Veritabanı parolası yalnızca ilk kurulumda veritabanına yazılır. `auth` klasörü kaybolursa ve veritabanı birimi (volume) kalırsa parola uyuşmaz. Bu yüzden `auth` klasörü de yedeklenmelidir. Bu klasör gizli anahtarları içerir; yedeği de gizli tutulmalıdır.
 
 ## Başlangıç verisi

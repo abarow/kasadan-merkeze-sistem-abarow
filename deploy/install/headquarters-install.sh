@@ -539,8 +539,8 @@ if [ "$command" = install ]; then
 	as systemctl --user start abarow-backup.service ||
 		die "could not take the database backup (journalctl --user -u abarow-backup)"
 	say "Daily backup set up ($backups; the first backup was taken)"
-	# The weekly base backup and the WAL archive (restore-to).
-	basebackup_install "$headquarters" "$quadlet/backup" abarow-basebackup
+	# The weekly base backup (restore-to) and the database maintenance.
+	weekly_db_jobs_install "$headquarters" "$quadlet/backup" abarow
 fi
 
 # 5c. Copying the backups off the machine (--backup-target): after every

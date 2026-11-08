@@ -45,6 +45,12 @@
 //     (ArchiveDir): it exists in every volume and the postgres user can write to it, so the
 //     archive cannot stop for a missing directory and fill the disk with WAL. A segment
 //     is archived at the latest after archive_timeout, also when it is not full.
+//   - Every tier logs the statements that take a second or longer, the waits for a lock
+//     longer than deadlock_timeout (1 s) and the autovacuum runs that take 10 s or longer
+//     (decision 12.11.2026, REVIEW.md D3): what is slow in the field is seen in the
+//     service log, not only in a benchmark. The store server and headquarters also load
+//     pg_stat_statements (1000 statements, about 2 MB) and measure the I/O time; the
+//     weekly maintenance (deploy/quadlet/backup/dbmaint.sh) prints the slowest ones.
 package pgtune
 
 import (
@@ -118,6 +124,9 @@ type Settings struct {
 	ShmMB int
 	// Archive turns on the continuous WAL archive (store server and headquarters).
 	Archive bool
+	// Statements loads pg_stat_statements and turns on track_io_timing (store server
+	// and headquarters).
+	Statements bool
 }
 
 // ForStore computes the settings of a store (store server) with registers registers.
@@ -205,6 +214,7 @@ func compute(registers int, p profile) Settings {
 		ParallelWorkers:      parallel,
 		ShmMB:                shm,
 		Archive:              true,
+		Statements:           true,
 	}
 }
 
@@ -263,6 +273,24 @@ func (s Settings) Flags() []string {
 			{"archive_library", "basic_archive"},
 			{"basic_archive.archive_directory", ArchiveDir},
 			{"archive_timeout", ArchiveTimeout},
+		}...)
+	}
+	kv = append(kv, []struct {
+		k string
+		v string
+	}{
+		{"log_min_duration_statement", "1s"},
+		{"log_lock_waits", "on"},
+		{"log_autovacuum_min_duration", "10s"},
+	}...)
+	if s.Statements {
+		kv = append(kv, []struct {
+			k string
+			v string
+		}{
+			{"shared_preload_libraries", "pg_stat_statements"},
+			{"pg_stat_statements.max", "1000"},
+			{"track_io_timing", "on"},
 		}...)
 	}
 	out := make([]string, 0, 2*len(kv))

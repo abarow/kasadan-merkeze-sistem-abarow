@@ -448,21 +448,25 @@ backup_copy_command() {
 	backup_copy "$cmd" "$dir" "$backups" "$target" || return 1
 }
 
-# basebackup_install <tier-directory> <unit-directory> <unit>: installs the weekly base
-# backup (basebackup.sh, <unit>.service and .timer) and the restore script; at the
-# first install the first base backup is taken right away, so a restore to a moment
-# works from the install day on.
-basebackup_install() {
-	local dir=$1 units=$2 unit=$3
+# weekly_db_jobs_install <tier-directory> <unit-directory> <prefix>: installs the
+# weekly base backup (basebackup.sh, <prefix>-basebackup) with the restore script and
+# the weekly database maintenance (dbmaint.sh, <prefix>-dbmaint). At the first install
+# the first base backup is taken right away, so a restore to a moment works from the
+# install day on.
+weekly_db_jobs_install() {
+	local dir=$1 units=$2 prefix=$3 job
 	install -o "$user" -g "$user" -m 0755 "$here/deploy/quadlet/backup/basebackup.sh" "$dir/basebackup.sh"
+	install -o "$user" -g "$user" -m 0755 "$here/deploy/quadlet/backup/dbmaint.sh" "$dir/dbmaint.sh"
 	install -o "$user" -g "$user" -m 0644 "$here/deploy/quadlet/backup/pitr-restore.sh" "$dir/pitr-restore.sh"
-	install -o "$user" -g "$user" -m 0644 "$units/$unit.service" "$units/$unit.timer" "$home/.config/systemd/user/"
+	for job in basebackup dbmaint; do
+		install -o "$user" -g "$user" -m 0644 "$units/$prefix-$job.service" "$units/$prefix-$job.timer" "$home/.config/systemd/user/"
+	done
 	as systemctl --user daemon-reload
-	as systemctl --user enable --now "$unit.timer"
+	as systemctl --user enable --now "$prefix-basebackup.timer" "$prefix-dbmaint.timer"
 	if ! ls "$dir"/backups/base-*.tar.gz >/dev/null 2>&1; then
-		as systemctl --user start "$unit.service" ||
-			die "could not take the first base backup (journalctl --user -u $unit)"
-		say "Weekly base backup set up (the first one was taken; the WAL archive is on)"
+		as systemctl --user start "$prefix-basebackup.service" ||
+			die "could not take the first base backup (journalctl --user -u $prefix-basebackup)"
+		say "Weekly base backup and maintenance set up (the first base backup was taken; the WAL archive is on)"
 	fi
 }
 
