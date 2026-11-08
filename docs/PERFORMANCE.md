@@ -371,6 +371,6 @@ Yalnızca `sale_lines` anahtarının kapsayıcı olduğu, taze veride doğrulama
 ### Yapılmayanlar ve nedenleri
 
 - **`sales (paid_at)` kapsayıcı indeks:** kazanç yok. Satışlar sorgusunun maliyeti, 15 dakikalık dilim × kasa × kasiyer kırılımının ~86 bin grubunu sıralamasındadır (diske taşar); indeks bunu değiştirmez.
-- **Ödemeler ve KDV anahtarlarını kapsayıcı yapmak:** kazanç yok. Bu tablolar küçük olduğundan planlayıcı karma birleştirme + tam tarama seçiyor (iç içe döngü zorlanınca 352 → 241 ve 709 → 266 ms, yani ~1 sn daha kazanç var), ama bunu ayar ya da sorgu yeniden yazımı olmadan sağlamak mümkün olmadı.
+- **Ödemeler ve KDV anahtarlarını kapsayıcı yapmak:** kazanç yok. Bu tablolar küçük olduğundan planlayıcı karma birleştirme + tam tarama seçiyor (iç içe döngü zorlanınca 352 → 241 ve 709 → 266 ms, yani toplam ~0,55 sn kazanç var), ama bunu ayar ya da sorgu yeniden yazımı olmadan sağlamak mümkün olmadı.
 - **Alt tablolara `paid_at` kopyası** en iyi sonucu verir (toplam 728 ms; ödemeler 16, KDV 36 ms), ama yazma yolunu (`SaveSale`), iki şemayı ve geçmiş veri için bir doldurma `UPDATE`'ini değiştirir: 1,19 milyon satışta doldurma ~6 dakika sürdü ve tabloları iki katına şişirdi. Ayrı bir karar olarak bırakıldı.
 - **50 kasa / çok yıllık veri ölçülmedi:** bu çalışma 10 kasa ve 13 ay ile sınırlıdır; büyüme doğrusal beklenir.
