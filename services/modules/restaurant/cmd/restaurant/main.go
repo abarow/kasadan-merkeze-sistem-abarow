@@ -19,7 +19,7 @@ import (
 	"abarow.com/pkg/service"
 	"abarow.com/services/modules/restaurant/internal/adapters/in/httpapi"
 	"abarow.com/services/modules/restaurant/internal/adapters/out/grpcclients"
-	"abarow.com/services/modules/restaurant/internal/adapters/out/sqlite"
+	"abarow.com/services/modules/restaurant/internal/adapters/out/postgres"
 	"abarow.com/services/modules/restaurant/internal/app"
 )
 
@@ -34,7 +34,11 @@ func main() {
 		if err != nil {
 			return err
 		}
-		store, err := sqlite.Open(ctx, service.Env("ABAROW_RESTAURANT_DB", "/data/restaurant.db"))
+		dsn, err := service.MustEnv("ABAROW_DATABASE_URL")
+		if err != nil {
+			return err
+		}
+		store, err := postgres.Open(ctx, dsn)
 		if err != nil {
 			return err
 		}

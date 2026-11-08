@@ -1,23 +1,23 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-package sqlite
+package postgres
 
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/modules/retail/internal/app"
 	"abarow.com/services/modules/retail/internal/domain"
 )
 
 func TestBasketsSurviveRestart(t *testing.T) {
 	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "retail.db")
+	path := pgdbtest.URL(t)
 	st, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func TestBasketsSurviveRestart(t *testing.T) {
 	if err := b.Add(domain.Product{ID: "domates", Name: "Domates", Unit: domain.Kg, UnitPrice: 3990, TaxRate: 100}, 1250, true); err != nil {
 		t.Fatal(err)
 	}
-	b.UpdatedAt = now.Add(time.Nanosecond)
+	b.UpdatedAt = now.Add(time.Microsecond)
 	if err := st.Save(ctx, b); err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestBasketsSurviveRestart(t *testing.T) {
 	}
 	// The last changed basket; thanks to the fixed-width time even a 1 ns difference
 	// is ordered correctly.
-	other := domain.NewBasket("b2", "ayse", now.Add(time.Second-time.Nanosecond))
+	other := domain.NewBasket("b2", "ayse", now.Add(time.Second-time.Microsecond))
 	if err := st.Save(ctx, other); err != nil {
 		t.Fatal(err)
 	}

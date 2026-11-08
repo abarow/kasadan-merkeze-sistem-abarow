@@ -93,15 +93,16 @@ services:
       args: { MODULE: services/modules/retail, PKG: ./cmd/retail, UI: ui/apps/retail }
     image: ghcr.io/abarow/abarow-retail:dev
     environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
       ABAROW_CATALOG_ADDR: catalog:9000
       ABAROW_SALES_ADDR: sales:9000
       # When a weighed product is selected the weight is read from device's scale.
       ABAROW_DEVICE_ADDR: device:9000
       GOMEMLIMIT: 48MiB
-    volumes: [retail-data:/data]
     mem_limit: 64m
     healthcheck: *healthcheck
     depends_on:
+      register-db: { condition: service_healthy }
       catalog: { condition: service_healthy }
       sales: { condition: service_healthy }
     restart: unless-stopped
@@ -290,7 +291,6 @@ services:
 
 volumes:
   nats-auth:
-  retail-data:
   catalog-data:
   staff-data:
   sales-data:

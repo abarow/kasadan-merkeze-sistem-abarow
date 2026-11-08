@@ -11,8 +11,8 @@ CREATE TABLE baskets (
     status     TEXT NOT NULL CHECK (status IN ('open', 'checked_out')),
     sale_id    TEXT NOT NULL DEFAULT '',
     lines      TEXT NOT NULL, -- JSON
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX baskets_cashier ON baskets (cashier_id, updated_at);
 CREATE INDEX baskets_updated ON baskets (updated_at);

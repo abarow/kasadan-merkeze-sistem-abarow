@@ -1,9 +1,9 @@
 // Copyright 2026 Mehmet ERGULCU and the abarow contributors
 // SPDX-License-Identifier: Apache-2.0
 
-// Package sqlite is the app.Store adapter that keeps the floor, tables and checks in SQLite
-// (a single-register restaurant: restaurant.db at the register).
-package sqlite
+// Package postgres is the app.Store adapter that keeps the floor, tables and checks in
+// PostgreSQL (a single-register restaurant: the register's own database).
+package postgres
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"abarow.com/pkg/sqlitedb"
+	"abarow.com/pkg/pgdb"
 	"abarow.com/services/modules/restaurant/internal/app"
 	"abarow.com/services/modules/restaurant/internal/domain"
 )
@@ -23,10 +23,7 @@ import (
 //go:embed migrations/*.sql
 var migrations embed.FS
 
-// timeLayout is the format of times in the database: fixed-width UTC.
-const timeLayout = "2006-01-02T15:04:05.000000000Z07:00"
-
-// Store, app.Store'u SQLite ile uygular.
+// Store implements app.Store with PostgreSQL.
 type Store struct {
 	db *sql.DB
 }
@@ -34,8 +31,8 @@ type Store struct {
 var _ app.Store = (*Store)(nil)
 
 // Open opens the database and applies the migrations.
-func Open(ctx context.Context, path string) (*Store, error) {
-	db, err := sqlitedb.Open(ctx, path, migrations)
+func Open(ctx context.Context, dsn string) (*Store, error) {
+	db, err := pgdb.Open(ctx, dsn, "restaurant", migrations)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +57,7 @@ func (s *Store) Floor(ctx context.Context) ([]domain.Area, error) {
 	}
 	var areas []domain.Area
 	if err := json.Unmarshal([]byte(data), &areas); err != nil {
-		return nil, fmt.Errorf("salonlar okunamadı: %w", err)
+		return nil, fmt.Errorf("could not read the floors: %w", err)
 	}
 	return areas, nil
 }
@@ -71,23 +68,23 @@ func (s *Store) SaveFloor(ctx context.Context, areas []domain.Area) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.ExecContext(ctx, `INSERT INTO floor (id, areas) VALUES (1, ?) ON CONFLICT (id) DO UPDATE SET areas = excluded.areas`, string(data))
+	_, err = s.db.ExecContext(ctx, `INSERT INTO floor (id, areas) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET areas = excluded.areas`, string(data))
 	return err
 }
 
 // OpenOrders are the open checks (in the order they were opened).
 func (s *Store) OpenOrders(ctx context.Context) ([]*domain.Order, error) {
-	return s.query(ctx, `SELECT data FROM orders WHERE closed = 0 ORDER BY opened_at, id`)
+	return s.query(ctx, `SELECT data FROM orders WHERE NOT closed ORDER BY opened_at, id`)
 }
 
-// Get, adisyondur.
+// Get is the check with the given id.
 func (s *Store) Get(ctx context.Context, id string) (*domain.Order, error) {
-	return s.one(ctx, `SELECT data FROM orders WHERE id = ?`, id)
+	return s.one(ctx, `SELECT data FROM orders WHERE id = $1`, id)
 }
 
 // AtTable is the table's open check.
 func (s *Store) AtTable(ctx context.Context, tableID string) (*domain.Order, error) {
-	return s.one(ctx, `SELECT data FROM orders WHERE table_id = ? AND closed = 0`, tableID)
+	return s.one(ctx, `SELECT data FROM orders WHERE table_id = $1 AND NOT closed`, tableID)
 }
 
 func (s *Store) one(ctx context.Context, query string, args ...any) (*domain.Order, error) {
@@ -115,7 +112,7 @@ func (s *Store) query(ctx context.Context, query string, args ...any) ([]*domain
 		}
 		var o domain.Order
 		if err := json.Unmarshal([]byte(data), &o); err != nil {
-			return nil, fmt.Errorf("adisyon okunamadı: %w", err)
+			return nil, fmt.Errorf("could not read the check: %w", err)
 		}
 		out = append(out, &o)
 	}
@@ -134,17 +131,17 @@ func (s *Store) Save(ctx context.Context, orders ...*domain.Order) error {
 		if err != nil {
 			return err
 		}
-		closedAt := ""
+		var closedAt any
 		if o.Closed {
-			closedAt = o.ClosedAt.UTC().Format(timeLayout)
+			closedAt = o.ClosedAt.UTC()
 		}
 		_, err = tx.ExecContext(ctx, `
-			INSERT INTO orders (id, table_id, closed, opened_at, closed_at, version, data) VALUES (?, ?, ?, ?, ?, ?, ?)
+			INSERT INTO orders (id, table_id, closed, opened_at, closed_at, version, data) VALUES ($1, $2, $3, $4, $5, $6, $7)
 			ON CONFLICT (id) DO UPDATE SET table_id = excluded.table_id, closed = excluded.closed, closed_at = excluded.closed_at,
 				version = excluded.version, data = excluded.data`,
-			o.ID, o.TableID, o.Closed, o.OpenedAt.UTC().Format(timeLayout), closedAt, o.Version, string(data))
+			o.ID, o.TableID, o.Closed, o.OpenedAt.UTC(), closedAt, o.Version, string(data))
 		if err != nil {
-			if strings.Contains(err.Error(), "UNIQUE constraint failed: orders.table_id") {
+			if strings.Contains(err.Error(), "orders_open_table") {
 				return domain.ErrTableBusy
 			}
 			return err
@@ -156,6 +153,6 @@ func (s *Store) Save(ctx context.Context, orders ...*domain.Order) error {
 // DeleteClosedBefore deletes the checks closed before the given time (sales are
 // permanent in sales; the check is only a working record).
 func (s *Store) DeleteClosedBefore(ctx context.Context, before time.Time) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM orders WHERE closed = 1 AND closed_at < ?`, before.UTC().Format(timeLayout))
+	_, err := s.db.ExecContext(ctx, `DELETE FROM orders WHERE closed AND closed_at < $1`, before.UTC())
 	return err
 }

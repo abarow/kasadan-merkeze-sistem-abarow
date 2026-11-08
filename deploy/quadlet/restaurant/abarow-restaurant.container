@@ -6,6 +6,8 @@
 
 [Unit]
 Description=abarow restaurant module (with its screen)
+Wants=abarow-register-db.service
+After=abarow-register-db.service
 Wants=abarow-catalog.service
 After=abarow-catalog.service
 Wants=abarow-sales.service
@@ -28,7 +30,7 @@ Environment=ABAROW_STAFF_ADDR=abarow-staff:9000
 Environment=ABAROW_TZ=Europe/Istanbul
 Environment=GOMEMLIMIT=48MiB
 # Masalar ve adisyonlar (restaurant.db).
-Volume=abarow-restaurant-data:/data
+Secret=abarow-register-db-url,type=env,target=ABAROW_DATABASE_URL
 HealthCmd=["/service", "healthcheck"]
 HealthInterval=5s
 HealthTimeout=3s

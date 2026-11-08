@@ -6,6 +6,8 @@ Description=abarow market module (with its screen)
 # Wants (not Requires): while the dependency is updated/restarted this
 # service does not stop, it renews the connection itself. After + Notify=healthy makes the start
 # wait for the dependency to be healthy.
+Wants=abarow-register-db.service
+After=abarow-register-db.service
 Wants=abarow-catalog.service
 After=abarow-catalog.service
 Wants=abarow-sales.service
@@ -23,7 +25,7 @@ Environment=ABAROW_SALES_ADDR=abarow-sales:9000
 # (if no scale is installed the scale barcode is needed).
 Environment=ABAROW_DEVICE_ADDR=abarow-device:9000
 Environment=GOMEMLIMIT=48MiB
-Volume=abarow-retail-data:/data
+Secret=abarow-register-db-url,type=env,target=ABAROW_DATABASE_URL
 HealthCmd=["/service", "healthcheck"]
 HealthInterval=5s
 HealthTimeout=3s

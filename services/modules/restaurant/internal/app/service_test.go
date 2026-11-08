@@ -7,13 +7,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"abarow.com/pkg/menu"
-	"abarow.com/services/modules/restaurant/internal/adapters/out/sqlite"
+	"abarow.com/pkg/pgdb/pgdbtest"
+	"abarow.com/services/modules/restaurant/internal/adapters/out/postgres"
 	"abarow.com/services/modules/restaurant/internal/app"
 	"abarow.com/services/modules/restaurant/internal/domain"
 )
@@ -96,7 +96,7 @@ var (
 func setup(t *testing.T) (*app.Service, *fakeSales, *fakePrinter) {
 	t.Helper()
 	ctx := context.Background()
-	store, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "restaurant.db"))
+	store, err := postgres.Open(ctx, pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

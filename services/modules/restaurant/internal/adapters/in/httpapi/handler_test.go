@@ -10,14 +10,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"abarow.com/pkg/menu"
+	"abarow.com/pkg/pgdb/pgdbtest"
 	"abarow.com/services/modules/restaurant/internal/adapters/in/httpapi"
-	"abarow.com/services/modules/restaurant/internal/adapters/out/sqlite"
+	"abarow.com/services/modules/restaurant/internal/adapters/out/postgres"
 	"abarow.com/services/modules/restaurant/internal/app"
 	"abarow.com/services/modules/restaurant/internal/domain"
 )
@@ -67,7 +67,7 @@ func (a approver) EditFloor(ctx context.Context, c, t string) (string, error) {
 
 func server(t *testing.T) *httptest.Server {
 	t.Helper()
-	store, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "r.db"))
+	store, err := postgres.Open(context.Background(), pgdbtest.URL(t))
 	if err != nil {
 		t.Fatal(err)
 	}

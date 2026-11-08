@@ -9,18 +9,17 @@ CREATE TABLE floor (
 );
 
 -- Checks: the document itself is JSON (lines, payment in progress); the table, status and times
--- are in separate columns for querying. At most one open check at a table
--- adisyon olur.
+-- are in separate columns for querying. There is at most one open check at a table.
 CREATE TABLE orders (
-    id        TEXT    PRIMARY KEY,
-    table_id  TEXT    NOT NULL,
-    closed    INTEGER NOT NULL DEFAULT 0,
-    opened_at TEXT    NOT NULL,
-    closed_at TEXT    NOT NULL DEFAULT '',
-    version   INTEGER NOT NULL,
-    data      TEXT    NOT NULL
+    id        TEXT        PRIMARY KEY,
+    table_id  TEXT        NOT NULL,
+    closed    BOOLEAN     NOT NULL DEFAULT FALSE,
+    opened_at TIMESTAMPTZ NOT NULL,
+    closed_at TIMESTAMPTZ,
+    version   BIGINT      NOT NULL,
+    data      TEXT        NOT NULL
 );
-CREATE UNIQUE INDEX orders_open_table ON orders (table_id) WHERE closed = 0;
+CREATE UNIQUE INDEX orders_open_table ON orders (table_id) WHERE NOT closed;
 CREATE INDEX orders_closed_at ON orders (closed_at);
 
 -- +goose Down

@@ -13,7 +13,7 @@ import (
 	"abarow.com/pkg/service"
 	"abarow.com/services/modules/retail/internal/adapters/in/httpapi"
 	"abarow.com/services/modules/retail/internal/adapters/out/grpcclients"
-	"abarow.com/services/modules/retail/internal/adapters/out/sqlite"
+	"abarow.com/services/modules/retail/internal/adapters/out/postgres"
 	"abarow.com/services/modules/retail/internal/app"
 )
 
@@ -22,7 +22,11 @@ func main() {
 	service.Main("retail", healthAddr, func(ctx context.Context, log *slog.Logger) error {
 		// Baskets are persistent: even if the service restarts the cashier continues from
 		// their basket.
-		store, err := sqlite.Open(ctx, service.Env("ABAROW_RETAIL_DB", "/data/retail.db"))
+		dsn, err := service.MustEnv("ABAROW_DATABASE_URL")
+		if err != nil {
+			return err
+		}
+		store, err := postgres.Open(ctx, dsn)
 		if err != nil {
 			return err
 		}
