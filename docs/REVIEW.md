@@ -41,6 +41,7 @@ Bulgular aşağıda yazıldıkları gibi duruyor; yapılanlar bu tabloda izleniy
 | D6 | Çözüldü (12.11.2026) | `plan_cache_mode` sunucu ayarı değil, yalnız rapor işleminde `SET LOCAL`. |
 | P3 | Çözüldü (12.11.2026) | Merkezde ham olay içeriği 90 gün sonra boşaltılıyor (D1). |
 | P5 | Ölçüldü, değişmedi (12.11.2026) | `hash_mem_multiplier = 1` ile yarım `/dev/shm` yük altında raporların yarısına yakınında hata verdi ([PERFORMANCE.md](PERFORMANCE.md)); 24 × `work_mem` pay korunuyor. |
+| M1 | Kısmen çözüldü (12.11.2026) | Her servis sağlık portunda `/metrics` (HTTP ve gRPC sayı ve süreleri, Go belleği; Prometheus kütüphanesi yerine küçük bir yazıcı, `pkg/metrics`). İstek kimliği HTTP'den gRPC'ye taşınıyor, hatalı istek bu kimlikle günlüğe yazılıyor; olay işleme hatası olay kimliğiyle yazılıyor. OpenTelemetry izi ve bir metrik toplayıcının kurulumu yok. |
 | M4 | Çözüldü (12.11.2026) | Her servis `/version` ucunda derlendiği sürümü ve Go sürümünü söylüyor. |
 | B4 | Bırakıldı | Quadlet dosyalarında sağlık durumu yeniden başlatma tetiklemiyor; ortak veritabanı container'ı durunca servisler bağlantı hatası verip veritabanı gelince sürüyor. Quadlet dosyaları CI'da `quadlet -dryrun` ile doğrulanıyor. |
 

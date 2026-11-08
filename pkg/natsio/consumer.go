@@ -166,7 +166,8 @@ func (c *Consumer) process(ctx context.Context, msg jetstream.Msg) {
 		_ = msg.NakWithDelay(later.delay)
 	default:
 		if !c.failing {
-			c.Log.Warn(c.What+" cannot be processed; it will come again", "subject", msg.Subject(), "err", err)
+			c.Log.Warn(c.What+" cannot be processed; it will come again", "subject", msg.Subject(), "ce-id", msg.Headers().Get("ce-id"),
+				"ce-source", msg.Headers().Get("ce-source"), "err", err)
 			c.failing = true
 		}
 		_ = msg.NakWithDelay(RetryDelay)

@@ -29,6 +29,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
+
+	"abarow.com/pkg/metrics"
 )
 
 // Env returns the environment variable; the fallback if empty.
@@ -91,9 +93,12 @@ func Healthcheck(addr string) error {
 // (-ldflags "-X abarow.com/pkg/service.Version=..."). The health port gives it at /version.
 var Version = "dev"
 
-// HealthHandler returns 200 "ok" if check returns nil, otherwise 503.
+// HealthHandler returns 200 "ok" if check returns nil, otherwise 503. It also serves the
+// version (/version) and the metrics in the Prometheus format (/metrics): the health
+// port is reached only from inside the tier's network.
 func HealthHandler(check func(context.Context) error) http.Handler {
 	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", metrics.Default.Handler())
 	mux.HandleFunc("GET /version", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{"version": Version, "go": runtime.Version()})
@@ -142,8 +147,9 @@ func NewGRPCServer(opts ...grpc.ServerOption) *grpc.Server {
 	base := []grpc.ServerOption{
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{MinTime: 5 * time.Second, PermitWithoutStream: true}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{Time: 30 * time.Second, Timeout: 10 * time.Second}),
-		grpc.ChainUnaryInterceptor(recoverUnary),
-		grpc.ChainStreamInterceptor(recoverStream),
+		// observe first: it sees the Internal error a recovered panic turns into.
+		grpc.ChainUnaryInterceptor(observeUnary, recoverUnary),
+		grpc.ChainStreamInterceptor(observeStream, recoverStream),
 	}
 	return grpc.NewServer(append(base, opts...)...)
 }
@@ -175,6 +181,9 @@ func dial(addr string, kp keepalive.ClientParameters) (*grpc.ClientConn, error) 
 	return grpc.NewClient(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithKeepaliveParams(kp),
+		// The request id of the calling request goes with the call (observe.go).
+		grpc.WithChainUnaryInterceptor(passIDUnary),
+		grpc.WithChainStreamInterceptor(passIDStream),
 		grpc.WithConnectParams(grpc.ConnectParams{
 			Backoff:           backoff.Config{BaseDelay: 100 * time.Millisecond, Multiplier: 1.6, Jitter: 0.2, MaxDelay: 2 * time.Second},
 			MinConnectTimeout: 2 * time.Second,
@@ -305,11 +314,11 @@ func ServeHTTP(ctx context.Context, log *slog.Logger, cfg HTTPConfig) error {
 		entries = append(entries, e)
 		return nil
 	}
-	if err := add("http", cfg.Addr, cfg.Handler, cfg.TLSCertFile, cfg.TLSKeyFile, 10*time.Second); err != nil {
+	if err := add("http", cfg.Addr, observeHTTP(cfg.Handler), cfg.TLSCertFile, cfg.TLSKeyFile, 10*time.Second); err != nil {
 		return err
 	}
 	for _, x := range cfg.Extra {
-		if err := add(x.Name, x.Addr, x.Handler, x.TLSCertFile, x.TLSKeyFile, 10*time.Second); err != nil {
+		if err := add(x.Name, x.Addr, observeHTTP(x.Handler), x.TLSCertFile, x.TLSKeyFile, 10*time.Second); err != nil {
 			return err
 		}
 	}

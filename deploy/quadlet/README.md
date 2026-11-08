@@ -334,6 +334,8 @@ Betik:
 
 Yedek başka makineye kurulan yeni bir merkeze de aynı komutla yüklenir.
 
+Ayarlar `/etc/abarow/headquarters.env`'de (root); anahtarlar, CA ve veritabanı parolası `~abarow/abarow/headquarters/auth`'ta (yalnızca `abarow`); mağaza listesi `~abarow/abarow/headquarters/config/stores.json`'dadır. Veritabanı parolası yalnızca ilk kurulumda veritabanına yazılır. `auth` klasörü kaybolursa ve veritabanı birimi (volume) kalırsa parola uyuşmaz. Bu yüzden `auth` klasörü de yedeklenmelidir. Bu klasör gizli anahtarları içerir; yedeği de gizli tutulmalıdır.
+
 ### 6. Belirli bir ana geri dönme (WAL arşivi)
 
 Günlük yedek en çok bir günlük merkez değişikliğini kaybettirir: katalog, fiyat, hesap ve stok düzeltmeleri gibi. Mağazalardan gelen satışlar bu kayba girmez, stream'den yeniden işlenir. Bu yüzden merkez ve operasyon veritabanı her değişikliğin kaydını (WAL) sürekli arşivler:
@@ -374,7 +376,12 @@ Her pazar 05:30'da (fiziksel yedekten sonra) haftalık bakım çalışır (`abar
 
 Rapor: `journalctl --user -u abarow-dbmaint` (`abarow` kullanıcısıyla). Ayrıca veritabanı günlüğü her katmanda 1 saniyeyi aşan sorguları, 1 saniyeden uzun kilit beklemelerini ve 10 saniyeyi aşan autovacuum çalışmalarını yazar (`journalctl --user -u abarow-db`).
 
-Ayarlar `/etc/abarow/headquarters.env`'de (root); anahtarlar, CA ve veritabanı parolası `~abarow/abarow/headquarters/auth`'ta (yalnızca `abarow`); mağaza listesi `~abarow/abarow/headquarters/config/stores.json`'dadır. Veritabanı parolası yalnızca ilk kurulumda veritabanına yazılır. `auth` klasörü kaybolursa ve veritabanı birimi (volume) kalırsa parola uyuşmaz. Bu yüzden `auth` klasörü de yedeklenmelidir. Bu klasör gizli anahtarları içerir; yedeği de gizli tutulmalıdır.
+**Servis ölçüleri:** her servisin sağlık portu (8081, yalnızca katmanın kendi ağından erişilir) `/metrics` ucunda Prometheus biçiminde şunları verir:
+- HTTP isteklerinin rota ve duruma göre sayısı ve süre dağılımı,
+- gRPC çağrılarının yöntem ve koda göre sayısı ve süre dağılımı,
+- Go çalışma zamanı belleği ve goroutine sayısı.
+
+Sürüm `/version` ucundadır. Her HTTP isteği bir istek kimliği alır (`X-Request-ID`; gelen kimlik korunur) ve gRPC çağrılarıyla taşınır. 5xx dönen istek ve iç hata veren çağrı bu kimlikle günlüğe yazılır; bir hatanın kasada hangi servislerden geçtiği `journalctl --user | grep <kimlik>` ile izlenir. Katmanlar arasında bağlantıyı olay kimliği (`ce-id`) sağlar: işlenemeyen olay bu kimlikle günlüğe yazılır.
 
 ## Başlangıç verisi
 
