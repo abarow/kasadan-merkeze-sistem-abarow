@@ -29,7 +29,22 @@ compose down -v >/dev/null 2>&1 || true
 password() { head -c 24 /dev/urandom | base64 | tr '/+' '_-'; }
 password >"$work/db-password"
 password >"$work/replication-password"
+password >"$work/restapi-password"
 db_password=$(cat "$work/db-password")
+
+# Every machine gets a certificate of headquarters' CA, as natsauth gives it in a real install:
+# the first machine makes the CA, the others get it before natsauth runs there. The
+# certificate's names are the machine's containers.
+for i in 1 2 3; do
+	m="$ABAROW_HA_SECRETS/m$i"
+	if [ "$i" -gt 1 ]; then
+		mkdir -p "$work/m$i/tls"
+		cp "$work/m1/tls/ca.pem" "$work/m1/tls/ca.key" "$work/m$i/tls/"
+	fi
+	(cd tools/natsauth && go run . -role headquarters -out "$m" -conf-dir /auth -users ingest -server-name "headquarters-$i" \
+		-domain headquarters -stores "$m/stores.json" -leaf-hosts "ha-db-$i,ha-etcd-$i,ha-proxy-$i") >/dev/null
+done
+ssl="sslmode=verify-ca sslrootcert=/w/m1/tls/ca.pem"
 network=abarow-ha_default
 
 # Patroni's view of the cluster as "member<TAB>role<TAB>state" lines (a role can have a
@@ -66,8 +81,8 @@ wait_healthy() {
 }
 container() { echo "ha-db-${1#hq-}"; }
 psql_proxy() {
-	docker run --rm --network "$network" -e PGPASSWORD="$db_password" -e PGCONNECT_TIMEOUT=5 postgres:18-alpine \
-		psql "host=ha-proxy-1 user=abarow dbname=abarow sslmode=disable" -v ON_ERROR_STOP=1 -tAc "$1"
+	docker run --rm --network "$network" -v "$ABAROW_HA_SECRETS:/w:ro" -e PGPASSWORD="$db_password" -e PGCONNECT_TIMEOUT=5 postgres:18-alpine \
+		psql "host=ha-proxy-1 user=abarow dbname=abarow $ssl" -v ON_ERROR_STOP=1 -tAc "$1"
 }
 
 echo "== building and starting three machines"
@@ -76,10 +91,23 @@ compose up -d
 wait_healthy "start"
 members
 
+echo "== 0. TLS between the machines"
+[ "$(psql_proxy "SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()")" = t ] ||
+	{ echo "the service connection is not TLS" >&2; exit 1; }
+[ "$(psql_proxy "SELECT count(*) FROM pg_stat_replication r JOIN pg_stat_ssl s USING (pid) WHERE s.ssl")" = 2 ] ||
+	{ echo "the replication is not TLS on both replicas" >&2; exit 1; }
+[ "$(psql_proxy "SHOW archive_mode")" = always ] || { echo "archive_mode is not always" >&2; exit 1; }
+if docker run --rm --network "$network" -e PGPASSWORD="$db_password" -e PGCONNECT_TIMEOUT=5 postgres:18-alpine \
+	psql "host=ha-proxy-1 user=abarow dbname=abarow sslmode=disable" -tAc "SELECT 1" >/dev/null 2>&1; then
+	echo "a connection without TLS was accepted" >&2
+	exit 1
+fi
+echo "service connection, replication: TLS; a connection without TLS is refused"
+
 echo "== 1. the primary is killed while writing"
 (cd pkg && CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" go test -c -o "$ABAROW_HA_SECRETS/failover" ./pgdb)
 docker run --rm --network "$network" -v "$(hostpath "$work"):/w" \
-	-e ABAROW_TEST_HA_DSN="postgres://abarow:$db_password@ha-proxy-1:5432/abarow?sslmode=disable" -e ABAROW_TEST_HA_SECONDS=90 \
+	-e ABAROW_TEST_HA_DSN="postgres://abarow:$db_password@ha-proxy-1:5432/abarow?sslmode=verify-ca&sslrootcert=/w/m1/tls/ca.pem" -e ABAROW_TEST_HA_SECONDS=90 \
 	--entrypoint /w/failover postgres:18-alpine -test.run TestFailover -test.v -test.count=1 &
 writer=$!
 sleep 20
