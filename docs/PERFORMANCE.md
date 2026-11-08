@@ -233,6 +233,8 @@ Kasa durumu 2 kasadan itibaren %40–55 hızlandı. Aylık özet ve ürün sıra
 
 Eklenen indeksler (operasyon `migrations/00001_init.sql`): `sales (register_id, receipt_no) INCLUDE (paid_at)` (eski indeksin ilk sütunu `store_id` olduğundan fiş boşluğu sorgusu onu kullanamıyor ve 450 bin satırı diske taşan bir sıralamayla işliyordu: 335 → 209 ms, yalnızca indeks taraması), `shifts (register_id, opened_at)` ve `shifts (register_id, closed_at)` (kasa başına son vardiya sorgusu), `outbox (seq) WHERE published_at IS NULL` (yayınlanmayı bekleyenler; diğer outbox tablolarında zaten vardı).
 
+> **Not (08.11.2026):** Bu bölümün tabloları kapsayıcı `sale_lines` anahtarı ve `random_page_cost = 1,1` öncesi ölçülmüştür ve yenilenmemiştir. Yalnızca 10 kasa, gerçek `storebench` ile art arda karşılaştırıldı: günlük özet 51 → 27 ms, kasa durumu 59 → 58 ms, aylık özet 957 → 1117 ms ve ürün sıralaması 958 → 1166 ms (30 günlük veride pencere tablonun tamamı olduğu için hafif yavaşlama beklenir), kayıt işleme gecikmesinde fark yok.
+
 ### Ayar değişiklikleri (pgtune) ve gerekçeleri
 
 İlk tur ayarlarıyla (shared_buffers = 64 MB + her kasa için 8 MB, bellek sınırı shared_buffers + 144 MB) görülenler ve yapılanlar:
@@ -275,17 +277,30 @@ Değişen ayarlar yalnızca 10 kasadan sonra ya da bellek sınırında kendini g
 - **Yük (60 sn):** her kasa saniyede 0,2 satış gönderir (50 mağazada 100 kasa = 20 satış/sn); olaylar tek işçide sırayla işlenir. Ekranlar (mağaza sayısı/5 + 1): her 10 sn'de mağaza durumu, ingest etkinliği, tüm mağazaların günlük özeti ve bir mağazanın günlük özeti; her 30 sn'de aylık özet ve ürün sıralaması.
 - Bağlantı havuzu sınırlıdır (reporting 8, ingest 4, catalog-admin 4, envanter 4); `max_connections` 30.
 
-### Sonuç (son ayarlar)
+### Sonuç (son ayarlar; yenilendi 08.11.2026)
+
+> Bu tablo, `00002_report_index.sql` (kapsayıcı `sale_lines` anahtarı) ve `random_page_cost = 1,1` eklendikten sonra aynı yöntemle yeniden ölçüldü. Veri hâlâ 30 günlüktür; aylık pencere tablonun tamamını kapsar (bu yüzden aylık rakamlar indeksten kazanç görmez, aşağıdaki nota bakın).
 
 | Mağaza | Kasa | Satış | Veritabanı | Mağaza durumu p50 | Günlük özet (hepsi) p50 | Bir mağazanın günlüğü p50 | Aylık özet p50 | Ürün sıralaması p50 | Kayıt işleme p50 / p95 | Kuyruk | DB CPU ort. | DB bellek en çok |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| 1 | 2 | 18.000 | 49 MB | 3 ms | 8 ms | 8 ms | 133 ms | 132 ms | 21 ms / 25 ms | 1 | %10 | 94 MiB |
-| 2 | 4 | 36.000 | 88 MB | 3 ms | 9 ms | 8 ms | 256 ms | 315 ms | 18 ms / 34 ms | 1 | %17 | 123 MiB |
-| 5 | 10 | 90.000 | 206 MB | 3 ms | 17 ms | 8 ms | 771 ms | 765 ms | 18 ms / 28 ms | 1 | %35 | 236 MiB |
-| 10 | 20 | 180.000 | 404 MB | 4 ms | 18 ms | 8 ms | 1,7 sn | 1,6 sn | 18 ms / 34 ms | 1 | %59 | 384 MiB |
-| 50 | 100 | 900.000 | 2,0 GB | 35 ms | 79 ms | 20 ms | 16,9 sn | 16,8 sn | 86 ms / 1,0 sn | 29 | %203 | 1658 MiB |
+| 1 | 2 | 18.000 | 54 MB | 3 ms | 13 ms | 17 ms | 190 ms | 130 ms | 18 ms / 21 ms | 1 | %11 | 99 MiB |
+| 2 | 4 | 36.000 | 97 MB | 3 ms | 17 ms | 13 ms | 254 ms | 242 ms | 19 ms / 44 ms | 1 | %19 | 128 MiB |
+| 5 | 10 | 90.000 | 229 MB | 4 ms | 31 ms | 14 ms | 750 ms | 754 ms | 19 ms / 50 ms | 1 | %38 | 262 MiB |
+| 10 | 20 | 180.000 | 450 MB | 5 ms | 54 ms | 14 ms | 1,7 sn | 1,6 sn | 19 ms / 46 ms | 2 | %61 | 380 MiB |
+| 50 | 100 | 900.000 | 2,3 GB | 68 ms | 953 ms | 112 ms | 16,4 sn | 18,7 sn | 142 ms / 1,2 sn | 32 | %210 | 1612 MiB |
 
-Hata: bu beş ölçümde toplam **0**. Kayıt işleme kapasitesi (tek işçi, kuyruksuz): 1 mağaza 60/sn, 2 mağaza 61/sn, 5 mağaza 61/sn, 10 mağaza 56/sn, 50 mağaza 49/sn. En çok kullanılan bağlantı: 1 mağaza 3, 2 mağaza 4, 5 mağaza 6, 10 mağaza 7, 50 mağaza 13 (sınır 30).
+Hata: bu beş ölçümde toplam **0**. Kayıt işleme kapasitesi (tek işçi, kuyruksuz): 1 mağaza 60/sn, 2 mağaza 52/sn, 5 mağaza 61/sn, 10 mağaza 61/sn, 50 mağaza 44/sn. En çok kullanılan bağlantı: 1 mağaza 3, 2 mağaza 4, 5 mağaza 6, 10 mağaza 7, 50 mağaza 11 (sınır 30).
+
+**Önceki (05–06.11.2026) tabloyla karşılaştırma uyarısı.** Yeni rakamlar eskisinden bazı yerlerde yüksektir (örn. günlük özet, 10 mağaza: 18 → 54 ms; 50 mağaza: 79 → 953 ms). Bu, değişikliğin yavaşlatması değildir: aynı gün, aynı makinede, eski kodla (indekssiz, `random_page_cost` 4) ve yeni kodla art arda ölçüldü ve **eski kod bugün de yüksek çıktı**:
+
+| Ölçüm (aynı makine, art arda) | Günlük (hepsi) p50 | Bir mağazanın günlüğü p50 | Aylık p50 | Ürün sıralaması p50 | Kayıt işleme p95 |
+|---|---|---|---|---|---|
+| 10 mağaza, eski, tur 1 / 2 | 89 / 90 ms | 15 / 14 ms | 1,6 / 2,0 sn | 1,6 / 1,8 sn | 51 / 53 ms |
+| 10 mağaza, **yeni**, tur 1 / 2 | 59 / 60 ms | 16 / 14 ms | 2,0 / 1,8 sn | 1,7 / 1,6 sn | 48 / 49 ms |
+| 50 mağaza, eski | 1231 ms | 110 ms | 16,3 sn | 18,9 sn | 2,1 sn |
+| 50 mağaza, **yeni** (iki ayrı ölçüm) | 933 / 953 ms | 63 / 112 ms | 15,7 / 16,4 sn | 17,2 / 18,7 sn | 1,2 sn / 1,2 sn |
+
+Yani günlük özet yeni hâlde eskiden hızlı ya da aynı; aylık ve ürün sıralaması ölçüm gürültüsü içinde aynı (bu veride pencere tablonun tamamı; kazanç, ay verinin küçük bir kısmı olunca görülür, bkz. "Aylık rapor için indeks çalışması"). Eski tablodaki düşük günlük rakamların nedenini doğrulayamadım; olası neden, ölçüm aracının "bugün" penceresinin ölçümün yapıldığı saate göre farklı sayıda satır kapsamasıdır (aynı gün art arda yapılan karşılaştırmalar bundan etkilenmez).
 
 ### Ayar değişikliği: merkez için ayrı formül (`pgtune.ForHeadquarters`)
 
@@ -304,6 +319,8 @@ Gerekçe ve okuma:
 - **50 mağazada** ilk ayar yetmedi: 2 GB veri 640 MB bellekte çalışma kümesini tutamadı; aylık özet 27,6 sn sürdü, ürün sıralaması 60 sn'lik yük süresinde hiç bitmedi, mağaza durumu sorgusu p95 19 sn'ye çıktı, kayıt işleme gecikmesi p95 2,5 sn ve kuyruk 62 olayı buldu. Bellek sınırı 2 × shared_buffers + 128 MB, tampon 1 GB'a kadar (kasa başına 8 MB), work_mem 40 kasadan sonra 32 MB olunca: aylık özet 16,9 sn, ürün sıralaması 16,8 sn (tamamlanıyor), kayıt işleme p95 1,0 sn, kuyruk 29.
 - **10 mağazada** ilk ve son ayar neredeyse aynıdır (192 MB tampon, 512 MB, work_mem 16 MB; yalnızca `max_connections` 20 → 30 ve `effective_cache_size`). Günlük özetteki 207 → 18 ms fark ayardan değil, koşular arası farktan (soğuk önbellek) gelir; aynı veriyle büyük bellek varyantı 11 ms verdi. Bu yüzden 10 mağaza için ayar değişikliği kazanç olarak yazılmaz.
 - "Büyük bellek" varyantı (50 mağaza, 2048 MB, 512 MB tampon) son ayarla aynı düzeydedir (aylık 15,2 sn, kayıt işleme p95 0,75 sn); formül ikisinin arasında kalır.
+
+> **Not (08.11.2026):** Bu tablo 05–06.11.2026'da, kapsayıcı `sale_lines` anahtarı ve `random_page_cost = 1,1` öncesinde ölçülmüştür; "son" satırının güncel ölçümü yukarıdaki "Sonuç (son ayarlar; yenilendi 08.11.2026)" tablosundadır. Satırların birbirine göre sırası geçerlidir, mutlak değerler farklı gün/makine durumunda ölçüldüğü için güncel tabloyla birebir karşılaştırılmamalıdır.
 
 ### Bulgular ve sınırlar
 
