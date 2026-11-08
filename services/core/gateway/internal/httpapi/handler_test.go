@@ -70,7 +70,11 @@ type fakeStaff struct {
 	printedDay   []int64
 	printedShift *staffv1.PrintShiftReportRequest
 	drawer       *staffv1.OpenDrawerRequest
+	// down makes staff unreachable (a restart).
+	down bool
 }
+
+var errStaffDown = status.Error(codes.Unavailable, "connection refused")
 
 // ayseShift is Cashier Ayşe's open shift.
 var ayseShift = &staffv1.Shift{Id: 1, CashierId: "ayse", CashierName: "Kasiyer Ayşe", OpenedAt: timestamppb.Now(), OpeningCashKurus: 50000}
@@ -80,7 +84,10 @@ var sessions = map[string]*staffv1.Cashier{
 	"mudur":   {Id: "ali", Name: "Müdür Ali", Role: staffv1.Role_ROLE_MANAGER},
 }
 
-func (*fakeStaff) ValidateSession(_ context.Context, req *staffv1.ValidateSessionRequest, _ ...grpc.CallOption) (*staffv1.ValidateSessionResponse, error) {
+func (f *fakeStaff) ValidateSession(_ context.Context, req *staffv1.ValidateSessionRequest, _ ...grpc.CallOption) (*staffv1.ValidateSessionResponse, error) {
+	if f.down {
+		return nil, errStaffDown
+	}
 	c, ok := sessions[req.GetToken()]
 	if !ok {
 		return nil, status.Error(codes.Unauthenticated, "oturum geçersiz")
@@ -113,7 +120,17 @@ func (f *fakeStaff) Approve(_ context.Context, req *staffv1.ApproveRequest, _ ..
 	return &staffv1.ApproveResponse{ApprovalToken: "onay", ExpiresAt: timestamppb.Now()}, nil
 }
 
+func (f *fakeStaff) Logout(context.Context, *staffv1.LogoutRequest, ...grpc.CallOption) (*staffv1.LogoutResponse, error) {
+	if f.down {
+		return nil, errStaffDown
+	}
+	return &staffv1.LogoutResponse{}, nil
+}
+
 func (f *fakeStaff) GetCurrentShift(context.Context, *staffv1.GetCurrentShiftRequest, ...grpc.CallOption) (*staffv1.GetCurrentShiftResponse, error) {
+	if f.down {
+		return nil, errStaffDown
+	}
 	return &staffv1.GetCurrentShiftResponse{Shift: f.shift}, nil
 }
 
@@ -652,5 +669,33 @@ func TestDefaultCheckoutTimeoutCoversPaymentAndFiscal(t *testing.T) {
 	// payment 90 s + fiscal 30 s + a write margin.
 	if httpapi.DefaultCheckoutTimeout < 90*time.Second+30*time.Second+30*time.Second {
 		t.Fatalf("the gate time %v is shorter than the total of the sub-calls", httpapi.DefaultCheckoutTimeout)
+	}
+}
+
+// While staff restarts, a cashier who was just working goes on with the last answers
+// of staff (session, open shift); a session staff never confirmed and a signed-out one
+// do not pass.
+func TestStaffOutage(t *testing.T) {
+	staff := &fakeStaff{shift: ayseShift}
+	srv := serverWith(&fakeSales{}, staff)
+	defer srv.Close()
+	if code, body := do(t, http.MethodGet, srv.URL+"/api/basket", "kasiyer", ""); code != http.StatusOK {
+		t.Fatalf("staff up: %d %s", code, body)
+	}
+	staff.down = true
+	if code, body := do(t, http.MethodGet, srv.URL+"/api/basket", "kasiyer", ""); code != http.StatusOK || !strings.Contains(body, "kasiyer:ayse") {
+		t.Errorf("staff down, known session: %d %s", code, body)
+	}
+	if code, _ := do(t, http.MethodGet, srv.URL+"/api/basket", "mudur", ""); code != http.StatusServiceUnavailable {
+		t.Errorf("staff down, a session never confirmed: %d", code)
+	}
+	// Signing out ends the session at the gateway even though staff cannot be reached.
+	do(t, http.MethodPost, srv.URL+"/api/auth/logout", "kasiyer", "")
+	if code, _ := do(t, http.MethodGet, srv.URL+"/api/basket", "kasiyer", ""); code != http.StatusServiceUnavailable {
+		t.Errorf("signed out during the outage: %d", code)
+	}
+	staff.down = false
+	if code, _ := do(t, http.MethodGet, srv.URL+"/api/basket", "yok", ""); code != http.StatusUnauthorized {
+		t.Errorf("staff back, invalid session: %d", code)
 	}
 }

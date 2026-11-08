@@ -76,7 +76,9 @@ type Config struct {
 const maxJSON = 16 << 10
 
 func New(sales salesv1.SalesServiceClient, staff staffv1.StaffServiceClient, device devicev1.DeviceServiceClient, module http.Handler, cfg Config) http.Handler {
-	h := &handler{sales: sales, staff: staff, device: device, cfg: cfg}
+	h := &handler{sales: sales, staff: staff, device: device, cfg: cfg,
+		sessions: newLastGood[*staffv1.ValidateSessionResponse]("session", StaffGrace),
+		shift:    newLastGood[*staffv1.GetCurrentShiftResponse]("shift", StaffGrace)}
 	mux := http.NewServeMux()
 
 	// Open to everyone: the install information and what the sign-in screen needs.
@@ -140,6 +142,9 @@ type handler struct {
 	staff  staffv1.StaffServiceClient
 	device devicev1.DeviceServiceClient
 	cfg    Config
+	// sessions and shift keep staff's last good answers for an outage (fallback.go).
+	sessions *lastGood[*staffv1.ValidateSessionResponse]
+	shift    *lastGood[*staffv1.GetCurrentShiftResponse]
 }
 
 type cashierKey struct{}
@@ -167,9 +172,11 @@ func (h *handler) authed(next http.HandlerFunc) http.Handler {
 			writeError(w, http.StatusUnauthorized, "giriş yapın")
 			return
 		}
-		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-		resp, err := h.staff.ValidateSession(ctx, &staffv1.ValidateSessionRequest{Token: token})
-		cancel()
+		resp, err := h.sessions.do(tokenKey(token), func() (*staffv1.ValidateSessionResponse, error) {
+			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+			defer cancel()
+			return h.staff.ValidateSession(ctx, &staffv1.ValidateSessionRequest{Token: token})
+		})
 		if err != nil {
 			replyError(w, err)
 			return
@@ -182,9 +189,11 @@ func (h *handler) authed(next http.HandlerFunc) http.Handler {
 // drawer at the register; no sale can be made while someone else's shift is open.
 func (h *handler) onShift(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-		resp, err := h.staff.GetCurrentShift(ctx, &staffv1.GetCurrentShiftRequest{})
-		cancel()
+		resp, err := h.shift.do("", func() (*staffv1.GetCurrentShiftResponse, error) {
+			ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+			defer cancel()
+			return h.staff.GetCurrentShift(ctx, &staffv1.GetCurrentShiftRequest{})
+		})
 		if err != nil {
 			replyError(w, err)
 			return
@@ -340,6 +349,8 @@ func (h *handler) approve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *handler) logout(w http.ResponseWriter, r *http.Request) {
+	// The session ends at the gateway too, even if staff cannot be reached now.
+	h.sessions.forget(tokenKey(bearerToken(r)))
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 	defer cancel()
 	if _, err := h.staff.Logout(ctx, &staffv1.LogoutRequest{Token: bearerToken(r)}); err != nil {
