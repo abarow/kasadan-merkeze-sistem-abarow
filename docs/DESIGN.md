@@ -173,7 +173,7 @@
  ┌───────────────────┐        ┌──────────────────────────┐        ┌───────────────────────┐
  │ UI + çekirdek     │  leaf  │ NATS hub (ara bellek)    │  leaf  │ NATS                  │
  │ + dikey modül     │───────▶│ mağaza raporları         │───────▶│ ingest → PostgreSQL   │
- │ + SQLite          │        │ catalog (mağaza kopyası) │        │ raporlama, ürün/price │
+ │ + PostgreSQL      │        │ catalog (mağaza kopyası) │        │ raporlama, ürün/price │
  └─────────┬─────────┘        │ restaurant (çok terminal)│        │ cihaz/sürüm yönetimi  │
            │                  └──────────────────────────┘        └───────────────────────┘
            │                                                                  ▲
@@ -195,7 +195,7 @@ Her kutu ayrı bir container'dır ve tek başına güncellenir. Kasa ve operasyo
 ║        │ HTTP/WS 127.0.0.1:8080                                            ║
 ║        ▼                                                                   ║
 ║  gateway ──gRPC──▶ retail ─▶ catalog                                       ║
-║     │              sales ─▶ payment        (her biri kendi SQLite'ı)       ║
+║     │              sales ─▶ payment        (her biri kendi şeması)         ║
 ║     │                │  └──▶ fiscal (simülatör / Beko X30TR)               ║
 ║     └──────────────▶ staff   device (yazıcı, çekmece, barkod, terazi)      ║
 ║                                                                            ║
@@ -517,11 +517,11 @@ func divRound(num, den int64) int64 {
 | 4 | **MongoDB** | sınırlanmazsa ~1,5 GB (WiredTiger önbelleği RAM'in yarısını alır) | Esnek şema | Çoklu doküman transaction'ı için replica set şart; 5.0+ ARM'da ARMv8.2 (RPi 4'te çalışmaz), x86'da AVX ister; SSPL lisanslı (OSI onaylı değil, Debian depolarında yok); POS verisi zaten ilişkisel | **Önerilmez** |
 | 5 | **Gömülü KV** (bbolt, Pebble) | çok düşük | Saf Go, çok hızlı | SQL yok; indeks, sorgu ve rapor elle yazılır | Yalnızca özel işler (kuyruk, önbellek); NATS KV zaten var |
 
-**Karar: kasada SQLite, operasyon ve merkezde PostgreSQL** (operasyon 04.11.2026'da SQLite'tan geçti: tek veritabanı teknolojisi, ortak SQL, kalıcı oturumlar, `pg_dump` yedeği; bedeli mağaza sunucusunda ~100 MB RAM'li bir container; bkz. [STORE-POSTGRES.md](decisions/STORE-POSTGRES.md)).
+**Karar: üç katmanda da PostgreSQL** (operasyon 04.11.2026'da, kasa 08.11.2026'da SQLite'tan geçti: tek veritabanı teknolojisi, ortak SQL, `pg_dump` yedeği; bedeli her kasada küçük bir container, zirve 55 MiB; bkz. [STORE-POSTGRES.md](decisions/STORE-POSTGRES.md), [REGISTER-POSTGRES.md](decisions/REGISTER-POSTGRES.md)). Kasada her servis kendi şemasında ve tek bağlantıyla çalışır; fiş, Z ve olay numaraları işlemle geri alınan sayaç satırından gelir.
 
-- PostgreSQL kasada da çalışır. Sorun RAM değil, operasyon: bir container daha, cihaz başına backup/geri yükleme, sahada major sürüm yükseltmesi.
+- Kasada PostgreSQL'in asıl bedeli RAM değil, operasyondur: bir container daha, cihaz başına yedek/geri yükleme, sahada ana sürüm yükseltmesi.
 - Kasa servisleri ile merkez servisleri zaten farklı kod (`sales` ≠ `reporting`), bu yüzden iki SQL lehçesi aynı servis içinde çakışmaz.
-- Operasyonun veritabanı mağaza başına tek PostgreSQL container'ıdır (`abarow-store-db`); report ve inventory ayrı tablolarla aynı veritabanını kullanır. Kasa servislerinin kendi SQLite'ı değişmez. Hexagonal yapının getirisi budur: depolama adaptörü değişti, servislerin iş kodu değişmedi.
+- Operasyonun veritabanı mağaza başına tek PostgreSQL container'ıdır (`abarow-store-db`); report ve inventory ayrı tablolarla aynı veritabanını kullanır. Hexagonal yapının getirisi budur: depolama adaptörü değişti, servislerin iş kodu değişmedi.
 
 **PostgreSQL'i hafif çalıştırmak:** `postgres:18-alpine` image'ı yeterli. Varsayılan ayarlar (`shared_buffers=128MB`, `work_mem=4MB`) zaten küçük makinelere göredir. Asıl dikkat edilecek şey bağlantı sayısı: her bağlantı ayrı bir süreçtir (~5–10 MB). Bu yüzden her servisin pgx havuzu küçük tutulur (`MaxConns` 4–8), `max_connections` 50 civarında bırakılır. (PGlite adında gömülü bir PostgreSQL var ama WASM tabanlı ve JS/Node için; Go backend'e uygun değil.)
 

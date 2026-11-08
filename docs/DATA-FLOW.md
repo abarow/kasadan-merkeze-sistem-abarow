@@ -10,8 +10,8 @@
 ```
    REGISTER (her kasada)                 STORE (mağaza sunucusu)          HEADQUARTERS (merkez)
  ┌──────────────────────┐          ┌──────────────────────────┐          ┌──────────────────────────┐
- │ SQLite: satış, ödeme,│  olaylar │ PostgreSQL: mağaza raporu,│  olaylar │ PostgreSQL: bütün        │
- │ vardiya, katalog,    │ ───────▶ │ mağaza fiyatı, kasiyer,  │ ───────▶ │ mağazaların satışları,   │
+ │ PostgreSQL: satış,   │  olaylar │ PostgreSQL: mağaza raporu,│  olaylar │ PostgreSQL: bütün        │
+ │ ödeme, vardiya, kat. │ ───────▶ │ mağaza fiyatı, kasiyer,  │ ───────▶ │ mağazaların satışları,   │
  │ sepet / adisyon      │  (yukarı)│ mağaza stoğu             │  (yukarı)│ katalog, stok, kullanıcı │
  │                      │ ◀─────── │                          │ ◀─────── │                          │
  │ NATS (makbuzla 30 gün)│ ayarlar │ NATS (makbuzla 90 gün)   │ katalog, │ NATS (90 gün)            │

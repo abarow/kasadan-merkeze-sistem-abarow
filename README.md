@@ -22,8 +22,8 @@ Kasanın 9 servisi birlikte **boşta ≈68 MiB** bellek kullanır, ağır yük a
 
 | Kurulum | Asgari | Önerilen |
 |---|---|---|
-| Yalnız kasa | **192 MB** | 544 MB |
-| Tek makinede 1 kasa + operasyon | **576 MB** | 1088 MB |
+| Yalnız kasa | **256 MB** | 736 MB |
+| Tek makinede 1 kasa + operasyon | **640 MB** | 1280 MB |
 | Operasyon makinesi, 50 kasalı mağaza | 1152 MB | 1312 MB |
 
 Bu sayılar yalnızca abarow'un kendi container'larıdır; işletim sistemi ve kasadaki Chromium kiosk ayrıca bellek ister (ikisi ölçülmedi, kasa için 4 GB hedeflenir). Asgari değer, yük altında ölçülen en yüksek kullanımın %40 üstüdür.
@@ -32,7 +32,7 @@ Bu sayılar yalnızca abarow'un kendi container'larıdır; işletim sistemi ve k
 
 - Her servis tek amaçlı, statik derlenmiş bir Go programıdır; imaj `scratch` tabanlıdır (işletim sistemi, kabuk ve çalışma zamanı yok).
 - Her container'a bellek tavanı konur; bir servisin sızıntısı makineyi doyurmaz.
-- Kasada ayrı bir veritabanı sunucusu yoktur (SQLite). PostgreSQL yalnızca mağaza sunucusunda ve merkezdedir ve ayarı kasa sayısına göre kendiliğinden hesaplanır (`pgtune`).
+- Üç katmanda da tek veritabanı vardır: PostgreSQL. Kasadaki container küçük ve sabit ayarlıdır (zirve 55 MiB); mağaza sunucusu ve merkezde ayar kasa sayısına göre kendiliğinden hesaplanır (`pgtune`).
 - Önyüz Svelte ile derlenir ve Go servisinin içinden sunulur; çalışma zamanında Node.js yoktur.
 
 ## Hız
@@ -55,7 +55,7 @@ Bir satış (sepet aç, 3 ürün okut, sepeti kapat, nakit öde: 5 çağrı) haf
 - **Çevrimdışı öncelikli:** İnternet yokken de satış yapılır; satışlar bağlantı gelince üst katmana aktarılır.
 - **Modüler:** Market modülüyle başlar; modül değiştirilerek restorana geçilebilir.
 - **Kendi sunucunda:** Her işletme kendi merkezini çalıştırır; verileri kendisinde kalır.
-- **Teknoloji:** Go ile hexagonal mikroservisler. Her servis ayrı bir container'da (Podman) çalışır ve tek başına güncellenebilir. Önyüz Svelte ile yazılır ve Chromium kiosk modunda açılır. Veri kasada SQLite'ta, merkezde PostgreSQL'de tutulur.
+- **Teknoloji:** Go ile hexagonal mikroservisler. Her servis ayrı bir container'da (Podman) çalışır ve tek başına güncellenebilir. Önyüz Svelte ile yazılır ve Chromium kiosk modunda açılır. Veri üç katmanda da PostgreSQL'de tutulur.
 
 ## Deneyin
 

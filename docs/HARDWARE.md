@@ -53,12 +53,12 @@ Aşağıdaki sayılar abarow'un **kendi servislerinin** (container'ların) ihtiy
 
 | Rol | Bellek asgari | Bellek optimum | CPU asgari | CPU optimum |
 |---|---|---|---|---|
-| Kasa (9 container) | **192 MB** | **544 MB** | 1 | 2 |
+| Kasa (10 container) | **256 MB** | **736 MB** | 1 | 2 |
 | Operasyon, 4 kasaya kadar | 384 MB | 544 MB | 1 | 2 |
 | Operasyon, 5 kasa | 448 MB | 608 MB | 1 | 2 |
 | Operasyon, 50 kasa | 1152 MB | 1312 MB | 4 | 8 |
 
-(Kasa: ölçülen en yüksek ≈137 MiB. Operasyon: veritabanı + diğer servislerin ≈110 MB zirvesi; optimumda NATS 128, report 64, envanter 48, catalog-admin 48 MB tavanı. Diskte veritabanı kasa başına ayda ≈17 MB, yılda ≈200 MB büyür.)
+(Kasa: ölçülen en yüksek ≈141 MiB, 55 MiB'ı PostgreSQL. Operasyon: veritabanı + diğer servislerin ≈110 MB zirvesi; optimumda NATS 128, report 64, envanter 48, catalog-admin 48 MB tavanı. Diskte veritabanı kasa başına ayda ≈17 MB, yılda ≈200 MB büyür.)
 
 ### Senaryo 1: tek makinede 1 kasa + operasyon
 
@@ -66,9 +66,9 @@ Küçük mağaza; kasa ve mağaza sunucusu aynı makinede.
 
 | | Bellek asgari | Bellek optimum | CPU asgari | CPU optimum |
 |---|---|---|---|---|
-| Kasa servisleri | 192 MB | 544 MB | 1 | 2 |
+| Kasa servisleri | 256 MB | 736 MB | 1 | 2 |
 | Operasyon (≤4 kasa) | 384 MB | 544 MB | 1 | 2 |
-| **Makine toplamı** | **576 MB** | **1088 MB** | **2** | **4** |
+| **Makine toplamı** | **640 MB** | **1280 MB** | **2** | **4** |
 
 ### Senaryo 2: 4 kasa ayrı makinede + 1 kasa operasyon ile aynı makinede
 
@@ -76,17 +76,17 @@ Toplam 5 kasa.
 
 | Makine | Adet | Bellek asgari | Bellek optimum | CPU asgari | CPU optimum |
 |---|---|---|---|---|---|
-| Yalnız kasa | 4 (her biri) | **192 MB** | **544 MB** | 1 | 2 |
-| Operasyon (5 kasa) + 1 kasa | 1 | 640 MB | 1152 MB | 2 | 4 |
-| **Mağaza toplamı** | 5 makine | **1408 MB** | **3328 MB** | 6 | 12 |
+| Yalnız kasa | 4 (her biri) | **256 MB** | **736 MB** | 1 | 2 |
+| Operasyon (5 kasa) + 1 kasa | 1 | 704 MB | 1344 MB | 2 | 4 |
+| **Mağaza toplamı** | 5 makine | **1728 MB** | **4288 MB** | 6 | 12 |
 
-Operasyon makinesi: operasyon 448 / 608 MB + kasa 192 / 544 MB.
+Operasyon makinesi: operasyon 448 / 608 MB + kasa 256 / 736 MB.
 
 ### Senaryo 3: ayrı bir operasyon makinesi + 50 kasa
 
 | Makine | Adet | Bellek asgari | Bellek optimum | CPU asgari | CPU optimum |
 |---|---|---|---|---|---|
-| Yalnız kasa | 50 (her biri) | **192 MB** | **544 MB** | 1 | 2 |
+| Yalnız kasa | 50 (her biri) | **256 MB** | **736 MB** | 1 | 2 |
 | Operasyon (yalnız) | 1 | 1152 MB | 1312 MB | 4 | 8 |
 
 Operasyon makinesi disk: veritabanı 50 kasada ≈830 MB / 30 gün, yılda ≈10 GB. Ölçülmeyenler ve riskler: operasyon NATS'ının 50 leaf bağlantısındaki belleği ve CPU'su (tavan 128 MB; kasa sayısı arttıkça izlenmeli), operasyondaki catalog-admin örneğinin kendi ölçümü (merkezdeki örneğe göre ≈10 MB varsayıldı).
