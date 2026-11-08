@@ -22,6 +22,11 @@
 //   - effective_cache_size = container memory - 144 MB: it tells the planner the cache
 //     it can actually use (telling it more than the container has makes it choose
 //     a wrong plan).
+//   - random_page_cost = 1.1 (the default 4.0 assumes a spinning disk): the registers and
+//     the store server run on SSD/NVMe, and with 4.0 the planner never chooses the index
+//     for the sale_lines join of the month summary and scans the whole table
+//     (measured: 1.2 million sales, the product ranking 1996 ms → 685 ms with the
+//     covering key of migration 00002 together with this setting).
 //   - work_mem is 4 MB up to 4 registers, 8 MB up to 16 registers, 16 MB beyond that:
 //     as the data grows the summary queries' hash joins no longer fit in 4 MB and spill
 //     to disk (at 50 registers it was split into 4 parts). The memory limit is
@@ -172,6 +177,7 @@ func (s Settings) Flags() []string {
 		{"maintenance_work_mem", mb(s.MaintenanceWorkMemMB)},
 		{"wal_buffers", mb(s.WalBuffersMB)},
 		{"effective_cache_size", mb(s.EffectiveCacheSizeMB)},
+		{"random_page_cost", "1.1"},
 		{"min_wal_size", mb(s.MinWalSizeMB)},
 		{"max_wal_size", mb(s.MaxWalSizeMB)},
 		{"checkpoint_completion_target", "0.9"},

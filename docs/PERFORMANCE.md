@@ -270,7 +270,7 @@ Değişen ayarlar yalnızca 10 kasadan sonra ya da bellek sınırında kendini g
 
 ### Yöntem
 
-- Araç: `services/headquarters/ingest/cmd/headquartersbench` ve `scripts/bench-headquarters.sh`. Gerçek kod yolları: ingest'in `Store.Record`'u (olay + satış defteri + sayaçlar + makbuz + sıra numarası) ve reporting'in kullandığı satış defteri raporu (`pkg/ledger`) ile mağaza durumu sorgusu. Mağazalar ve NATS yoktur; olaylar doğrudan yazılır. Veritabanı boş bir `postgres:18-alpine` container'ıdır; ayarları `reporting pgtune --stores N` verir (`pkg/pgtune.ForMerkez`).
+- Araç: `services/headquarters/ingest/cmd/headquartersbench` ve `scripts/bench-headquarters.sh`. Gerçek kod yolları: ingest'in `Store.Record`'u (olay + satış defteri + sayaçlar + makbuz + sıra numarası) ve reporting'in kullandığı satış defteri raporu (`pkg/ledger`) ile mağaza durumu sorgusu. Mağazalar ve NATS yoktur; olaylar doğrudan yazılır. Veritabanı boş bir `postgres:18-alpine` container'ıdır; ayarları `reporting pgtune --stores N` verir (`pkg/pgtune.ForHeadquarters`).
 - **Veri mağaza sayısıyla katlanır:** mağaza başına 2 kasa × 30 gün × 300 satış = 18 000 satış (satış başına bir ham olay, 4 satır, ödeme, 2 KDV satırı, makbuz; yüzde biri iptal; günde bir vardiya). 1 mağaza: 18 bin satış / 49 MB; 50 mağaza: 900 bin satış / 2,1 GB.
 - **Yük (60 sn):** her kasa saniyede 0,2 satış gönderir (50 mağazada 100 kasa = 20 satış/sn); olaylar tek işçide sırayla işlenir. Ekranlar (mağaza sayısı/5 + 1): her 10 sn'de mağaza durumu, ingest etkinliği, tüm mağazaların günlük özeti ve bir mağazanın günlük özeti; her 30 sn'de aylık özet ve ürün sıralaması.
 - Bağlantı havuzu sınırlıdır (reporting 8, ingest 4, catalog-admin 4, envanter 4); `max_connections` 30.
@@ -287,7 +287,7 @@ Değişen ayarlar yalnızca 10 kasadan sonra ya da bellek sınırında kendini g
 
 Hata: bu beş ölçümde toplam **0**. Kayıt işleme kapasitesi (tek işçi, kuyruksuz): 1 mağaza 60/sn, 2 mağaza 61/sn, 5 mağaza 61/sn, 10 mağaza 56/sn, 50 mağaza 49/sn. En çok kullanılan bağlantı: 1 mağaza 3, 2 mağaza 4, 5 mağaza 6, 10 mağaza 7, 50 mağaza 13 (sınır 30).
 
-### Ayar değişikliği: merkez için ayrı formül (`pgtune.ForMerkez`)
+### Ayar değişikliği: merkez için ayrı formül (`pgtune.ForHeadquarters`)
 
 İlk tur operasyon formülüyle (`ForStore`; tampon en çok 256 MB, bellek en çok 640 MB) alındı. Merkezde veritabanı mağaza sayısıyla büyür (50 mağazada 2 GB) ve bu bellekte çalışma kümesi sığmadı:
 
@@ -295,10 +295,10 @@ Hata: bu beş ölçümde toplam **0**. Kayıt işleme kapasitesi (tek işçi, ku
 |---|---|---|---|---|---|---|---|---|---|---|
 | 10 | ilk (operasyon formülü) | 512 MB | 192 MB | 16 MB | 6 ms / 19 ms | 207 ms | 1,8 sn | 1,7 sn | 40 ms | 2 |
 | 10 | büyük bellek | 768 MB | 256 MB | 16 MB | 3 ms / 15 ms | 11 ms | 1,7 sn | 1,6 sn | 30 ms | 1 |
-| 10 | son (ForMerkez) | 512 MB | 192 MB | 16 MB | 4 ms / 19 ms | 18 ms | 1,7 sn | 1,6 sn | 34 ms | 1 |
+| 10 | son (ForHeadquarters) | 512 MB | 192 MB | 16 MB | 4 ms / 19 ms | 18 ms | 1,7 sn | 1,6 sn | 34 ms | 1 |
 | 50 | ilk (operasyon formülü) | 640 MB | 256 MB | 16 MB | 27 ms / 19,2 sn | 40 ms | 27,6 sn | bitmedi | 2,5 sn | 62 |
 | 50 | büyük bellek | 2048 MB | 512 MB | 32 MB | 44 ms / 7,1 sn | 110 ms | 15,2 sn | 16,4 sn | 745 ms | 23 |
-| 50 | son (ForMerkez) | 1792 MB | 832 MB | 32 MB | 35 ms / 7,8 sn | 79 ms | 16,9 sn | 16,8 sn | 1,0 sn | 29 |
+| 50 | son (ForHeadquarters) | 1792 MB | 832 MB | 32 MB | 35 ms / 7,8 sn | 79 ms | 16,9 sn | 16,8 sn | 1,0 sn | 29 |
 Gerekçe ve okuma:
 
 - **50 mağazada** ilk ayar yetmedi: 2 GB veri 640 MB bellekte çalışma kümesini tutamadı; aylık özet 27,6 sn sürdü, ürün sıralaması 60 sn'lik yük süresinde hiç bitmedi, mağaza durumu sorgusu p95 19 sn'ye çıktı, kayıt işleme gecikmesi p95 2,5 sn ve kuyruk 62 olayı buldu. Bellek sınırı 2 × shared_buffers + 128 MB, tampon 1 GB'a kadar (kasa başına 8 MB), work_mem 40 kasadan sonra 32 MB olunca: aylık özet 16,9 sn, ürün sıralaması 16,8 sn (tamamlanıyor), kayıt işleme p95 1,0 sn, kuyruk 29.
@@ -314,7 +314,7 @@ Gerekçe ve okuma:
 - Ölçülen mağaza başına kasa sayısı 2'dir; çok kasalı mağazalarda veri orantılı büyür. Merkez ayarı toplam kasa sayısına (mağaza × kasa) göre hesaplanır; kasa sayısı bilinmiyorsa mağaza başına 2 varsayılır.
 - Ölçülmeyenler: gerçek NATS akışı, catalog-admin ve envanter yükü, yedek sırasındaki gecikme, mağaza başına 2'den çok kasa. Tek çalıştırma, geliştirici bilgisayarı.
 
-### Merkez ayar tablosu (`pgtune.ForMerkez`; mağaza × 2 kasa)
+### Merkez ayar tablosu (`pgtune.ForHeadquarters`; mağaza × 2 kasa)
 
 | Mağaza | Container belleği | shared_buffers | work_mem | effective_cache_size | max_wal_size | maintenance_work_mem | max_connections |
 |---|---|---|---|---|---|---|---|
@@ -328,3 +328,49 @@ Gerekçe ve okuma:
 
 Ölçülenler 1, 2, 5, 10 ve 50 mağazadır; 25 ve 100 formülün ara/üst değeridir. Paralel sorgu kapalıdır (operasyon ölçümündeki `/dev/shm` hatası nedeniyle).
 
+
+## Aylık rapor için indeks çalışması (07–08.11.2026)
+
+> Geliştirici bilgisayarında, tek çalıştırma; sayılar sıralama ve oran için güvenilirdir, mağaza donanımı için garanti değildir.
+
+Önceki ölçümler aylık özetin "veriyle doğrusal büyüdüğünü" gösteriyordu, ama ölçüm verisi yalnızca 30 günlüktü: aylık pencere tablonun tamamını kapsıyordu ve indeks bir şey değiştiremezdi. Gerçek bir mağazada veri yıllarca birikir ve ay, verinin küçük bir kısmıdır. Bu çalışma o durumu ölçer.
+
+### Yöntem
+
+- **Veri:** 1 mağaza, 10 kasa, 395 gün, kasa başına günde 300 satış = **1.185.000 satış** (4,74 milyon satır, 1,19 milyon ödeme, 2,37 milyon KDV satırı, 11.850 iptal), zaman sırasıyla eklenmiş. Bir ayın dilimi ~90 bin satış. `postgres:18-alpine`, `pgtune --registers 10` ayarı (384 MB container, `shared_buffers` 112 MB).
+- **Sorgular:** `pkg/ledger/ledgerdb` içindeki `Report`'un beş sorgusu (satışlar, iptaller, ödemeler, KDV, ürün sıralaması). İki pencere: son 30 gün ve 6 ay önceki 30 gün. Her değer 3 çalıştırmanın medyanı (`EXPLAIN (ANALYZE, BUFFERS)` yürütme süresi), milisaniye.
+- Her varyant aynı veri üstünde, yalnızca ilgili indeks/ayar değiştirilerek ölçüldü.
+
+### Sonuç (son 30 gün, ms)
+
+| Varyant | Satışlar | Ödemeler | KDV | Ürün sıralaması | Toplam | 6 ay önceki ay (toplam) |
+|---|---|---|---|---|---|---|
+| Temel (mevcut indeksler, `random_page_cost` 4) | 313 | 352 | 709 | 2809 | **4184** | 3572 |
+| `random_page_cost` 1,1 | 166 | 332 | 600 | 1770 | 2868 | 2929 |
+| `sales (paid_at)` kapsayıcı indeks | 295 | 320 | 553 | 1941 | 3109 | 3187 |
+| Üç alt tablonun anahtarı kapsayıcı | 311 | 381 | 592 | 2755 | 4039 | 3218 |
+| Üç alt tablo kapsayıcı + `random_page_cost` 1,1 | 158 | 343 | 560 | 578 | **1640** | 1750 |
+| Aynısı, iç içe döngü zorlanmış (`enable_hashjoin=off`) | 159 | 241 | 266 | 479 | 1144 | 1147 |
+| Alt tablolara `paid_at` kopyası + tarih indeksi | 285 | 16 | 36 | 390 | 728 | 731 |
+
+Yalnızca `sale_lines` anahtarının kapsayıcı olduğu, taze veride doğrulama (eklenen hâl): temel 3391 ms (6 ay önce 3385), yalnızca ayar 3211 (2850), anahtar adsız 3115 (2950; ürün sıralaması 1860), anahtar adlı **1820 ms (1871); ürün sıralaması 685 ms**.
+
+### Ne yapıldı
+
+1. **`sale_lines` anahtarı kapsayıcı yapıldı** (`00002_report_index.sql`, mağaza ve merkez `ingest`): `PRIMARY KEY (store_id, sale_id, line_no) INCLUDE (product_id, name, qty, total)`. Ürün sıralaması 1996 → 685 ms (2,9 kat), toplam ~1,9 kat. Satır sayısı en büyük tablo olduğu için planlayıcı ancak bu tabloda tüm tabloyu taramak yerine indeksten okumayı seçiyor.
+2. **`random_page_cost = 1,1`** (`pgtune` ve dört dağıtım dosyası: iki compose, iki Quadlet). Varsayılan 4,0 dönen disk varsayar; tek başına 4,2 → 2,9 sn'ye indiriyor, ama kapsayıcı anahtarın kullanılması için de gerekli (ayar olmadan kapsayıcı anahtar hiçbir şeyi değiştirmedi: 4039 ms). **Mağaza makinesi SSD/NVMe değilse bu ayar geri alınmalıdır.**
+3. **Satır adı 512 bayta kısaltılıyor** (`ledgerdb.MaxLineNameBytes`). Kapsayıcı anahtar adı da taşır ve PostgreSQL, sayfanın üçte birinden büyük bir indeks girdisini kabul etmez (~2,7 KB): ölçümde 3200 karakterlik sıkıştırılamaz bir ad satış kaydını **hata ile** reddetti. Üründe ad uzunluğu sınırı olmadığı için kayıt anında defterdeki kopya kısaltılır; kasadaki fiş tam adı korur.
+
+### Maliyet
+
+- **Boyut:** 1,19 milyon satışta `sale_lines` indeksi 229 → 387 MB (+158 MB); veritabanı yaklaşık %11 büyür.
+- **Yazma:** 100 bin satış + satırları toplu eklemede 19,3 → 20,4 sn (+%6); `storebench` kayıt işleme gecikmesinde fark ölçülmedi (p50 17,6 → 13,8 ms, ölçüm gürültüsü içinde).
+- **Pencere tablonun tamamıysa hafif yavaşlama:** 30 günlük `storebench` verisinde (aylık pencere = tüm tablo) aylık özet 957 → 1117 ms, ürün sıralaması 958 → 1166 ms (+%17–22). Bu, bir mağazanın ilk ayıdır; ikinci aydan sonra pencere verinin yarısından azdır ve kazanç başlar.
+- İndeks-yalnız taramalar görünürlük haritasına dayanır; toplu yüklemeden sonra `VACUUM` önerilir (günlük işte autovacuum yeter).
+
+### Yapılmayanlar ve nedenleri
+
+- **`sales (paid_at)` kapsayıcı indeks:** kazanç yok. Satışlar sorgusunun maliyeti, 15 dakikalık dilim × kasa × kasiyer kırılımının ~86 bin grubunu sıralamasındadır (diske taşar); indeks bunu değiştirmez.
+- **Ödemeler ve KDV anahtarlarını kapsayıcı yapmak:** kazanç yok. Bu tablolar küçük olduğundan planlayıcı karma birleştirme + tam tarama seçiyor (iç içe döngü zorlanınca 352 → 241 ve 709 → 266 ms, yani ~1 sn daha kazanç var), ama bunu ayar ya da sorgu yeniden yazımı olmadan sağlamak mümkün olmadı.
+- **Alt tablolara `paid_at` kopyası** en iyi sonucu verir (toplam 728 ms; ödemeler 16, KDV 36 ms), ama yazma yolunu (`SaveSale`), iki şemayı ve geçmiş veri için bir doldurma `UPDATE`'ini değiştirir: 1,19 milyon satışta doldurma ~6 dakika sürdü ve tabloları iki katına şişirdi. Ayrı bir karar olarak bırakıldı.
+- **50 kasa / çok yıllık veri ölçülmedi:** bu çalışma 10 kasa ve 13 ay ile sınırlıdır; büyüme doğrusal beklenir.

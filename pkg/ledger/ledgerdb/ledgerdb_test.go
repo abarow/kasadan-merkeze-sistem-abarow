@@ -10,8 +10,10 @@ import (
 	"math/rand/v2"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -303,5 +305,23 @@ func TestQ(t *testing.T) {
 	}
 	if got := SQLite.Q("a = ?"); got != "a = ?" {
 		t.Error(got)
+	}
+}
+
+func TestLineName(t *testing.T) {
+	if got := LineName("Su"); got != "Su" {
+		t.Errorf("a short name should stay: %q", got)
+	}
+	long := strings.Repeat("ş", MaxLineNameBytes) // 2 bytes per character
+	got := LineName(long)
+	if len(got) > MaxLineNameBytes || !utf8.ValidString(got) || !strings.HasPrefix(long, got) {
+		t.Errorf("the cut name is wrong: %d bytes, valid=%v", len(got), utf8.ValidString(got))
+	}
+	if len(got) != MaxLineNameBytes {
+		t.Errorf("an even number of 2-byte characters should be cut exactly at the limit: %d", len(got))
+	}
+	odd := strings.Repeat("a", MaxLineNameBytes-1) + "ş" // the last character crosses the limit
+	if got := LineName(odd); got != strings.Repeat("a", MaxLineNameBytes-1) {
+		t.Errorf("the character that crosses the limit should be dropped: %d bytes", len(got))
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"abarow.com/pkg/ledger"
 	"abarow.com/pkg/money"
@@ -55,6 +56,24 @@ func (d Dialect) binary(expr string) string {
 	return expr
 }
 
+// MaxLineNameBytes is the longest product name the ledger keeps in a sale line. The report
+// index of sale_lines carries the name (migration 00002), and PostgreSQL does not accept an index
+// entry larger than a third of a page (about 2.7 KB): a longer name would make the sale
+// impossible to record. The register's receipt keeps the full name; only the ledger's copy is cut.
+const MaxLineNameBytes = 512
+
+// LineName cuts name to MaxLineNameBytes without splitting a character.
+func LineName(name string) string {
+	if len(name) <= MaxLineNameBytes {
+		return name
+	}
+	cut := MaxLineNameBytes
+	for cut > 0 && !utf8.RuneStart(name[cut]) {
+		cut--
+	}
+	return name[:cut]
+}
+
 // SaveSale writes the sale with its lines, payments and VAT; if the sale already
 // exists it does nothing and returns false. The lines must be written in a single
 // transaction (db is a *sql.Tx).
@@ -74,7 +93,7 @@ func (d Dialect) SaveSale(ctx context.Context, db DB, s ledger.Sale) (bool, erro
 		if _, err := db.ExecContext(ctx, d.Q(`
 			INSERT INTO sale_lines (store_id, sale_id, line_no, product_id, barcode, name, qty, unit_price, tax_rate, total)
 			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
-			s.StoreID, s.ID, i+1, l.ProductID, l.Barcode, l.Name,
+			s.StoreID, s.ID, i+1, l.ProductID, l.Barcode, LineName(l.Name),
 			int64(l.Qty), int64(l.UnitPrice), int64(l.TaxRate), int64(l.Total())); err != nil {
 			return false, err
 		}
