@@ -1,5 +1,7 @@
 # abarow — Beş bakış açısıyla inceleme (11.11.2026)
 
+> İkinci inceleme (14.11.2026, `9a1afd9`): [REVIEW-2.md](REVIEW-2.md).
+
 > Kod `35d20a5` üzerinde okundu ve araçlarla tarandı; hiçbir şey değiştirilmedi. Bulgular sırayla Go uzmanı, veritabanı yöneticisi (DBA), zayıf bağlı uygulama uzmanı, mikroservis mimarı ve performanslı/hafif/ölçeklenebilir yazılım uzmanı gözüyle yazıldı. "Denenmedi" yazan bulgular yalnızca kod okumasına dayanır.
 >
 > Kullanılan araçlar: `staticcheck`, `govulncheck`, `gosec` (bütün modüller), `go vet` ve testler (CI), elle okuma. Ölçüm rakamları [PERFORMANCE.md](PERFORMANCE.md) ve [REGISTER-POSTGRES.md](decisions/REGISTER-POSTGRES.md) içindendir.
