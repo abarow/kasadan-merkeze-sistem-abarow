@@ -4,6 +4,132 @@
 
 > **Yük oranı (13.11.2026):** Merkez ölçümlerinde 13.11.2026'dan önce kasa başına saniyede 0,2 satış (50 mağazada 20 satış/sn) kullanıldı. Bir satış en az 30 saniye sürdüğü için bu oran gerçek üst sınırın yaklaşık 6 katıdır; bu tablolar **stres testi**dir. Gerçekçi yük kasa başına 20 saniyede 1 satıştır (0,05/sn, 50 mağazada 5 satış/sn); sonuçlar "Gerçekçi yük" bölümündedir.
 
+## Kaynak kullanımı: iki örnek kurulum (14.11.2026)
+
+> Geliştirici bilgisayarı (Docker Desktop, WSL2, 16 mantıksal CPU), tek çalıştırma. Sayılar sıralama ve oran için güvenilirdir; mağaza donanımının değerini vermez, garanti değildir. İşletim sistemi ve kasadaki Chromium dahil değildir (bkz. [HARDWARE.md](HARDWARE.md)).
+
+İki kurulumun container başına CPU ve belleği, boşta ve gerçekçi satış yükü altında.
+
+- **A: 1 mağaza sunucusu + 1 kasa, aynı makinede, merkezsiz.** Doğrudan ölçüldü: 15 container.
+- **B: 1 merkez + 2 mağaza, mağaza başına 5 kasa.** Doğrudan ölçülen: 1 merkez + 1 mağaza + 5 kasa (61 container). İkinci mağaza ayrı bir yığın olarak kurulmadı (compose dosyaları tek mağaza ağına bağlı). **İkinci mağaza ve 5 kasası, ölçülen mağaza ve kasaların aynısı sayılarak eklendi: bu satırlar türetilmiştir.**
+
+### Yöntem
+
+- **Yığın:** `scripts/e2e.sh` ile kuruldu (A: `standalone`; B: `headquarters`, kasa listesi 5'e çıkarılmış bir kopyayla, ingest portu başka porta alınarak).
+- **Süre:** kurulumdan 60 sn sonra boşta 45 sn, ardından yük altında 120 sn. `docker stats` yaklaşık 2 saniyede bir okundu (A: 22 boşta, 58 yük; B: 20 boşta, 53 yük örnek).
+- **Yük:** her kasada 20 saniyede 1 satış (3 ürün, nakit; gateway API'si üzerinden, kasiyer gibi), mağaza ekranında ve merkez ekranında 10 saniyede bir okuma. Yük başladıktan 10 sn sonra örneklendi.
+- **Sonuç:** A'da 7 satış, B'de 34 satış; ikisinde de **hata 0**. Satış (3 ürün, 5 çağrı) A'da p50 68 / p95 118 ms, B'de p50 65 / p95 115 ms.
+- **Birimler:** CPU, `docker stats`'ın tek çekirdeğe göre yüzdesidir (%100 = bir çekirdek). Bellek container'ın kullandığı bellektir (`docker stats`; sayfa önbelleğinin bir kısmını içerir). Ortalama alınmıştır; "en çok" sütunu en yüksek örnektir.
+
+### Özet
+
+| Kurulum | Container | CPU boşta / yük | Bellek boşta | Bellek yük (ort. / en çok) |
+|---|---|---|---|---|
+| **A:** 1 mağaza + 1 kasa, tek makine | 15 | %10,8 / %11,7 | 171 MiB | 191 / 200 MiB |
+| **B (ölçülen):** 1 merkez + 1 mağaza + 5 kasa | 61 | %47,1 / %55,7 | 731 MiB | 835 / 871 MiB |
+| **B (türetilmiş):** 1 merkez + 2 mağaza + 10 kasa | 116 | %89,5 / %106,1 | 1354 MiB | 1556 MiB |
+
+Tek bir örneklemde bir container'ın en yüksek CPU'su: A'da %4,9 (kasa veritabanı), B'de %18,3 (bir kasanın veritabanı, satış anında).
+
+**Makine başına (B'de her biri ayrı makinedir):**
+
+| Makine | Adet | Container | CPU boşta / yük | Bellek boşta | Bellek yük (ort. / en çok) |
+|---|---|---|---|---|---|
+| Kasa | 10 | 10 | %7,4 / %8,7 | 99,6 MiB | 113,5 / 123,2 MiB |
+| Mağaza sunucusu (5 kasalı) | 2 | 5 | %5,2 / %6,9 | 125,0 MiB | 152,7 / 167,9 MiB |
+| Merkez | 1 | 6 | %4,7 / %5,5 | 107,5 MiB | 115,1 / 121,8 MiB |
+
+Kasa satırı beş kasanın ortalamasıdır (kasa başına yük belleği 110,3–116,6 MiB). A'da aynı makinedeki kasa 107,6, mağaza sunucusu 82,9 MiB kullandı.
+
+### Container başına: A (1 mağaza + 1 kasa)
+
+CPU %, tek çekirdek; bellek MiB.
+
+##### Kasa
+
+| Container | Boşta CPU | Boşta bellek | Yük CPU | Yük bellek | Yük bellek en çok |
+|---|---|---|---|---|---|
+| register-db | 0,8 | 43,9 | 0,8 | 46,1 | 47,4 |
+| nats (kasa NATS'ı) | 1,0 | 11,4 | 1,2 | 15,0 | 17,6 |
+| staff | 0,8 | 8,0 | 0,9 | 8,4 | 13,3 |
+| sales | 0,8 | 7,7 | 1,0 | 8,1 | 9,1 |
+| catalog | 0,7 | 5,8 | 0,6 | 6,1 | 7,8 |
+| retail | 0,5 | 5,2 | 0,5 | 5,8 | 7,4 |
+| gateway | 0,5 | 3,0 | 0,6 | 5,6 | 6,9 |
+| payment | 0,7 | 5,1 | 0,6 | 5,2 | 6,7 |
+| fiscal | 0,7 | 3,2 | 0,6 | 3,7 | 5,4 |
+| device | 0,5 | 3,2 | 0,5 | 3,5 | 5,9 |
+
+##### Mağaza sunucusu
+
+| Container | Boşta CPU | Boşta bellek | Yük CPU | Yük bellek | Yük bellek en çok |
+|---|---|---|---|---|---|
+| store-db | 0,7 | 47,3 | 0,9 | 52,6 | 55,8 |
+| store (mağaza NATS'ı) | 0,9 | 7,7 | 1,1 | 9,4 | 10,9 |
+| report (ekran + API) | 0,8 | 7,6 | 0,9 | 8,4 | 10,7 |
+| inventory | 0,7 | 6,3 | 0,8 | 6,6 | 10,1 |
+| store-catalog-admin | 0,7 | 5,7 | 0,7 | 6,0 | 6,9 |
+
+### Container başına: B (1 merkez + 1 mağaza + 5 kasa)
+
+Kasa tablosu beş kasanın container başına ortalamasıdır. Merkez, ölçüm sırasında bir mağazaya bağlıydı.
+
+##### Kasa
+
+| Container | Boşta CPU | Boşta bellek | Yük CPU | Yük bellek | Yük bellek en çok |
+|---|---|---|---|---|---|
+| register-db | 0,9 | 42,7 | 1,1 | 45,5 | 47,7 |
+| nats (kasa NATS'ı) | 1,1 | 13,6 | 1,3 | 17,4 | 19,4 |
+| sales | 0,8 | 7,8 | 1,0 | 8,8 | 9,9 |
+| staff | 0,9 | 8,2 | 1,0 | 8,8 | 11,1 |
+| catalog | 0,7 | 6,5 | 0,8 | 6,7 | 8,4 |
+| gateway | 0,5 | 3,6 | 0,7 | 6,5 | 8,0 |
+| retail | 0,6 | 4,9 | 0,7 | 5,9 | 7,6 |
+| payment | 0,7 | 5,0 | 0,7 | 5,2 | 6,3 |
+| fiscal | 0,6 | 3,5 | 0,7 | 4,3 | 5,8 |
+| device | 0,5 | 3,8 | 0,7 | 4,3 | 5,8 |
+
+##### Mağaza sunucusu
+
+| Container | Boşta CPU | Boşta bellek | Yük CPU | Yük bellek | Yük bellek en çok |
+|---|---|---|---|---|---|
+| store (mağaza NATS'ı) | 1,9 | 46,5 | 2,4 | 68,2 | 79,6 |
+| store-db | 0,7 | 51,1 | 1,1 | 54,6 | 56,8 |
+| report (ekran + API) | 1,1 | 11,2 | 1,6 | 13,1 | 16,7 |
+| inventory | 0,7 | 8,5 | 0,9 | 8,9 | 10,1 |
+| store-catalog-admin | 0,8 | 7,7 | 0,9 | 7,9 | 12,2 |
+
+##### Merkez
+
+| Container | Boşta CPU | Boşta bellek | Yük CPU | Yük bellek | Yük bellek en çok |
+|---|---|---|---|---|---|
+| headquarters-db | 1,0 | 58,2 | 1,1 | 60,6 | 62,1 |
+| ingest | 0,8 | 12,9 | 1,0 | 13,8 | 15,2 |
+| headquarters (merkez NATS'ı) | 0,9 | 9,9 | 1,1 | 11,1 | 12,3 |
+| catalog-admin | 0,6 | 9,1 | 0,8 | 10,2 | 11,5 |
+| headquarters-inventory | 0,7 | 9,3 | 0,8 | 10,1 | 11,3 |
+| reporting (ekran + API) | 0,6 | 8,2 | 0,6 | 9,3 | 11,5 |
+
+### 30 günlük veriyle veritabanları
+
+Yukarıdaki yığınlar tazedir: veritabanları boş. Veritabanı belleği veriyle büyür. Aynı yükte, 30 günlük satışla dolu veritabanları (`bench-store.sh`, `bench-headquarters.sh`; ayarlar `pgtune`'dan; rapor ekranı açık):
+
+| Veritabanı | Veri | CPU (ort.) | Bellek (en çok) | Taze yığında (en çok) |
+|---|---|---|---|---|
+| Mağaza sunucusu, 1 kasa | 9.000 satış, 29 MB | %2 | 74 MiB | 55,8 MiB |
+| Mağaza sunucusu, 5 kasa | 45.000 satış, 102 MB | %14 | 149 MiB | 56,8 MiB |
+| Merkez, 2 mağaza × 5 kasa | 90.000 satış, 229 MB | %17 | 249 MiB | 62,1 MiB |
+
+Buna göre toplam bellek yaklaşık A'da **210 MiB**, B'de (2 mağaza, 10 kasa) **1,9 GiB** olur. Bu iki sayı ölçülenlere veritabanı farkını ekleyerek hesaplandı, bütün yığın 30 günlük veriyle ölçülmedi. Veritabanı CPU'su bu tabloda yığındakinden yüksektir, çünkü 30 günlük veride aylık ve ürün raporları ağır sorgulardır.
+
+### Bulgular
+
+- **Bellek PostgreSQL'dedir:** taze yığında kasanın 108 MiB'ının 46'sı (%43), A'daki mağaza sunucusunun 83 MiB'ının 53'ü (%63) veritabanıdır. Veritabanı ve mağaza sunucusunun NATS'ı dışında her container 3–17 MiB tutar.
+- **CPU boşta gibidir:** satış yükü kasanın CPU'sunu %7,0'dan %7,3'e çıkardı (A). Yükte bile hiçbir container'ın ortalaması %2,4'ü geçmedi. Her container'ın boşta ≈%0,5–1'lik tabanı Docker Desktop ve WSL2'nin sanallaştırma yükünü de içerir; gerçek Linux ve Podman'da ölçülmedi.
+- **Mağaza sunucusunun NATS'ı:** A'da (merkezsiz, 1 kasa) 7,7 MiB, B'de (merkeze bağlı, 5 kasa) boşta 46,5, yükte 68,2 MiB. Farkın ne kadarı merkez bağlantısından ne kadarı kasa sayısından geliyor, ayrıştırılmadı.
+- **Tavanların küçük bir kısmı kullanılıyor:** kasada ölçülen en yüksek 123 MiB, [HARDWARE.md](HARDWARE.md)'deki 736 MB optimumun yaklaşık %17'si. Mağaza sunucusu (5 kasa) taze veride 168 MiB, optimum 608 MB'ın %28'i; 30 günlük veriyle yaklaşık 260 MiB, %43'ü.
+- **Sınırlar:** tek çalıştırma, bir geliştirici bilgisayarı, kısa süre (2 dakika). İkinci mağaza ölçülmedi, türetildi. Merkezin iki mağazaya bağlıyken CPU ve belleği ölçülmedi (bir mağazaya bağlıyken ölçüldü). ARM, düşük güçlü işlemci ve aylarca birikmiş veri ölçülmedi.
+
 ## Yenileme: gerçekçi yükte veritabanı ölçümü (14.11.2026)
 
 > Geliştirici bilgisayarı (Docker Desktop, Windows 11), tek çalıştırma. Sayılar sıralama ve oran için güvenilirdir; mağaza donanımının değerini vermez, garanti değildir.

@@ -146,6 +146,35 @@ tr:last-child td { border-bottom: 0; }
 .stepper.js .controls { display: flex; }
 .step-label { color: var(--muted); font-size: .92rem; }
 
+/* resource usage */
+.pickers { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 18px 0 6px; }
+.pickers fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.pickers legend { font-size: .85rem; color: var(--muted); padding: 0; margin: 0 0 4px; }
+.seg-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg-opts label { position: relative; display: inline-block; }
+.seg-opts input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.seg-opts span { display: inline-block; padding: 7px 13px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--card); font-size: .93rem; }
+.seg-opts input:checked + span { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--card)); font-weight: 600; }
+.seg-opts input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+.machine { margin: 14px 0; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.machine header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; }
+.machine h3 { margin: 0; font-size: 1.05rem; }
+.machine .mtotal { color: var(--muted); font-size: .9rem; }
+.part h4 { margin: 12px 0 6px; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.brow { display: grid; grid-template-columns: minmax(120px, 190px) 1fr minmax(150px, auto); gap: 8px; align-items: center; font-size: .9rem; padding: 2px 0; }
+.track { position: relative; height: 12px; background: color-mix(in srgb, var(--fg) 8%, transparent); border-radius: 6px; }
+.fill { position: absolute; inset: 0 auto 0 0; min-width: 2px; background: var(--c); border-radius: 6px; }
+.tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--fg); }
+.bval { text-align: right; font-variant-numeric: tabular-nums; }
+.t-reg { --c: var(--reg); } .t-store { --c: var(--store); } .t-hq { --c: var(--hq); }
+.legend .l-bar { width: 16px; height: 8px; border-radius: 4px; background: var(--muted); }
+.legend .l-tick { width: 2px; height: 12px; border-radius: 0; background: var(--fg); margin: 0 9px 0 7px; }
+@media (prefers-reduced-motion: no-preference) { .fill, .tick { transition: width .35s, left .35s; } }
+@media (max-width: 640px) {
+  .brow { grid-template-columns: 1fr auto; }
+  .brow .track { grid-column: 1 / -1; order: 3; }
+}
+
 footer { margin-top: 64px; padding: 24px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
 
 @media (max-width: 640px) {
@@ -164,6 +193,7 @@ footer { margin-top: 64px; padding: 24px 0 40px; border-top: 1px solid var(--lin
     <nav aria-label="Bölümler">
       <a href="#akis">Akış</a>
       <a href="#kesinti">Bağlantı kesilince</a>
+      <a href="#kaynak">Kaynak</a>
     </nav>
     <button class="btn" id="theme" type="button" aria-label="Temayı değiştir">Tema</button>
   </div>
@@ -181,7 +211,7 @@ footer { margin-top: 64px; padding: 24px 0 40px; border-top: 1px solid var(--lin
         <div class="stat"><b>0 hata</b><span>682 satışta ve ≈113 bin okuma isteğinde</span></div>
         <div class="stat"><b>2 satış</b><span>Gerçekçi yükte merkezde bekleyen en uzun kuyruk (50 mağaza, 100 kasa)</span></div>
       </div>
-      <p class="note">Geliştirici bilgisayarında (Docker Desktop, 16 mantıksal CPU) ölçüldü. Mağaza donanımının değerini vermez, garanti değildir.</p>
+      <p class="note">Geliştirici bilgisayarında (Docker Desktop, 16 mantıksal CPU) ölçüldü. Mağaza donanımının değerini vermez, garanti değildir. <a href="#kaynak">Kaynak kullanımının ayrıntısı</a>.</p>
     </div>
   </section>
 
@@ -264,6 +294,63 @@ footer { margin-top: 64px; padding: 24px 0 40px; border-top: 1px solid var(--lin
           <span class="step-label" aria-live="polite"></span>
         </div>
       </div>
+    </div>
+  </section>
+  <section id="kaynak">
+    <div class="wrap">
+      <h2>Kaynak kullanımı: iki örnek kurulum</h2>
+      <p class="lead">Container başına CPU ve bellek, boşta ve gerçekçi satış yükü altında (her kasada 20 saniyede 1 satış). Bir kurulum seçin.</p>
+      <div class="pickers">
+        <fieldset class="seg">
+          <legend>Kurulum</legend>
+          <div class="seg-opts">
+            <label><input type="radio" name="scen" value="A" checked><span>1 mağaza + 1 kasa (tek makine)</span></label>
+            <label><input type="radio" name="scen" value="B"><span>1 merkez + 2 mağaza + 10 kasa</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="seg">
+          <legend>Ölçü</legend>
+          <div class="seg-opts">
+            <label><input type="radio" name="metric" value="mem" checked><span>Bellek</span></label>
+            <label><input type="radio" name="metric" value="cpu"><span>CPU</span></label>
+          </div>
+        </fieldset>
+      </div>
+      <div class="stats" id="res-stats"></div>
+      <p class="note" id="res-note"></p>
+      <div id="res-machines"></div>
+      <ul class="legend">
+        <li><i class="l-bar"></i>Çubuk: yük altında (ortalama)</li>
+        <li><i class="l-tick"></i>Çizgi: boşta</li>
+      </ul>
+      <details>
+        <summary>Bütün sayılar (tablo)</summary>
+        <div class="tablebox"><table id="res-table"></table></div>
+      </details>
+
+      <h3>Veri büyüyünce</h3>
+      <p class="prose">Yukarıdaki yığınlar tazedir, veritabanları boştur. Veritabanı belleği veriyle büyür. Aynı yükte, 30 günlük satışla dolu veritabanları:</p>
+      <div class="tablebox"><table>
+        <thead><tr><th>Veritabanı</th><th>Veri</th><th>CPU (ort.)</th><th>Bellek (en çok)</th><th>Taze yığında (en çok)</th></tr></thead>
+        <tbody>
+          <tr><td>Mağaza sunucusu, 1 kasa</td><td>9.000 satış, 29 MB</td><td>%2</td><td>74 MiB</td><td>55,8 MiB</td></tr>
+          <tr><td>Mağaza sunucusu, 5 kasa</td><td>45.000 satış, 102 MB</td><td>%14</td><td>149 MiB</td><td>56,8 MiB</td></tr>
+          <tr><td>Merkez, 2 mağaza × 5 kasa</td><td>90.000 satış, 229 MB</td><td>%17</td><td>249 MiB</td><td>62,1 MiB</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Bu CPU değerleri yığındakinden yüksektir: 30 günlük veride aylık ve ürün raporları ağır sorgulardır ve rapor ekranı açıktır.</p>
+
+      <h3>Ayrılan tavan ve kullanılan</h3>
+      <p class="prose">Her container'ın bir bellek tavanı vardır. Tavanların toplamı ("optimum") makinenin ayırması gereken bellektir; ölçülen kullanım bunun küçük bir kısmı.</p>
+      <div class="tablebox"><table>
+        <thead><tr><th>Makine</th><th>Ölçülen en çok (taze)</th><th>30 günlük veriyle (hesaplanan)</th><th>Optimum tavan</th></tr></thead>
+        <tbody>
+          <tr><td>Kasa</td><td>123 MiB</td><td>kasa veritabanı ölçülmedi</td><td>736 MB</td></tr>
+          <tr><td>Mağaza sunucusu, 5 kasa</td><td>168 MiB</td><td>≈260 MiB</td><td>608 MB</td></tr>
+          <tr><td>1 mağaza + 1 kasa, tek makine</td><td>200 MiB</td><td>≈210 MiB</td><td>1280 MB</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Geliştirici bilgisayarında (Docker Desktop, WSL2, 16 mantıksal CPU) tek çalıştırmada, 2 dakikalık yükle ölçüldü; mağaza donanımının değerini vermez, garanti değildir. CPU, tek çekirdeğin yüzdesidir. İşletim sistemi ve kasadaki Chromium dahil değildir (≈256 MB ve ≈512 MB tahmin). Boşta CPU'nun bir kısmı Docker Desktop ve WSL2'nin sanallaştırma yüküdür; gerçek Linux ve Podman'da ölçülmedi.</p>
     </div>
   </section>
 </main>
@@ -673,6 +760,125 @@ footer { margin-top: 64px; padding: 24px 0 40px; border-top: 1px solid var(--lin
     new IntersectionObserver(function (entries) { if (!entries[0].isIntersecting) stop(); }, { threshold: 0.05 }).observe(rootEl);
     show(0);
   });
+})();
+</script>
+<script>
+(function () {
+  'use strict';
+  // measured 14.11.2026 (docs/PERFORMANCE.md): [name, idle MiB, load MiB, peak MiB, idle CPU %, load CPU %]
+  var RES = {"A":{"machines":[{"title":"Tek makine: kasa + mağaza sunucusu","count":1,"parts":[{"tier":"reg","name":"Kasa (10 container)","rows":[["register-db",43.9,46.1,47.4,0.8,0.8],["nats",11.4,15.0,17.6,1.0,1.2],["staff",8.0,8.4,13.3,0.8,0.9],["sales",7.7,8.1,9.1,0.8,1.0],["catalog",5.8,6.1,7.8,0.7,0.6],["retail",5.2,5.8,7.4,0.5,0.5],["gateway",3.0,5.6,6.9,0.5,0.6],["payment",5.1,5.2,6.7,0.7,0.6],["fiscal",3.2,3.7,5.4,0.7,0.6],["device",3.2,3.5,5.9,0.5,0.5]]},{"tier":"store","name":"Mağaza sunucusu (5 container)","rows":[["store-db",47.3,52.6,55.8,0.7,0.9],["store (NATS)",7.7,9.4,10.9,0.9,1.1],["report",7.6,8.4,10.7,0.8,0.9],["inventory",6.3,6.6,10.1,0.7,0.8],["store-catalog-admin",5.7,6.0,6.9,0.7,0.7]]}],"total":{"idleMem":171.1,"loadMem":190.5,"peakMem":199.6,"idleCpu":10.8,"loadCpu":11.7}}],"load":{"sales":7,"errors":0,"screenReads":14,"saleP50ms":68,"saleP95ms":118}},"B":{"machines":[{"title":"Kasa makinesi","count":10,"parts":[{"tier":"reg","name":"10 container (5 kasanın ortalaması)","rows":[["register-db",42.7,45.5,47.7,0.9,1.1],["nats",13.6,17.4,19.4,1.1,1.3],["sales",7.8,8.8,9.9,0.8,1.0],["staff",8.2,8.8,11.1,0.9,1.0],["catalog",6.5,6.7,8.4,0.7,0.8],["gateway",3.6,6.5,8.0,0.5,0.7],["retail",4.9,5.9,7.6,0.6,0.7],["payment",5.0,5.2,6.3,0.7,0.7],["fiscal",3.5,4.3,5.8,0.6,0.7],["device",3.8,4.3,5.8,0.5,0.7]]}],"total":{"idleMem":99.6,"loadMem":113.5,"peakMem":123.2,"idleCpu":7.4,"loadCpu":8.7}},{"title":"Mağaza sunucusu (5 kasalı)","count":2,"parts":[{"tier":"store","name":"5 container","rows":[["store (NATS)",46.5,68.2,79.6,1.9,2.4],["store-db",51.1,54.6,56.8,0.7,1.1],["report",11.2,13.1,16.7,1.1,1.6],["inventory",8.5,8.9,10.1,0.7,0.9],["store-catalog-admin",7.7,7.9,12.2,0.8,0.9]]}],"total":{"idleMem":125.0,"loadMem":152.7,"peakMem":167.9,"idleCpu":5.2,"loadCpu":6.9}},{"title":"Merkez","count":1,"parts":[{"tier":"hq","name":"6 container","rows":[["headquarters-db",58.2,60.6,62.1,1.0,1.1],["ingest",12.9,13.8,15.2,0.8,1.0],["headquarters (NATS)",9.9,11.1,12.3,0.9,1.1],["catalog-admin",9.1,10.2,11.5,0.6,0.8],["headquarters-inventory",9.3,10.1,11.3,0.7,0.8],["reporting",8.2,9.3,11.5,0.6,0.6]]}],"total":{"idleMem":107.5,"loadMem":115.1,"peakMem":121.8,"idleCpu":4.7,"loadCpu":5.5}}],"fleet":{"idleMem":1353.7,"loadMem":1555.3,"idleCpu":89.5,"loadCpu":106.1},"load":{"sales":34,"errors":0,"screenReads":14,"saleP50ms":65,"saleP95ms":115}}};
+
+  function fmt(v) { return v.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+  function checked(name) { return document.querySelector('input[name="' + name + '"]:checked').value; }
+  function mk(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function stats(scen, S) {
+    if (scen === 'A') {
+      var t = S.machines[0].total;
+      return [
+        ['15', 'container, hepsi tek makinede'],
+        [fmt(t.loadMem) + ' MiB', 'yük altında bellek (en çok ' + fmt(t.peakMem) + ' MiB)'],
+        ['%' + fmt(t.loadCpu), 'CPU, tek çekirdeğin yüzdesi (boşta %' + fmt(t.idleCpu) + ')'],
+        ['≈210 MiB', '30 günlük veriyle bellek (hesaplanan)']
+      ];
+    }
+    var f = S.fleet, reg = S.machines[0].total;
+    return [
+      ['≈' + fmt(f.loadMem / 1024) + ' GiB', 'yük altında toplam bellek, 116 container (türetilmiş)'],
+      ['≈1,9 GiB', '30 günlük veriyle toplam bellek (hesaplanan)'],
+      ['%' + Math.round(f.loadCpu), 'toplam CPU, tek çekirdeğin yüzdesi; 13 makineye dağılmış (türetilmiş)'],
+      [fmt(reg.loadMem) + ' MiB', 'bir kasa makinesi, yük altında (mağaza sunucusu: ' + fmt(S.machines[1].total.loadMem) + ' MiB)']
+    ];
+  }
+
+  function render() {
+    var scen = checked('scen'), metric = checked('metric'), S = RES[scen];
+    var mem = metric === 'mem', iIdle = mem ? 1 : 4, iLoad = mem ? 2 : 5, unit = mem ? ' MiB' : ' %';
+    var max = 0;
+    S.machines.forEach(function (m) {
+      m.parts.forEach(function (p) { p.rows.forEach(function (r) { max = Math.max(max, r[iLoad], r[iIdle]); }); });
+    });
+
+    var st = document.getElementById('res-stats');
+    st.textContent = '';
+    stats(scen, S).forEach(function (s) {
+      var box = mk('div', 'stat');
+      box.appendChild(mk('b', null, s[0]));
+      box.appendChild(mk('span', null, s[1]));
+      st.appendChild(box);
+    });
+
+    var L = S.load;
+    document.getElementById('res-note').textContent = scen === 'A'
+      ? 'Doğrudan ölçüldü (15 container). Yük: ' + L.sales + ' satış, hata ' + L.errors + ', satış p50 ' + L.saleP50ms + ' ms.'
+      : '1 merkez + 1 mağaza + 5 kasa doğrudan ölçüldü (61 container; ' + L.sales + ' satış, hata ' + L.errors + ', satış p50 ' + L.saleP50ms + ' ms). İkinci mağaza ve 5 kasası ölçülenin aynısı sayılarak eklendi: makine adedi ve toplamlar türetilmiştir. Merkez, ölçüm sırasında bir mağazaya bağlıydı.';
+
+    var host = document.getElementById('res-machines');
+    host.textContent = '';
+    S.machines.forEach(function (m) {
+      var card = mk('article', 'machine');
+      var head = mk('header');
+      head.appendChild(mk('h3', null, m.title + (m.count > 1 ? '  × ' + m.count : '')));
+      var t = m.total;
+      head.appendChild(mk('span', 'mtotal', mem
+        ? 'Makine toplamı: ' + fmt(t.loadMem) + ' MiB yükte (en çok ' + fmt(t.peakMem) + '), ' + fmt(t.idleMem) + ' MiB boşta'
+        : 'Makine toplamı: %' + fmt(t.loadCpu) + ' yükte, %' + fmt(t.idleCpu) + ' boşta'));
+      card.appendChild(head);
+      m.parts.forEach(function (p) {
+        var part = mk('div', 'part t-' + p.tier);
+        part.appendChild(mk('h4', null, p.name));
+        p.rows.forEach(function (r) {
+          var row = mk('div', 'brow');
+          row.appendChild(mk('span', null, r[0]));
+          var track = mk('div', 'track');
+          track.setAttribute('aria-hidden', 'true');
+          var fill = mk('div', 'fill');
+          fill.style.width = (r[iLoad] / max * 100).toFixed(1) + '%';
+          var tick = mk('div', 'tick');
+          tick.style.left = (r[iIdle] / max * 100).toFixed(1) + '%';
+          track.appendChild(fill);
+          track.appendChild(tick);
+          row.appendChild(track);
+          row.appendChild(mk('span', 'bval', mem
+            ? fmt(r[iLoad]) + ' MiB · boşta ' + fmt(r[iIdle])
+            : '%' + fmt(r[iLoad]) + ' · boşta %' + fmt(r[iIdle])));
+          part.appendChild(row);
+        });
+        card.appendChild(part);
+      });
+      host.appendChild(card);
+    });
+
+    var table = document.getElementById('res-table');
+    table.textContent = '';
+    var thead = mk('thead'), hr = mk('tr');
+    ['Container', 'Boşta (' + unit.trim() + ')', 'Yük (' + unit.trim() + ')'].concat(mem ? ['Yük, en çok (MiB)'] : []).forEach(function (h) { hr.appendChild(mk('th', null, h)); });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = mk('tbody');
+    S.machines.forEach(function (m) {
+      m.parts.forEach(function (p) {
+        var g = mk('tr'), gh = mk('th', null, m.title + ': ' + p.name);
+        gh.colSpan = mem ? 4 : 3;
+        g.appendChild(gh);
+        tbody.appendChild(g);
+        p.rows.forEach(function (r) {
+          var tr = mk('tr');
+          [r[0], fmt(r[iIdle]), fmt(r[iLoad])].concat(mem ? [fmt(r[3])] : []).forEach(function (c) { tr.appendChild(mk('td', null, c)); });
+          tbody.appendChild(tr);
+        });
+      });
+    });
+    table.appendChild(tbody);
+  }
+
+  document.querySelectorAll('input[name="scen"], input[name="metric"]').forEach(function (i) { i.addEventListener('change', render); });
+  render();
 })();
 </script>
 </body>
