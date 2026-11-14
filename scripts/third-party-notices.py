@@ -48,8 +48,7 @@ out = []
 for d in sorted(m.distributions(), key=lambda d: d.metadata["Name"].lower()):
     md = d.metadata
     out.append({"name": md["Name"], "version": md["Version"],
-                "license": (md.get("License-Expression") or md.get("License") or "")[:60],
-                "libs": sorted({str(f).split("/")[-1] for f in (d.files or []) if ".libs/" in str(f)})})
+                "license": (md.get("License-Expression") or md.get("License") or "")[:60]})
 print(json.dumps(out))
 """
 
@@ -187,24 +186,23 @@ def ui_section(npm):
 
 
 def patroni_block(image):
-    libs = []
     r = subprocess.run(["docker", "run", "--rm", "--entrypoint", "/opt/patroni/bin/python", image, "-c", PATRONI_PROBE],
                        capture_output=True, text=True, check=True)
     pkgs = json.loads(r.stdout)
     lines = ["3. PATRONI IMAGE (abarow-patroni)", "",
              "Built from docker.io/library/postgres:18-alpine (deploy/container/patroni.Containerfile). Besides abarow's own",
              "shell scripts (Apache-2.0) it holds the base image and these Python packages (as installed when the licenses",
-             "were last read; Patroni and psycopg2-binary are pinned, the others are their dependencies). Each package",
+             "were last read; Patroni and psycopg2 are pinned, the others are their dependencies). Each package",
              "carries its own license files inside the image, in the package's .dist-info folder.", ""]
     for p in pkgs:
         lic = p["license"].split("\n")[0] or "see its license file"
         lines.append(f"  {p['name']} {p['version']}  [{lic}]")
-        libs += p["libs"]
     lines += ["", "Components with a copyleft license, and what that means here:", "",
-              "  - psycopg2-binary: LGPL-3.0-or-later with the OpenSSL exception. It is a separate Python package in",
-              "    /opt/patroni; it can be replaced with another build of psycopg2 (pip install in that folder). Its wheel carries",
-              "    these shared libraries under their own licenses (libpq: PostgreSQL License; OpenSSL: Apache-2.0; MIT",
-              "    Kerberos; OpenLDAP; Cyrus SASL): " + ", ".join(libs) + ".",
+              "  - psycopg2: LGPL-3.0-or-later with the OpenSSL exception. It is a separate Python package in",
+              "    /opt/patroni; it can be replaced with another build of psycopg2 (pip install in that folder). The image builds",
+              "    it from its source (the sdist from PyPI) against the libpq and OpenSSL of the Alpine base image, so it carries",
+              "    no libraries of its own; those are the base image's (libpq: PostgreSQL License; OpenSSL: Apache-2.0; MIT",
+              "    Kerberos; OpenLDAP; Cyrus SASL), each under its own license.",
               "    The LGPL-3.0 text and the GPL-3.0 text it refers to are in /licenses/LGPL-3.0.txt and /licenses/GPL-3.0.txt",
               "    (deploy/container/patroni/licenses). Source: https://github.com/psycopg/psycopg2",
               "  - certifi: MPL-2.0, not modified. Source: https://github.com/certifi/python-certifi",

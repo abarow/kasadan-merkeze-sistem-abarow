@@ -40,7 +40,7 @@ Go standart kütüphanesi de (BSD-3-Clause) servislerin içindedir ve listededir
 
 | Bileşen | Lisans | Ne demek |
 |---|---|---|
-| `psycopg2-binary` | LGPL-3.0 (OpenSSL istisnasıyla) | Ayrı bir Python paketidir, abarow'un kodu içine gömülü değildir. Başka bir sürümle değiştirilebilir (`pip`). Bu yüzden abarow'u Apache-2.0 olmaktan çıkarmaz. Metin imajda. |
+| `psycopg2` | LGPL-3.0 (OpenSSL istisnasıyla) | Ayrı bir Python paketidir, abarow'un kodu içine gömülü değildir. Başka bir sürümle değiştirilebilir (`pip`). Bu yüzden abarow'u Apache-2.0 olmaktan çıkarmaz. İmaj onu hazır paketle (`-binary`) değil, **kaynağından** derler: kendi içinde OpenSSL/libpq kopyası taşımaz, Alpine'in yamalanan kütüphanelerini kullanır. Metin imajda. |
 | `certifi` | MPL-2.0 | Değiştirilmeden kullanılır; kaynağı herkese açık. |
 | Alpine tabanı | `busybox` GPL-2.0, Python PSF, PostgreSQL | Taban imajın parçası. Kaynak kodlarının nereden alınacağı `THIRD_PARTY_NOTICES` bölüm 3'te yazılı. |
 
@@ -48,7 +48,7 @@ Go standart kütüphanesi de (BSD-3-Clause) servislerin içindedir ve listededir
 
 ## Bilinen sınırlar
 
-- **Patroni imajının listesi imajı derlediğimiz günkü hâldir.** Python bağımlılıklarının sürümleri sabitlenmemiştir (yalnız Patroni ve `psycopg2-binary` sabit). Yeni bir derlemede değişebilirler; bölüm 3'ü `python3 scripts/third-party-notices.py --patroni-image <imaj>` yeniler. CI bunu denetlemez (Docker ve derleme ister).
+- **Patroni imajının listesi imajı derlediğimiz günkü hâldir.** Python bağımlılıklarının sürümleri sabitlenmemiştir (yalnız Patroni ve `psycopg2` sabit). Yeni bir derlemede değişebilirler; bölüm 3'ü `python3 scripts/third-party-notices.py --patroni-image <imaj>` yeniler. CI bunu denetlemez (Docker ve derleme ister).
 - **Beko köprüsü yayınlanmıyor:** Token'ın SDK'sının lisansı belirsiz ([beko-x30tr-prep.md](decisions/beko-x30tr-prep.md)); o imaj ve SDK ne depoda ne yayında. Token'la netleşmeden bu değişmemeli.
 - **Kasadaki işletim sistemi paketleri** (Chromium, sway, cage, keepalived) kurulumda kullanıcının dağıtımından gelir; abarow bunları dağıtmaz.
 - **Marka:** Apache-2.0 `abarow` adını kullanma hakkı vermez (madde 6). Adın marka olarak tescili ayrı bir karardır.
