@@ -51,6 +51,9 @@
 //     service log, not only in a benchmark. The store server and headquarters also load
 //     pg_stat_statements (1000 statements, about 2 MB) and measure the I/O time; the
 //     weekly maintenance (deploy/quadlet/backup/dbmaint.sh) prints the slowest ones.
+//   - Every tier ends a session that stays idle inside a transaction for 5 minutes
+//     (idle_in_transaction_session_timeout, 14.11.2026): its row locks and the rows autovacuum
+//     cannot clean while it is open are not held without end.
 package pgtune
 
 import (
@@ -178,6 +181,10 @@ func ForHeadquarters(registers int) Settings {
 		maxShared: MaxHeadquartersSharedBuffersMB, pool: HeadquartersPoolConnections, maxConns: HeadquartersMaxConnections, maxMaintenance: 128, bigWorkMem: 32,
 	})
 }
+
+// IdleInTransaction is idle_in_transaction_session_timeout on every tier: a session idle inside
+// a transaction for longer is ended, and its locks with it.
+const IdleInTransaction = "5min"
 
 // ClusterIdleSessionMin is idle_session_timeout at headquarters on several machines. The
 // connections of a machine that lost power or its network are not closed; the primary would
@@ -320,6 +327,10 @@ func (s Settings) Flags() []string {
 		{"log_min_duration_statement", "1s"},
 		{"log_lock_waits", "on"},
 		{"log_autovacuum_min_duration", "10s"},
+		// A transaction left open and idle (a bug, a client gone in the middle) would hold its
+		// row locks and keep autovacuum back without end; no service waits inside a
+		// transaction; decision 14.11.2026.
+		{"idle_in_transaction_session_timeout", IdleInTransaction},
 	}...)
 	if s.Statements {
 		kv = append(kv, []struct {

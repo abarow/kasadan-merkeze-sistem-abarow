@@ -192,7 +192,7 @@ services:
   # values are pgtune.ForRegister; pkg/pgtune's test checks this file.
   register-db:
     image: postgres:18-alpine
-    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=12", "-c", "work_mem=2MB", "-c", "maintenance_work_mem=8MB", "-c", "wal_buffers=1MB", "-c", "effective_cache_size=96MB", "-c", "random_page_cost=1.1", "-c", "min_wal_size=32MB", "-c", "max_wal_size=128MB", "-c", "checkpoint_completion_target=0.9", "-c", "autovacuum_max_workers=2", "-c", "max_worker_processes=4", "-c", "max_parallel_workers=0", "-c", "max_parallel_workers_per_gather=0", "-c", "max_parallel_maintenance_workers=0", "-c", "log_min_duration_statement=1s", "-c", "log_lock_waits=on", "-c", "log_autovacuum_min_duration=10s"]
+    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=12", "-c", "work_mem=2MB", "-c", "maintenance_work_mem=8MB", "-c", "wal_buffers=1MB", "-c", "effective_cache_size=96MB", "-c", "random_page_cost=1.1", "-c", "min_wal_size=32MB", "-c", "max_wal_size=128MB", "-c", "checkpoint_completion_target=0.9", "-c", "autovacuum_max_workers=2", "-c", "max_worker_processes=4", "-c", "max_parallel_workers=0", "-c", "max_parallel_workers_per_gather=0", "-c", "max_parallel_maintenance_workers=0", "-c", "log_min_duration_statement=1s", "-c", "log_lock_waits=on", "-c", "log_autovacuum_min_duration=10s", "-c", "idle_in_transaction_session_timeout=5min"]
     environment:
       POSTGRES_DB: abarow
       POSTGRES_USER: abarow
