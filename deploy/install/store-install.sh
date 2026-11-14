@@ -556,6 +556,7 @@ if [ "$command" = install ]; then
 fi
 
 # 6. Summary
+memory_check
 first=${hosts%%,*}
 case "$command" in
 install)

@@ -47,6 +47,7 @@ Aşağıdaki sayılar abarow'un **kendi servislerinin** (container'ların) ihtiy
 
 - **Asgari:** ölçülen en yüksek bellek kullanımı (yük altında) + %40 pay, 64 MB'ın katına yuvarlanır. Altına inilirse bellek baskısı yaşanır.
 - **Optimum:** container bellek tavanlarının toplamı; hiçbir servis sınırına dayansa bile makinede yer kalır. Veritabanı için `pgtune`'un hesapladığı bellek kullanılır.
+  - **Kurulum denetimi:** kurulum her çalıştığında makinenin belleğini (`MemTotal`) bu toplamla karşılaştırır. Toplama işletim sistemi için 256 MB, kiosk kuruluysa Chromium için 512 MB ekler; aynı makinedeki bütün katmanlar (ör. kasa ve operasyon) birlikte sayılır. Yetmiyorsa kurulum özetinde uyarır ama durmaz, çünkü servisler tavanın çok altında çalışır. Yine de böyle bir makinede yük altında çekirdek bir servisi durdurabilir (OOM).
 - **CPU:** çekirdek sayısıdır. Ölçümler x86-64 geliştirici bilgisayarında alındı; düşük güçlü ARM64 çekirdekte süreler uzar (ölçülmedi). Asgari, ölçülen yükün çok altındaki gerçek kasa kullanımına göre; optimum ise yoğun saatte rahat çalışması içindir.
 
 **Rol başına ihtiyaç**

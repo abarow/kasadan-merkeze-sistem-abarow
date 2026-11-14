@@ -581,6 +581,7 @@ EOF
 	systemctl set-default graphical.target >/dev/null
 	say "Kiosk installed (abarow-kiosk.service, $compositor); it starts after a reboot"
 fi
+memory_check
 
 if [ -n "$store_url" ]; then
 	key=$("${natsauth[@]}" -out /auth -show-leaf-key | tr -d '\r' | tail -n 1)

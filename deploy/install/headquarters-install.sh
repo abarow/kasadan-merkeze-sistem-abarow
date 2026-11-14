@@ -680,6 +680,7 @@ elif [ -n "$account" ]; then
 fi
 
 # 7. Summary
+memory_check
 first=${hosts%%,*}
 case "$command" in
 install)

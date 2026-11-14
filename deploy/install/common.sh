@@ -589,3 +589,52 @@ oidc_warning() {
 	oidc) say "WARNING: only the corporate sign-in is on; if the identity provider cannot be reached nobody can sign in to the screen (sales are not affected). To sign in during a provider outage too, use --login local,oidc." ;;
 	esac
 }
+
+# The memory the install counts besides the containers (docs/DESIGN.md, the register's RAM
+# budget): the operating system (Debian minimal with systemd, conmon per container) and, if
+# the kiosk is installed, cage or sway with Chromium. memory_meminfo and memory_kiosk_unit
+# are variables so that the test can give its own.
+memory_os_mb=256
+memory_kiosk_mb=512
+memory_meminfo=/proc/meminfo
+memory_kiosk_unit=/etc/systemd/system/abarow-kiosk.service
+
+# memory_ceilings: the sum of the memory ceilings (--memory) of the abarow containers
+# installed for the user, in MB. Every tier on the machine is counted (a register and a
+# store server on one machine have one user). A drop-in file adds its PodmanArgs after the
+# unit's and Podman takes the last --memory, so per unit the last one counts.
+memory_ceilings() {
+	local f m total=0
+	for f in "$home"/.config/containers/systemd/abarow*.container; do
+		[ -e "$f" ] || continue
+		m=$(cat "$f" "$f.d"/*.conf 2>/dev/null | sed -n 's/^PodmanArgs=.*--memory=\([0-9][0-9]*\)m.*/\1/p' | tail -n 1)
+		total=$((total + ${m:-0}))
+	done
+	printf '%s' "$total"
+}
+
+# memory_check: compares the machine's memory (MemTotal) with the containers' memory
+# ceilings, the operating system's share and the kiosk. If it does not fit it warns but
+# does not stop: the ceilings are upper limits and in use the services take much less
+# (docs/HARDWARE.md, minimum and optimum), but under load the kernel may stop a process
+# (OOM) instead of a container reaching its own ceiling.
+memory_check() {
+	local have ceilings need kiosk=0 with=''
+	have=$(sed -n 's/^MemTotal: *\([0-9][0-9]*\) kB$/\1/p' "$memory_meminfo")
+	[ -n "$have" ] || {
+		say "WARNING: the machine's memory could not be read ($memory_meminfo); the memory check was skipped."
+		return 0
+	}
+	have=$((have / 1024))
+	ceilings=$(memory_ceilings)
+	if [ -e "$memory_kiosk_unit" ]; then
+		kiosk=$memory_kiosk_mb
+		with=" and the kiosk ($kiosk MB)"
+	fi
+	need=$((ceilings + memory_os_mb + kiosk))
+	if [ "$need" -gt "$have" ]; then
+		say "WARNING: the machine has $have MB of memory; the containers' ceilings total $ceilings MB, with the operating system ($memory_os_mb MB)$with $need MB. Under load the kernel may stop a service (OOM); see docs/HARDWARE.md for the memory a machine needs."
+	else
+		say "Memory: $have MB; the containers' ceilings ($ceilings MB), the operating system$with need $need MB at most"
+	fi
+}
