@@ -73,7 +73,7 @@ Mehmet ERGULCU: ikinci seviye yapılacak, yük devri **otomatik** (seçenek B).
 
 ### Makine değiştirme
 
-Diski değişen ya da baştan kurulan makine `--cluster-import` dosyası ve `--rejoin` ile kurulur ([REVIEW-2.md](../REVIEW-2.md) D10). etcd tanıdığı bir üyenin boş veriyle "yeni küme" olarak başlamasını kabul etmez (Docker testinde böyle başlayan üye kümeye dönmedi); kurulum önce makinenin eski kaydını diğer iki makinenin etcd'sinden siler ve yeniden ekler (`etcdctl member remove/add`, bu makinenin sertifikasıyla), sonra etcd'yi mevcut kümenin üyesi olarak boş başlatır (`ETCD_INITIAL_CLUSTER_STATE=existing`). Üye eklemek çoğunluk ister: diğer iki makine açık olmalıdır. Patroni boş makineye veritabanını birincilden kendisi kopyalar. Docker testi (`ha-db-test.sh` 3. aşama) bunu dener.
+Diski değişen ya da baştan kurulan makine `--cluster-import` dosyası ve `--rejoin` ile kurulur ([REVIEW-2.md](../REVIEW-2.md) D10). etcd, tanıdığı bir üyenin boş veriyle "yeni küme" olarak başlamasında güvenilir değildir: Docker testinde bir koşuda böyle başlayan üye dönmedi, bir koşuda dönmüş göründü; etcd'nin belgelediği yol üyeyi silip yeniden eklemektir; kurulum önce makinenin eski kaydını diğer iki makinenin etcd'sinden siler ve yeniden ekler (`etcdctl member remove/add`, bu makinenin sertifikasıyla), sonra etcd'yi mevcut kümenin üyesi olarak boş başlatır (`ETCD_INITIAL_CLUSTER_STATE=existing`). Üye eklemek çoğunluk ister: diğer iki makine açık olmalıdır. Patroni boş makineye veritabanını birincilden kendisi kopyalar. Docker testi (`ha-db-test.sh` 3. aşama) bunu dener.
 
 ### Kümede geri yükleme
 

@@ -8,8 +8,18 @@
 #
 # The backup is in pg_dump's own format (compressed); to restore see
 # deploy/quadlet/README.md ("Restoring from a backup").
+#
+# Headquarters on three machines: ABAROW_BACKUP_LOCAL is this machine's database (abarow-patroni).
+# Only the machine whose database is primary takes the backup; the others would read the same
+# data from it a second and a third time (docs/REVIEW-2.md P6). If this machine's database
+# cannot be asked, the backup is taken anyway: two backups are better than none.
 set -eu
 days=${ABAROW_BACKUP_DAYS:-14}
+if [ -n "${ABAROW_BACKUP_LOCAL:-}" ] &&
+	[ "$(psql -h "$ABAROW_BACKUP_LOCAL" -X -tAc 'SELECT pg_is_in_recovery()' 2>/dev/null)" = t ]; then
+	echo "this machine's database is a replica: the machine of the primary takes the backup"
+	exit 0
+fi
 name="abarow-$(date +%Y-%m-%d-%H%M%S).dump"
 # It is written under a temporary name first: a half-written backup is not taken for a complete one.
 pg_dump --format=custom --file="/backup/.$name.tmp"

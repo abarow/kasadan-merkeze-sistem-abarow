@@ -186,6 +186,11 @@ func ForHeadquarters(registers int) Settings {
 // not cut; Patroni asks every 10 seconds.
 const ClusterIdleSessionMin = 15
 
+// PatroniMemoryMB is the share of Patroni (Python, its helper processes) in the memory limit of
+// the database container on several machines: measured idle 78 MB PSS (14.11.2026,
+// docs/REVIEW-2.md D12); the limit was computed for PostgreSQL alone.
+const PatroniMemoryMB = 96
+
 // PatroniConnections are the connections Patroni keeps to its own database on every machine
 // (the heartbeat and the REST API).
 const PatroniConnections = 2
@@ -205,6 +210,7 @@ func ForHeadquartersCluster(registers, machines int) Settings {
 		maxMaintenance: 128, bigWorkMem: 32,
 	})
 	s.IdleSessionMin = ClusterIdleSessionMin
+	s.MemoryLimitMB += PatroniMemoryMB
 	return s
 }
 

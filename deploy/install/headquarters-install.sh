@@ -585,6 +585,7 @@ if [ -n "$cluster" ] && ! cluster_db_ready; then
 	db_ready=false
 	say "The database is not open yet: it opens when two of the three machines are installed (this is machine $node)"
 fi
+[ -z "$cluster" ] || ! $db_ready || cluster_stores_check
 
 # 5b. HTTPS for the screen (--domain): Caddy, in front of abarow-reporting.
 caddy_unit="$units_dir/abarow-caddy.container"
@@ -633,7 +634,11 @@ if [ "$command" = install ]; then
 		# The first backup is taken right away: that the backup works is seen at install time.
 		as systemctl --user start abarow-backup.service ||
 			die "could not take the database backup (journalctl --user -u abarow-backup)"
-		say "Daily backup set up ($backups; the first backup was taken)"
+		if [ -n "$cluster" ]; then
+			say "Daily backup set up ($backups; the machine whose database is primary takes it)"
+		else
+			say "Daily backup set up ($backups; the first backup was taken)"
+		fi
 	else
 		say "Daily backup set up ($backups); the first one is taken on schedule, once the database is open"
 	fi

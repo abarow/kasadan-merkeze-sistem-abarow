@@ -200,7 +200,7 @@ func TestForHeadquartersCluster(t *testing.T) {
 		if need := 3*HeadquartersPoolConnections + PatroniConnections + ReservedConnections + 1; s.MaxConnections < need {
 			t.Errorf("%d registers: max_connections %d < %d", n, s.MaxConnections, need)
 		}
-		if need := s.SharedBuffersMB + perConnectionMB*3*HeadquartersPoolConnections + overheadMB; s.MemoryLimitMB < need {
+		if need := s.SharedBuffersMB + perConnectionMB*3*HeadquartersPoolConnections + overheadMB + PatroniMemoryMB; s.MemoryLimitMB < need {
 			t.Errorf("%d registers: memory %d < %d", n, s.MemoryLimitMB, need)
 		}
 		if one := ForHeadquarters(n); s.SharedBuffersMB != one.SharedBuffersMB || s.WorkMemMB != one.WorkMemMB {

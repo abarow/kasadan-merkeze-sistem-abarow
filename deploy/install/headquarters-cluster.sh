@@ -203,6 +203,8 @@ EOF
 			if [ "$d" = abarow-backup ]; then
 				echo "Environment=PGSSLMODE=verify-ca"
 				echo "Environment=PGSSLROOTCERT=/etc/abarow/tls/ca.pem"
+				# Only the machine of the primary takes the daily backup (backup.sh).
+				echo "Environment=ABAROW_BACKUP_LOCAL=abarow-patroni"
 			fi
 		} | as tee "$units_dir/$d.container.d/cluster.conf" >/dev/null
 	done
@@ -274,16 +276,50 @@ cluster_tune_apply() {
 	fi
 }
 
+# cluster_psql runs SQL through this machine's HAProxy, with TLS, as a service connects; it
+# prints the result of the last statement.
+cluster_psql() {
+	as podman run --rm --network abarow-headquarters --secret abarow-db-password,type=env,target=PGPASSWORD \
+		--secret abarow-headquarters-tls-ca,type=mount,target=/ca.pem docker.io/library/postgres:18-alpine \
+		psql "host=abarow-db user=abarow dbname=abarow sslmode=verify-ca sslrootcert=/ca.pem connect_timeout=3" -X -tA -v ON_ERROR_STOP=1 -c "$1"
+}
+
+# cluster_stores_digest is the digest of this machine's store list: the ids and the keys, in any
+# order (the names are not part of it).
+cluster_stores_digest() {
+	as cat "$config/stores.json" | { grep -o '"\(id\|nkey\)": *"[^"]*"' || true; } | paste - - | sort | sha256sum | cut -c1-16
+}
+
+# cluster_stores_check writes this machine's store list to the database and says which machines
+# have another one (docs/REVIEW-2.md M7). Every machine's NATS takes only the stores of its own
+# stores.json, so store-add and store-remove are run on all three; a forgotten machine refuses
+# the store whose connection lands on it.
+cluster_stores_check() {
+	local digest n others
+	digest=$(cluster_stores_digest)
+	n=$(as cat "$config/stores.json" | grep -c '"nkey"' || true)
+	# psql prints the result of every statement of -c: the writing and the question are two calls.
+	if ! cluster_psql "CREATE TABLE IF NOT EXISTS public.abarow_cluster_stores (machine TEXT PRIMARY KEY, digest TEXT NOT NULL, stores INT NOT NULL, at TIMESTAMPTZ NOT NULL);
+		INSERT INTO public.abarow_cluster_stores VALUES ('hq-$node', '$digest', $n, now())
+			ON CONFLICT (machine) DO UPDATE SET digest = excluded.digest, stores = excluded.stores, at = excluded.at" >/dev/null 2>&1 ||
+		! others=$(cluster_psql "SELECT string_agg(machine || ' (' || stores || ' stores)', ', ' ORDER BY machine)
+			FROM public.abarow_cluster_stores WHERE digest <> '$digest'" 2>/dev/null); then
+		say "The store lists of the machines could not be compared: the database did not answer"
+		return 0
+	fi
+	if [ -n "$others" ]; then
+		say "WARNING: the store list differs on $others; this machine (hq-$node) has $n stores. Run the same store-add or store-remove there: a store whose connection lands on such a machine is refused."
+	else
+		say "The store list is the same on the machines installed so far (hq-$node: $n stores)"
+	fi
+}
+
 # cluster_db_ready waits a little for the database: until two of the three machines are installed
 # there is none, and the first backup and the account wait.
 cluster_db_ready() {
 	local i
-	# A query through this machine's HAProxy, with TLS, as a service connects.
 	for i in $(seq 1 30); do
-		as podman run --rm --network abarow-headquarters --secret abarow-db-password,type=env,target=PGPASSWORD \
-			--secret abarow-headquarters-tls-ca,type=mount,target=/ca.pem docker.io/library/postgres:18-alpine \
-			psql "host=abarow-db user=abarow dbname=abarow sslmode=verify-ca sslrootcert=/ca.pem connect_timeout=3" -tAc 'SELECT 1' >/dev/null 2>&1 &&
-			return 0
+		cluster_psql 'SELECT 1' >/dev/null 2>&1 && return 0
 		[ "$i" = 30 ] || sleep 2
 	done
 	return 1

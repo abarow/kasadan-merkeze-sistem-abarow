@@ -10,9 +10,10 @@
 #     write must be on the new primary. The old primary comes back as a replica.
 #  2. Both replicas are stopped: the primary must not accept a write (synchronous and strict;
 #     a commit is not on one machine only). When they come back the writes go on.
-#  3. Machine 3's disk is replaced: its etcd does not come back empty by itself; after the
-#     install's --rejoin (cluster_etcd_rejoin, deploy/install/headquarters-cluster.sh) it does,
-#     and Patroni copies the database to it.
+#  3. Machine 3's disk is replaced: after the install's --rejoin (cluster_etcd_rejoin,
+#     deploy/install/headquarters-cluster.sh) its empty etcd is a member again and Patroni copies
+#     the database to it. (Without --rejoin etcd sometimes refuses the empty member and sometimes
+#     seems to take it; etcd asks for the member to be removed and added again.)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
@@ -118,6 +119,18 @@ CONTAINER=docker sh deploy/quadlet/backup/dbmaint.sh "$(container "$primary")" |
 CONTAINER=docker sh deploy/quadlet/backup/dbmaint.sh "$(container "$replica")" | grep "^== replica" >/dev/null ||
 	{ echo "the maintenance on a replica did not skip to the archive check" >&2; exit 1; }
 echo "base backup from the replica $replica; maintenance on the primary $primary and on the replica"
+# The daily backup (backup.sh): only the machine of the primary takes it (docs/REVIEW-2.md P6).
+daily() {
+	mkdir -p "$work/daily-$1"
+	docker run --rm --network "$network" -v "$ABAROW_HA_SECRETS:/w:ro" -v "$(hostpath "$work/daily-$1"):/backup" \
+		-v "$(hostpath deploy/quadlet/backup)/backup.sh:/backup.sh:ro" -e PGHOST=ha-proxy-1 -e PGUSER=abarow -e PGDATABASE=abarow \
+		-e PGPASSWORD="$db_password" -e PGSSLMODE=verify-ca -e PGSSLROOTCERT=/w/m1/tls/ca.pem -e ABAROW_BACKUP_LOCAL="$(container "$1")" \
+		--entrypoint /bin/sh postgres:18-alpine /backup.sh
+}
+daily "$primary" | grep "^backup taken" >/dev/null || { echo "the machine of the primary did not take the daily backup" >&2; exit 1; }
+daily "$replica" | grep "is a replica" >/dev/null || { echo "a replica's machine took the daily backup" >&2; exit 1; }
+[ -n "$(ls "$work/daily-$primary")" ] && [ -z "$(ls "$work/daily-$replica")" ] || { echo "daily backups: wrong machines" >&2; exit 1; }
+echo "daily backup on the primary's machine only"
 
 echo "== 1. the primary is killed while writing"
 (cd pkg && CGO_ENABLED=0 GOOS=linux GOARCH="$(go env GOARCH)" go test -c -o "$ABAROW_HA_SECRETS/failover" ./pgdb)
@@ -169,19 +182,10 @@ $resumed || { echo "writes did not resume after the replicas returned" >&2; exit
 echo "== 3. machine 3's disk is replaced"
 etcd_all="https://ha-etcd-1:2379,https://ha-etcd-2:2379,https://ha-etcd-3:2379"
 etcd_healthy() {
-	docker exec ha-etcd-1 etcdctl --endpoints "$etcd_all" --cacert /tls/ca.pem --cert /tls/server.pem --key /tls/server.key 		endpoint health >/dev/null 2>&1
+	docker exec ha-etcd-1 etcdctl --endpoints "$etcd_all" --cacert /tls/ca.pem --cert /tls/server.pem --key /tls/server.key \
+		endpoint health >/dev/null 2>&1
 }
 docker rm -f ha-etcd-3 ha-db-3 >/dev/null
-compose up -d --no-deps etcd-3 >/dev/null 2>&1
-for _ in $(seq 20); do
-	if etcd_healthy; then
-		echo "an empty etcd was taken back without --rejoin" >&2
-		exit 1
-	fi
-	sleep 1
-done
-echo "without --rejoin the empty etcd does not come back; its last error: $(docker logs ha-etcd-3 2>&1 | grep -iE '"level":"(error|fatal|panic)"' | tail -n 1 | cut -c1-300 || true)"
-docker rm -f ha-etcd-3 >/dev/null
 (
 	# shellcheck source=deploy/install/headquarters-cluster.sh
 	. deploy/install/headquarters-cluster.sh

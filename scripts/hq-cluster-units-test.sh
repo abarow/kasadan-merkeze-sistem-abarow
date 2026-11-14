@@ -119,6 +119,7 @@ grep -q "^Environment=ABAROW_ETCD=abarow-etcd:2379,hq1.example.com:2379,hq3.exam
 grep -q "^Environment=ETCD_INITIAL_CLUSTER=etcd-1=https://hq1.example.com:2380,etcd-2=https://hq2.example.com:2380,etcd-3=https://hq3.example.com:2380$" \
 	"$units/abarow-etcd.container.d/node.conf" || { echo "etcd node.conf:" >&2; cat "$units/abarow-etcd.container.d/node.conf" >&2; exit 1; }
 grep -q "^Environment=ABAROW_NATS_REPLICAS=3$" "$units/abarow-ingest.container.d/cluster.conf" || { echo "ingest has no replicas" >&2; exit 1; }
+grep -q "^Environment=ABAROW_BACKUP_LOCAL=abarow-patroni$" "$units/abarow-backup.container.d/cluster.conf" || { echo "the backup does not know this machine's database" >&2; exit 1; }
 # A machine that rejoins (--rejoin) starts its etcd as a member of the existing cluster.
 ! grep -q "ETCD_INITIAL_CLUSTER_STATE" "$units/abarow-etcd.container.d/node.conf" || { echo "the state is written without --rejoin" >&2; exit 1; }
 rejoin=1 cluster_units >/dev/null
@@ -133,6 +134,16 @@ case "$(cluster_db_url secret)" in
 *"@abarow-db:5432/abarow?sslmode=verify-ca&sslrootcert=/etc/abarow/tls/ca.pem") ;;
 *) echo "database address: $(cluster_db_url secret)" >&2; exit 1 ;;
 esac
+
+# The store lists compare by the ids and keys, not by the order or the names (cluster_stores_check).
+one=$(cluster_stores_digest)
+printf '[\n  {\n    "id": "store-2",\n    "nkey": "UB"\n  },\n  {\n    "id": "store-1",\n    "name": "Kadıköy",\n    "nkey": "UA"\n  }\n]\n' >"$config/stores.json"
+a=$(cluster_stores_digest)
+printf '[\n  {\n    "id": "store-1",\n    "nkey": "UA"\n  },\n  {\n    "id": "store-2",\n    "nkey": "UB"\n  }\n]\n' >"$config/stores.json"
+b=$(cluster_stores_digest)
+printf '[\n  {\n    "id": "store-1",\n    "nkey": "UA"\n  },\n  {\n    "id": "store-2",\n    "nkey": "UC"\n  }\n]\n' >"$config/stores.json"
+c=$(cluster_stores_digest)
+[ "$a" = "$b" ] && [ "$b" != "$c" ] && [ "$one" != "$a" ] || { echo "store list digests: $one $a $b $c" >&2; exit 1; }
 
 echo "== Quadlet generator (units and drop-in files of machine 2)"
 docker run --rm -v "$(hostpath "$units"):/q:ro" -e QUADLET_UNIT_DIRS=/q quay.io/podman/stable:v5.4 \
