@@ -371,7 +371,9 @@ Sınırlar:
 Her pazar 05:30'da (fiziksel yedekten sonra) haftalık bakım çalışır (`abarow-dbmaint.timer`, operasyonda `abarow-store-dbmaint.timer`):
 
 - yaprak sayfaları yarıdan az dolu, 8 MB ve üstü indeksleri yazmaları durdurmadan yeniden kurar (`REINDEX CONCURRENTLY`),
-- haftanın en çok süre alan 10 sorgusunu, en büyük tabloları (ölü satır ve son autovacuum ile) ve WAL arşivinin durumunu yazar,
+- haftanın sorgularından üç liste yazar: en çok toplam süre alan 10 sorgu, ortalama süresi en uzun 10 sorgu ve diskten en çok okuyan 10 sorgu. Yedeğin `COPY` sorguları ve bakımın kendi sorguları bu listelere girmez.
+- en büyük tabloları (ölü satır ve son autovacuum ile) ve WAL arşivinin durumunu yazar,
+- hiç kullanılmamış indeksleri (benzersiz indeksler hariç; kural tutarlar) ve 10 000 satırın üstünde çoğunlukla tam taramayla okunan tabloları yazar. Bu iki liste sayaçların son sıfırlanmasından beri geçerlidir ve yalnız bu makinedeki sorguları gösterir. Rapor hiçbir şeyi değiştirmez; indeks eklemek ya da kaldırmak bir migration işidir ([DB-TUNING.md](../../docs/decisions/DB-TUNING.md)),
 - arşivleme takılmışsa hata verir: o zaman WAL veri klasöründe birikir ve diski doldurur.
 
 Rapor: `journalctl --user -u abarow-dbmaint` (`abarow` kullanıcısıyla). Ayrıca veritabanı günlüğü her katmanda 1 saniyeyi aşan sorguları, 1 saniyeden uzun kilit beklemelerini ve 10 saniyeyi aşan autovacuum çalışmalarını yazar (`journalctl --user -u abarow-db`).

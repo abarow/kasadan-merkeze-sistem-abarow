@@ -100,4 +100,17 @@ if ! grep -q "reindex: public.bloat_id" "$work/dbmaint.out" || [ "$after" -ge "$
 	echo "the maintenance did not rebuild the bloated index ($before -> $after bytes)" >&2
 	exit 1
 fi
-echo "weekly maintenance OK (bloated index $before -> $after bytes)"
+# The report's lists (docs/decisions/DB-TUNING.md): the test's DELETE is among the slowest and
+# the statements that read from disk; the index was never used for a query and the table
+# (20000 rows) was read by a full scan; the maintenance's own statements are not counted.
+section() { awk -v h="== $1" 'index($0, h) == 1 { on = 1; next } /^== / { on = 0 } on' "$work/dbmaint.out"; }
+if ! section "the statements slowest on average" | grep -q "DELETE FROM bloat" ||
+	! section "the statements that read the most from disk" | grep -q "DELETE FROM bloat\|CREATE TABLE bloat" ||
+	! section "indexes never used" | grep -q "public.bloat_id" ||
+	! section "tables of 10000 rows or more read mostly by full scans" | grep -q "public.bloat" ||
+	section "the statements slowest on average" | grep -qi "reindex\|pgstatindex"; then
+	cat "$work/dbmaint.out" >&2
+	echo "the maintenance report lacks a list or counts its own statements" >&2
+	exit 1
+fi
+echo "weekly maintenance OK (bloated index $before -> $after bytes; the report's lists)"

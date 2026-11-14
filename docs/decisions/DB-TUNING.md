@@ -93,6 +93,11 @@
      - **Kapsam:** tek makineli mağaza sunucusu ve merkez. Kümede Patroni kendisi karar veriyor.
      - **Test:** `scripts/install-machine-test.sh`; sorgu PostgreSQL 18'de gerçek `pgtune` çıktısıyla denendi (30 → 31 kasa yeniden başlatmasız, 5 → 6 kasa yeniden başlatmalı).
 5. **Haftalık bakım raporuna ekler:** ortalama süresi en uzun 10 sorgu, diskten en çok okuyan 10 sorgu, hiç kullanılmamış indeksler ve tam taramanın çok olduğu tablolar. Rapor yalnız okur, bir şey değiştirmez.
+   - **Yapıldı (14.11.2026):** `dbmaint.sh`.
+     - **Listeler:** benzersiz olmayan ve hiç kullanılmamış indeksler; 10 000 satırın üstünde, tam taraması indeks taramasından çok olan tablolar.
+     - **Gürültü:** bakımın kendi sorguları (`pgstattuple` taraması, `REINDEX`) sayılmıyor (oturumunda `pg_stat_statements.track=none`); karşı denetimde bunlar sayılmazsa listeye girdiği görüldü. Günlük yedeğin tablo başına `COPY`'si sorgu listelerine alınmıyor.
+     - **Kümede:** indeks ve tablo sayaçları makine başına tutuluyor. Replikalarda okunan sorgular birincilin listesinde görünmüyor.
+     - **Test:** `scripts/pitr-test.sh` dört listeyi gerçek PostgreSQL 18'de deniyor.
 
 ## Reddedilenler
 

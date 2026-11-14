@@ -8,9 +8,13 @@
 #   - a B-tree index of ABAROW_REINDEX_MIN_MB (8) MB or more whose leaf pages are
 #     less than half full (many deletes and updates: the outbox, the retention
 #     cleaning) is rebuilt with REINDEX CONCURRENTLY, which does not stop the writes;
-#   - the ten statements that took the most time in the week (pg_stat_statements;
-#     the counters then start again), the largest tables with their dead rows and
-#     last autovacuum, and the state of the WAL archive are printed;
+#   - the ten statements that took the most time in the week, the ten slowest on average
+#     and the ten that read the most from disk (pg_stat_statements; the counters then
+#     start again; the backup's COPY statements are left out), the largest tables with
+#     their dead rows and last autovacuum, the indexes never used, the large tables read
+#     mostly by full scans, and the state of the WAL archive are printed. The report only
+#     reads: an index is added or dropped by a migration, measured, never here
+#     (docs/decisions/DB-TUNING.md);
 #   - it fails if the archive is failing (the newest failure is newer than the
 #     newest archived file): the WAL then stays in the data directory and fills the disk.
 #
@@ -27,7 +31,11 @@ db=${1:?database container}
 tool=${CONTAINER:-podman}
 min_mb=${ABAROW_REINDEX_MIN_MB:-8}
 case "$min_mb" in '' | *[!0-9]*) echo "ABAROW_REINDEX_MIN_MB must be a number" >&2; exit 1 ;; esac
-sql() { "$tool" exec "$db" psql -U abarow -d abarow -X -q -v ON_ERROR_STOP=1 "$@"; }
+# The maintenance's own statements (the index scan of pgstattuple, REINDEX) are not counted in
+# pg_stat_statements: they would lead the lists of the slowest statements.
+sql() { "$tool" exec -e PGOPTIONS='-c pg_stat_statements.track=none' "$db" psql -U abarow -d abarow -X -q -v ON_ERROR_STOP=1 "$@"; }
+# not_backup: the statements of the daily pg_dump (a COPY ... TO stdout per table).
+not_backup="query !~* '^[[:space:]]*COPY .* TO stdout'"
 
 primary() {
 	sql -c 'CREATE EXTENSION IF NOT EXISTS pg_stat_statements' -c 'CREATE EXTENSION IF NOT EXISTS pgstattuple'
@@ -43,12 +51,34 @@ primary() {
 	echo "== the statements that took the most time since the last maintenance"
 	sql -c "SELECT round(total_exec_time / 1000) AS total_s, calls, round(mean_exec_time) AS mean_ms,
 		left(regexp_replace(query, '\s+', ' ', 'g'), 100) AS query
-		FROM pg_stat_statements ORDER BY total_exec_time DESC LIMIT 10"
+		FROM pg_stat_statements WHERE $not_backup ORDER BY total_exec_time DESC LIMIT 10"
+	echo "== the statements slowest on average"
+	sql -c "SELECT round(mean_exec_time) AS mean_ms, round(max_exec_time) AS max_ms, calls,
+		left(regexp_replace(query, '\s+', ' ', 'g'), 100) AS query
+		FROM pg_stat_statements WHERE $not_backup ORDER BY mean_exec_time DESC LIMIT 10"
+	echo "== the statements that read the most from disk (not from the buffers)"
+	sql -c "SELECT pg_size_pretty(shared_blks_read * current_setting('block_size')::bigint) AS read, calls,
+		round(100.0 * shared_blks_hit / nullif(shared_blks_hit + shared_blks_read, 0)) AS hit_pct,
+		left(regexp_replace(query, '\s+', ' ', 'g'), 100) AS query
+		FROM pg_stat_statements WHERE shared_blks_read > 0 AND $not_backup ORDER BY shared_blks_read DESC LIMIT 10"
 	sql -tA -c 'SELECT pg_stat_statements_reset()' >/dev/null
 	echo "== the largest tables"
 	sql -c "SELECT schemaname || '.' || relname AS table, pg_size_pretty(pg_total_relation_size(relid)) AS size,
 		n_live_tup AS live, n_dead_tup AS dead, last_autovacuum::timestamp(0) AS autovacuum
 		FROM pg_stat_user_tables ORDER BY pg_total_relation_size(relid) DESC LIMIT 15"
+	# The table statistics are not reset weekly: they count since stats_reset.
+	since=$(sql -tA -c "SELECT coalesce(stats_reset::timestamp(0)::text, 'the database was created')
+		FROM pg_stat_database WHERE datname = current_database()")
+	echo "== indexes never used on this machine since $since (unique indexes keep a rule and are left out)"
+	sql -c "SELECT s.schemaname || '.' || s.indexrelname AS index, s.relname AS table,
+		pg_size_pretty(pg_relation_size(s.indexrelid)) AS size
+		FROM pg_stat_user_indexes s JOIN pg_index i ON i.indexrelid = s.indexrelid
+		WHERE s.idx_scan = 0 AND NOT i.indisunique ORDER BY pg_relation_size(s.indexrelid) DESC LIMIT 15"
+	echo "== tables of 10000 rows or more read mostly by full scans, since $since"
+	sql -c "SELECT schemaname || '.' || relname AS table, seq_scan, seq_tup_read, coalesce(idx_scan, 0) AS idx_scan,
+		n_live_tup AS live
+		FROM pg_stat_user_tables WHERE n_live_tup >= 10000 AND seq_scan > coalesce(idx_scan, 0)
+		ORDER BY seq_tup_read DESC LIMIT 10"
 }
 
 if [ "$(sql -tA -c 'SELECT pg_is_in_recovery()')" = t ]; then
