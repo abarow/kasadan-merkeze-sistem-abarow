@@ -121,7 +121,7 @@ func (s *Service) RecordBatch(ctx context.Context, items []Item) error {
 // validate returns domain.ErrInvalidEvent if the event or its body is incomplete.
 func validate(e domain.Event, body any) error {
 	if err := e.Validate(); err != nil {
-		return fmt.Errorf("olay %q: %w", e.ID, err)
+		return fmt.Errorf("event %q: %w", e.ID, err)
 	}
 	switch b := body.(type) {
 	case domain.Sale:
@@ -130,7 +130,7 @@ func validate(e domain.Event, body any) error {
 		}
 	case domain.Void:
 		if err := domain.InStore(b.StoreID, b.Validate()); err != nil {
-			return fmt.Errorf("iptal %q: %w", b.SaleID, err)
+			return fmt.Errorf("void %q: %w", b.SaleID, err)
 		}
 	case domain.Unfinished:
 		if err := domain.InStore(b.StoreID, b.Validate()); err != nil {
@@ -138,7 +138,7 @@ func validate(e domain.Event, body any) error {
 		}
 	case domain.Shift:
 		if err := domain.InStore(b.StoreID, b.Validate()); err != nil {
-			return fmt.Errorf("vardiya %s/%s/%d: %w", b.StoreID, b.RegisterID, b.ID, err)
+			return fmt.Errorf("shift %s/%s/%d: %w", b.StoreID, b.RegisterID, b.ID, err)
 		}
 	case domain.StorePrices:
 		if err := b.Validate(); err != nil {
@@ -146,7 +146,7 @@ func validate(e domain.Event, body any) error {
 		}
 	case domain.Cashier:
 		if err := b.Validate(); err != nil {
-			return fmt.Errorf("kasiyer %s/%s: %w", b.StoreID, b.CashierID, err)
+			return fmt.Errorf("cashier %s/%s: %w", b.StoreID, b.CashierID, err)
 		}
 	case nil:
 		// Unknown event kind: it is stored only in its raw form.

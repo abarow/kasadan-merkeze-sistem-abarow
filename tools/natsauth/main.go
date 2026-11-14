@@ -431,7 +431,7 @@ func appSubjects() []string {
 func leafPermissions(kind, id string, streams []string, hub string, downward []string) permission {
 	api := "$JS." + id + ".API."
 	p := permission{
-		Purpose: kind + " " + id + " (leaf): " + strings.Join(streams, ", ") + " JetStream sourcing ile gelir",
+		Purpose: kind + " " + id + " (leaf): " + strings.Join(streams, ", ") + " come by JetStream sourcing",
 		Publish: []string{
 			"$JS.S.>",  // the events and signals the source consumer delivers
 			"$JSC.R.>", // the device's JetStream API replies
@@ -462,18 +462,18 @@ func leafPermissions(kind, id string, streams []string, hub string, downward []s
 	return p
 }
 
-var conf = template.Must(template.New("nats.conf").Funcs(template.FuncMap{"quote": quoteList}).Parse(`# abarow {{.Title}} NATS yapılandırması: natsauth üretir, elle değiştirmeyin.
+var conf = template.Must(template.New("nats.conf").Funcs(template.FuncMap{"quote": quoteList}).Parse(`# abarow {{.Title}} NATS configuration: written by natsauth, do not edit by hand.
 server_name: "{{.ServerName}}"
 http_port: 8222
 jetstream {
   store_dir: "/data"
-  # JetStream alanı: üst katman bu sunucunun stream'lerine bu adla ulaşır.
+  # JetStream domain: the tier above reaches this server's streams by this name.
   domain: "{{.Domain}}"
 }
 {{- with .Cluster}}
 cluster {
-  # Merkez kümesi: makineler birbirine yalnızca TLS ile bağlanır; iki taraf da
-  # aynı CA'nın imzaladığı sertifikayı gösterir.
+  # Headquarters cluster: the machines connect to each other only with TLS; both
+  # sides show a certificate signed by the same CA.
   name: "{{.Name}}"
   port: {{.Port}}
   routes: [{{quote .Routes}}]
@@ -491,8 +491,8 @@ cluster {
 {{- if or .Remote .Leafnodes}}
 leafnodes {
 {{- with .Leafnodes}}
-  # Aşağıdan leaf bağlantıları ({{.Who}}): her biri kendi anahtarıyla,
-  # yalnızca TLS ile.
+  # Leaf connections from below ({{.Who}}): each with its own key, only
+  # with TLS.
   port: {{.Port}}
 {{- if $.Cluster}}
   # The stores are given the machines' addresses (or --vip); the container addresses the
@@ -505,8 +505,8 @@ leafnodes {
   }
 {{- end}}
 {{- with .Remote}}
-  # Üst katmana ({{.Who}}) leaf bağlantısı. Olaylar yalnızca JetStream
-  # sourcing ile gider; uygulama konuları iki yönde de kapalıdır.
+  # Leaf connection to the tier above ({{.Who}}). The events go only by JetStream
+  # sourcing; the application subjects are closed in both directions.
   remotes: [
     {
 {{- if eq (len .URLs) 1}}
@@ -515,7 +515,7 @@ leafnodes {
       urls: [{{quote .URLs}}]
 {{- end}}
       nkey: "{{.Seed}}"
-      # Üst katmanın sertifikası onun CA'sıyla doğrulanır.
+      # The certificate of the tier above is checked with its CA.
       tls { ca_file: "{{.CAFile}}" }
       deny_imports: [{{quote .Deny}}]
       deny_exports: [{{quote .Deny}}]
