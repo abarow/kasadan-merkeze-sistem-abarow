@@ -477,6 +477,9 @@ cluster {
   name: "{{.Name}}"
   port: {{.Port}}
   routes: [{{quote .Routes}}]
+  # The address a server knows inside its container cannot be reached from the other machines;
+  # the routes list all three (docs/REVIEW-2.md M5).
+  no_advertise: true
   tls {
     cert_file: "{{.Cert}}"
     key_file: "{{.Key}}"
@@ -491,6 +494,11 @@ leafnodes {
   # Aşağıdan leaf bağlantıları ({{.Who}}): her biri kendi anahtarıyla,
   # yalnızca TLS ile.
   port: {{.Port}}
+{{- if $.Cluster}}
+  # The stores are given the machines' addresses (or --vip); the container addresses the
+  # cluster would tell them cannot be reached (docs/REVIEW-2.md M5).
+  no_advertise: true
+{{- end}}
   tls {
     cert_file: "{{.Cert}}"
     key_file: "{{.Key}}"

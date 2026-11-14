@@ -76,6 +76,10 @@ func TestClusterConfig(t *testing.T) {
 			t.Errorf("no %s in the configuration:\n%s", want, conf)
 		}
 	}
+	// Neither the routes nor the leaf port tell the container's address (docs/REVIEW-2.md M5).
+	if n := strings.Count(conf, "no_advertise: true"); n != 2 {
+		t.Errorf("no_advertise %d times, want 2 (cluster and leafnodes):\n%s", n, conf)
+	}
 	if strings.Contains(conf, "$JS.headquarters-2.") {
 		t.Errorf("the machine's name is used as the domain:\n%s", conf)
 	}
