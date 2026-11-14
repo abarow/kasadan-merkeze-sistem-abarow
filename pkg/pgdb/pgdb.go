@@ -15,7 +15,6 @@ import (
 	"regexp"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // the "pgx" driver
-	"github.com/pressly/goose/v3"
 )
 
 var schemaName = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
@@ -35,25 +34,19 @@ func Open(ctx context.Context, dsn, schema string, migrations fs.FS) (*sql.DB, e
 	if err := ensureSchema(ctx, dsn, schema); err != nil {
 		return nil, fmt.Errorf("could not set up schema %s: %w", schema, err)
 	}
+	fsys, err := fs.Sub(migrations, "migrations")
+	if err != nil {
+		return nil, err
+	}
+	if err := Migrate(ctx, scoped, fsys); err != nil {
+		return nil, fmt.Errorf("could not apply the migrations of schema %s: %w", schema, err)
+	}
 	db, err := sql.Open("pgx", scoped)
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	fsys, err := fs.Sub(migrations, "migrations")
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	p, err := goose.NewProvider(goose.DialectPostgres, db, fsys)
-	if err == nil {
-		_, err = p.Up(ctx)
-	}
-	if err != nil {
-		db.Close()
-		return nil, fmt.Errorf("could not apply the migrations of schema %s: %w", schema, err)
-	}
 	return db, nil
 }
 

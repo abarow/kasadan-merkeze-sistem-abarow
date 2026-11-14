@@ -16,12 +16,12 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib" // the "pgx" driver for database/sql
-	"github.com/pressly/goose/v3"
 
 	"abarow.com/pkg/delivery"
 	"abarow.com/pkg/delivery/deliverydb"
 	"abarow.com/pkg/ledger/ledgerdb"
 	"abarow.com/pkg/outbox"
+	"abarow.com/pkg/pgdb"
 	"abarow.com/pkg/pgpool"
 	"abarow.com/pkg/sequence/sequencedb"
 	"abarow.com/pkg/sqldialect"
@@ -70,11 +70,7 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	p, err := goose.NewProvider(goose.DialectPostgres, db, fsys)
-	if err == nil {
-		_, err = p.Up(ctx)
-	}
-	if err != nil {
+	if err := pgdb.Migrate(ctx, dsn, fsys); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("%w: %w", ErrMigration, err)
 	}

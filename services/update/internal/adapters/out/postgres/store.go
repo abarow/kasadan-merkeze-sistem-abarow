@@ -18,6 +18,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib" // the "pgx" driver for database/sql
 	"github.com/pressly/goose/v3"
 
+	"abarow.com/pkg/pgdb"
 	"abarow.com/pkg/pgpool"
 	"abarow.com/services/update/internal/registration"
 	"abarow.com/services/update/internal/token"
@@ -55,12 +56,7 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	p, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithTableName(VersionTable))
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	if _, err := p.Up(ctx); err != nil {
+	if err := pgdb.Migrate(ctx, dsn, fsys, goose.WithTableName(VersionTable)); err != nil {
 		db.Close()
 		return nil, err
 	}

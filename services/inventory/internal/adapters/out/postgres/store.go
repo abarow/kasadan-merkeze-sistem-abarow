@@ -21,6 +21,7 @@ import (
 
 	"abarow.com/pkg/money"
 	"abarow.com/pkg/outbox"
+	"abarow.com/pkg/pgdb"
 	"abarow.com/pkg/pgpool"
 	"abarow.com/pkg/retention"
 	"abarow.com/pkg/sqldialect"
@@ -68,11 +69,7 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	p, err := goose.NewProvider(goose.DialectPostgres, db, fsys, goose.WithTableName(VersionTable))
-	if err == nil {
-		_, err = p.Up(ctx)
-	}
-	if err != nil {
+	if err := pgdb.Migrate(ctx, dsn, fsys, goose.WithTableName(VersionTable)); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migration uygulanamadı: %w", err)
 	}

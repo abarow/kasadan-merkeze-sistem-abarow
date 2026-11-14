@@ -28,6 +28,7 @@ import (
 	"abarow.com/pkg/ledger/ledgerdb"
 	"abarow.com/pkg/money"
 	"abarow.com/pkg/personnel/personneldb"
+	"abarow.com/pkg/pgdb"
 	"abarow.com/pkg/pgpool"
 	"abarow.com/pkg/report"
 	"abarow.com/pkg/sequence/sequencedb"
@@ -82,11 +83,7 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	p, err := goose.NewProvider(goose.DialectPostgres, mig, fsys, goose.WithTableName(VersionTable))
-	if err == nil {
-		_, err = p.Up(ctx)
-	}
-	if err != nil {
+	if err := pgdb.Migrate(ctx, dsn, fsys, goose.WithTableName(VersionTable)); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrMigration, err)
 	}
 	q := cfg.Copy()
