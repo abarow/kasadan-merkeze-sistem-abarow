@@ -638,3 +638,28 @@ memory_check() {
 		say "Memory: $have MB; the containers' ceilings ($ceilings MB), the operating system$with need $need MB at most"
 	fi
 }
+
+# disk_rotational: prints true if the user's containers (and the database volume with them)
+# are on a spinning disk, false otherwise; pgtune is given --rotational then (pkg/pgtune,
+# docs/decisions/DB-TUNING.md). In a virtual machine the virtual disk often says "rotational"
+# whatever is under it (KVM's virtio does by default), so there the SSD settings are kept, as
+# when the disk cannot be read. disk_virt is a variable so that the test can give its own.
+disk_virt="systemd-detect-virt --vm --quiet"
+disk_rotational() {
+	local dir="$home/.local/share/containers" src rota
+	[ -d "$dir" ] || dir=$home
+	if $disk_virt 2>/dev/null; then
+		printf false
+		return 0
+	fi
+	# A btrfs subvolume is written as /dev/sda2[/@home].
+	src=$(findmnt -no SOURCE --target "$dir" 2>/dev/null | sed 's/\[.*//' | head -n 1)
+	rota=$(lsblk -dno ROTA "$src" 2>/dev/null | tr -d ' ' | head -n 1)
+	if [ "$rota" = 1 ]; then printf true; else printf false; fi
+}
+
+# disk_warning <true|false>: the summary's warning for a database on a spinning disk.
+disk_warning() {
+	[ "$1" = true ] || return 0
+	say "WARNING: the database is on a spinning disk (HDD); its settings follow it (random_page_cost 4, effective_io_concurrency 2), but reports and writes are much slower than on an SSD. An SSD is recommended (docs/HARDWARE.md)."
+}

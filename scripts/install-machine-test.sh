@@ -2,10 +2,14 @@
 # Copyright 2026 Mehmet ERGULCU and the abarow contributors
 # SPDX-License-Identifier: Apache-2.0
 
-# install-memory-test.sh checks the install's memory check (memory_check in
-# deploy/install/common.sh) with the repository's Quadlet files and a made-up /proc/meminfo:
-# the sum of the containers' ceilings, a drop-in that changes a ceiling, the kiosk and the
-# warning when the machine's memory is not enough. Nothing is installed.
+# install-machine-test.sh checks the install's machine checks in deploy/install/common.sh,
+# without installing anything:
+#
+#   - memory_check, with the repository's Quadlet files and a made-up /proc/meminfo: the sum of
+#     the containers' ceilings, a drop-in that changes a ceiling, the kiosk and the warning when
+#     the machine's memory is not enough;
+#   - disk_rotational, with findmnt and lsblk replaced: a spinning disk, an SSD, a btrfs
+#     subvolume, a virtual machine and a disk that cannot be read.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 work=$(mktemp -d)
@@ -20,7 +24,7 @@ memory_meminfo="$work/meminfo"
 memory_kiosk_unit="$work/abarow-kiosk.service"
 
 fail() {
-	echo "install-memory-test: $*" >&2
+	echo "install-machine-test: $*" >&2
 	exit 1
 }
 meminfo() { printf 'MemTotal:       %s kB\nMemFree:          123456 kB\n' "$1" >"$memory_meminfo"; }
@@ -55,4 +59,32 @@ echo "== unreadable memory"
 : >"$memory_meminfo"
 expect "WARNING: the machine's memory could not be read"
 
-echo "install-memory-test: OK"
+echo "== disk type"
+# The made-up machine: the containers' directory is on $fake_source, whose ROTA is $fake_rota.
+findmnt() {
+	[ "$*" = "-no SOURCE --target $home/.local/share/containers" ] || fail "findmnt $*"
+	printf '%s\n' "$fake_source"
+}
+lsblk() {
+	[ "$*" = "-dno ROTA /dev/sda2" ] || return 32
+	printf '%s\n' "$fake_rota"
+}
+mkdir -p "$home/.local/share/containers"
+disk_virt=false
+disk() {
+	local got
+	fake_source=$1 fake_rota=$2
+	got=$(disk_rotational)
+	[ "$got" = "$3" ] || fail "disk $1 (ROTA $2): $got, want $3"
+}
+disk /dev/sda2 "   1" true
+disk /dev/sda2 "   0" false
+disk "/dev/sda2[/@home]" 1 true # btrfs
+disk /dev/nvme0n1p2 1 false     # lsblk does not know it: SSD assumed
+disk "" 1 false                 # findmnt found nothing
+disk_virt=true
+disk /dev/sda2 1 false # a virtual machine: its disk's flag is not trusted
+disk_warning false | grep -q . && fail "a warning for an SSD"
+disk_warning true | grep -qF "WARNING: the database is on a spinning disk" || fail "no warning for a spinning disk"
+
+echo "install-machine-test: OK"

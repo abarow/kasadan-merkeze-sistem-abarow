@@ -536,7 +536,11 @@ if [ -n "$cluster" ]; then
 	db_dropin="$units_dir/abarow-patroni.container.d"
 	machines=3
 fi
-tune=$(as podman run --rm --network none -v "$config:/config:ro,Z" "ghcr.io/abarow/abarow-reporting:$channel" pgtune --machines "$machines") ||
+# On a spinning disk the I/O settings follow it (disk_rotational).
+db_rotational=$(disk_rotational)
+rotational_flag=
+[ "$db_rotational" = false ] || rotational_flag=--rotational
+tune=$(as podman run --rm --network none -v "$config:/config:ro,Z" "ghcr.io/abarow/abarow-reporting:$channel" pgtune --machines "$machines" ${rotational_flag:+"$rotational_flag"}) ||
 	die "could not compute the database settings (reporting pgtune)"
 db_memory=$(printf '%s\n' "$tune" | sed -n 's/^MEMORY_MB=//p')
 db_flags=$(printf '%s\n' "$tune" | sed -n 's/^ARGS=//p')
@@ -681,6 +685,7 @@ fi
 
 # 7. Summary
 memory_check
+disk_warning "$db_rotational"
 first=${hosts%%,*}
 case "$command" in
 install)

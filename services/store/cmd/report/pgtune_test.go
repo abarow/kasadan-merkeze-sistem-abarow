@@ -68,6 +68,17 @@ func TestPgtuneCommandReadsRegisterFile(t *testing.T) {
 	}
 }
 
+// --rotational gives the spinning disk's I/O settings (pkg/pgtune.Settings.Rotational).
+func TestPgtuneCommandRotational(t *testing.T) {
+	var out bytes.Buffer
+	if err := pgtuneCommand([]string{"--registers", "2", "--rotational"}, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "-c random_page_cost=4 -c effective_io_concurrency=2 ") {
+		t.Errorf("output:\n%s", out.String())
+	}
+}
+
 func TestPgtuneCommandBadFlag(t *testing.T) {
 	var out bytes.Buffer
 	if err := pgtuneCommand([]string{"--bilinmeyen"}, &out); err == nil {

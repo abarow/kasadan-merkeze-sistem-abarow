@@ -110,8 +110,8 @@ jobs:
           [ "$files" -eq "$units" ] || { echo "::error::$files Quadlet files produced $units units"; exit 1; }
       - name: Headquarters on three machines, the units the install writes
         run: bash scripts/hq-cluster-units-test.sh
-      - name: The install's memory check
-        run: bash scripts/install-memory-test.sh
+      - name: The install's memory and disk checks
+        run: bash scripts/install-machine-test.sh
 
   e2e:
     name: End-to-end (${{ matrix.scenario }})

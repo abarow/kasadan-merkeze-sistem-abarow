@@ -26,7 +26,9 @@
 //     the store server run on SSD/NVMe, and with 4.0 the planner never chooses the index
 //     for the sale_lines join of the month summary and scans the whole table
 //     (measured: 1.2 million sales, the product ranking 1996 ms → 685 ms with the
-//     covering key of migration 00002 together with this setting).
+//     covering key of migration 00002 together with this setting). If the install finds the
+//     database on a spinning disk (Settings.Rotational, 14.11.2026) random_page_cost stays 4 and
+//     effective_io_concurrency is 2; on SSD it keeps PostgreSQL 18's default (16).
 //   - work_mem is 4 MB up to 4 registers, 8 MB up to 16 registers, 16 MB beyond that:
 //     as the data grows the summary queries' hash joins no longer fit in 4 MB and spill
 //     to disk (at 50 registers it was split into 4 parts). The memory limit is
@@ -133,6 +135,9 @@ type Settings struct {
 	// IdleSessionMin ends a session idle (outside a transaction) longer than this many
 	// minutes; 0 is never (idle_session_timeout).
 	IdleSessionMin int
+	// Rotational: the database is on a spinning disk (the install reads it); the I/O
+	// settings follow it (RotationalRandomPageCost, RotationalIOConcurrency).
+	Rotational bool
 }
 
 // ForStore computes the settings of a store (store server) with registers registers.
@@ -192,6 +197,16 @@ const IdleInTransaction = "5min"
 // The pools close a connection idle for 5 minutes themselves (pkg/pgpool), so a live one is
 // not cut; Patroni asks every 10 seconds.
 const ClusterIdleSessionMin = 15
+
+// The I/O settings by disk type (decision 14.11.2026, docs/decisions/DB-TUNING.md): on SSD,
+// NVMe and eMMC random_page_cost is 1.1 and effective_io_concurrency stays at PostgreSQL 18's
+// default (16). On a spinning disk a random read costs much more than a sequential one, the
+// planner's default 4 holds, and the disk serves only a few reads at once.
+const (
+	RandomPageCost           = "1.1"
+	RotationalRandomPageCost = "4"
+	RotationalIOConcurrency  = "2"
+)
 
 // PatroniMemoryMB is the share of Patroni (Python, its helper processes) in the memory limit of
 // the database container on several machines: measured idle 78 MB PSS (14.11.2026,
@@ -299,7 +314,22 @@ func (s Settings) Flags() []string {
 		{"maintenance_work_mem", mb(s.MaintenanceWorkMemMB)},
 		{"wal_buffers", mb(s.WalBuffersMB)},
 		{"effective_cache_size", mb(s.EffectiveCacheSizeMB)},
-		{"random_page_cost", "1.1"},
+		{"random_page_cost", RandomPageCost},
+	}
+	if s.Rotational {
+		kv[len(kv)-1].v = RotationalRandomPageCost
+		kv = append(kv, []struct {
+			k string
+			v string
+		}{
+			{"effective_io_concurrency", RotationalIOConcurrency},
+			{"maintenance_io_concurrency", RotationalIOConcurrency},
+		}...)
+	}
+	kv = append(kv, []struct {
+		k string
+		v string
+	}{
 		{"min_wal_size", mb(s.MinWalSizeMB)},
 		{"max_wal_size", mb(s.MaxWalSizeMB)},
 		{"checkpoint_completion_target", "0.9"},
@@ -308,7 +338,7 @@ func (s Settings) Flags() []string {
 		{"max_parallel_workers", fmt.Sprint(s.ParallelWorkers)},
 		{"max_parallel_workers_per_gather", fmt.Sprint(s.ParallelWorkers)},
 		{"max_parallel_maintenance_workers", "0"},
-	}
+	}...)
 	if s.Archive {
 		kv = append(kv, []struct {
 			k string

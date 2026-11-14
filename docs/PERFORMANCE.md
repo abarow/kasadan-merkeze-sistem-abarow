@@ -377,7 +377,7 @@ Yalnızca `sale_lines` anahtarının kapsayıcı olduğu, taze veride doğrulama
 ### Ne yapıldı
 
 1. **`sale_lines` anahtarı kapsayıcı yapıldı** (`00002_report_index.sql`, mağaza ve merkez `ingest`): `PRIMARY KEY (store_id, sale_id, line_no) INCLUDE (product_id, name, qty, total)`. Ürün sıralaması 1996 → 685 ms (2,9 kat), toplam ~1,9 kat. Satır sayısı en büyük tablo olduğu için planlayıcı ancak bu tabloda tüm tabloyu taramak yerine indeksten okumayı seçiyor.
-2. **`random_page_cost = 1,1`** (`pgtune` ve dört dağıtım dosyası: iki compose, iki Quadlet). Varsayılan 4,0 dönen disk varsayar; tek başına 4,2 → 2,9 sn'ye indiriyor, ama kapsayıcı anahtarın kullanılması için de gerekli (ayar olmadan kapsayıcı anahtar hiçbir şeyi değiştirmedi: 4039 ms). **Mağaza makinesi SSD/NVMe değilse bu ayar geri alınmalıdır.**
+2. **`random_page_cost = 1,1`** (`pgtune` ve dört dağıtım dosyası: iki compose, iki Quadlet). Varsayılan 4,0 dönen disk varsayar; tek başına 4,2 → 2,9 sn'ye indiriyor, ama kapsayıcı anahtarın kullanılması için de gerekli (ayar olmadan kapsayıcı anahtar hiçbir şeyi değiştirmedi: 4039 ms). **Mağaza makinesi SSD/NVMe değilse bu ayar geri alınmalıdır.** (14.11.2026: kurulum veritabanını dönen diskte bulursa bunu kendisi yapıyor, [DB-TUNING.md](decisions/DB-TUNING.md).)
 3. **Satır adı 512 bayta kısaltılıyor** (`ledgerdb.MaxLineNameBytes`). Kapsayıcı anahtar adı da taşır ve PostgreSQL, sayfanın üçte birinden büyük bir indeks girdisini kabul etmez (~2,7 KB): ölçümde 3200 karakterlik sıkıştırılamaz bir ad satış kaydını **hata ile** reddetti. Üründe ad uzunluğu sınırı olmadığı için kayıt anında defterdeki kopya kısaltılır; kasadaki fiş tam adı korur.
 
 ### Maliyet

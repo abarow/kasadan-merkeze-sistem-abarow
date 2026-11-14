@@ -506,7 +506,11 @@ oidc_dropin store-install.sh "$report_dropin/oidc.conf" abarow-store-oidc-secret
 # settings changed the database is restarted (shared_buffers and max_connections
 # do not change without a restart). The values in the Quadlet file are the base for up to four registers.
 db_dropin="$home/.config/containers/systemd/abarow-store-db.container.d"
-tune=$(as podman run --rm --network none -v "$config:/config:ro,Z" "ghcr.io/abarow/abarow-report:$channel" pgtune) ||
+# On a spinning disk the I/O settings follow it (disk_rotational).
+db_rotational=$(disk_rotational)
+rotational_flag=
+[ "$db_rotational" = false ] || rotational_flag=--rotational
+tune=$(as podman run --rm --network none -v "$config:/config:ro,Z" "ghcr.io/abarow/abarow-report:$channel" pgtune ${rotational_flag:+"$rotational_flag"}) ||
 	die "could not compute the database settings (report pgtune)"
 db_memory=$(printf '%s\n' "$tune" | sed -n 's/^MEMORY_MB=//p')
 db_flags=$(printf '%s\n' "$tune" | sed -n 's/^ARGS=//p')
@@ -557,6 +561,7 @@ fi
 
 # 6. Summary
 memory_check
+disk_warning "$db_rotational"
 first=${hosts%%,*}
 case "$command" in
 install)

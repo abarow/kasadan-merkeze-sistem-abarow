@@ -153,6 +153,25 @@ func TestFlags(t *testing.T) {
 	}
 }
 
+// TestRotational: on a spinning disk the planner keeps random_page_cost 4 and the disk is
+// given few reads at once; on SSD the settings stay as they were (the register's and the
+// deploy files' values).
+func TestRotational(t *testing.T) {
+	ssd := ForStore(10).Args()
+	if !strings.Contains(ssd, "-c random_page_cost=1.1 ") || strings.Contains(ssd, "io_concurrency") {
+		t.Errorf("SSD: %s", ssd)
+	}
+	s := ForHeadquartersCluster(100, 3)
+	before := s.Args()
+	s.Rotational = true
+	hdd := s.Args()
+	want := strings.Replace(before, "-c random_page_cost=1.1 ",
+		"-c random_page_cost=4 -c effective_io_concurrency=2 -c maintenance_io_concurrency=2 ", 1)
+	if hdd != want {
+		t.Errorf("spinning disk:\n%s\nwant\n%s", hdd, want)
+	}
+}
+
 // Headquarters setting: the same logic, higher ceilings; since the database grows with the number of
 // stores the memory grows up to 1 GB of buffers.
 func TestForHeadquarters(t *testing.T) {

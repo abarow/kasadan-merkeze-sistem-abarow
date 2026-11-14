@@ -39,6 +39,8 @@ Kasa eklenince ya da çıkarılınca kurulum betiği PostgreSQL ayarlarını yen
 
 10 kasadan itibaren dönem raporları paralel sorgu kullanır (10–49 kasa 2 işçi, 50 ve üstü 4 işçi); container belleğine `/dev/shm` payı (24 × `work_mem`) eklenmiştir.
 
+Ayarlar SSD ya da NVMe disk varsayar. Kurulum, mağaza sunucusunun ya da merkezin veritabanını dönen diskte (HDD) bulursa ayarları ona göre değiştirir ve uyarır; raporlar ve yazma yine de SSD'dekinden çok yavaş olur. Önerilen disk SSD'dir. Sanal makinede disk türü güvenilir okunamadığı için SSD ayarı korunur ([DB-TUNING.md](decisions/DB-TUNING.md)).
+
 Merkez için ayrı formül vardır (veri mağaza sayısıyla büyür): 10 mağazada 896 MB / 192 MB, 50 mağazada 2560 MB / 832 MB. Ölçümde bu ayarlar 50 kasada kayıt işleme gecikmesini 680 → 397 ms'ye, 50 mağazada 2,5 sn → 1,0 sn'ye indirdi. Tüm tablolar: [docs/PERFORMANCE.md](PERFORMANCE.md).
 
 ## Donanım ihtiyacı
