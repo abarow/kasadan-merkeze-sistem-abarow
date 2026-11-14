@@ -33,3 +33,6 @@ Thumbs.db
 /TODO.md
 /docs/ISIMLENDIRME.md
 __pycache__/
+
+# OWASP ZAP reports (scripts/zap-scan.py); they hold the test session
+/zap-out/

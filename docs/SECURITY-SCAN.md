@@ -54,8 +54,35 @@ Sınırlar: SBOM'lar yalnızca modül düzeyinde eşleştirir (kodun açık fonk
 
 Bu sahte bulguların sahte olduğu OSV kayıtlarıyla doğrulandı (düzeltme sürümleri bizdekinden eski); modül SBOM'larında (üstte) bu bulgular hiç çıkmamıştı.
 
+## OWASP ZAP (14.11.2026)
+
+Çalışan ekranlara ve API'lere dinamik tarama. Tarama, merkezli uçtan uca test yığınında yapıldı (`bash scripts/e2e.sh up headquarters`). Bu yığın düz HTTP kullanıyor ve yalnız tohum verisi içeriyor. Komut: `python3 scripts/zap-scan.py`. ZAP sürümü 2.17.0 (`ghcr.io/zaproxy/zaproxy:stable`). Gerçek bir kuruluma çalıştırılmaz: etkin tarama saldırı dener ve çöp veri yazar.
+
+**Nasıl taranıyor:**
+
+- **Oturum:** betik her ekrana yığının deneme hesaplarıyla girer. Kasaya kasiyer PIN'iyle girip jeton alır; mağaza sunucusuna ve merkeze parolayla girip oturum çerezi alır. ZAP oturumu her isteğe ekler. Önce yalnız oturumla 200 dönen bir deneme isteği gönderilir; oturum çalışmazsa tarama durur.
+- **İstekler:** ekranlar tek sayfalık uygulama olduğu için örümcek API'yi bulamaz. Bu yüzden her ekranın arkasındaki servislerin API yolları koddan alınıp istenir: kasada 38, mağaza sunucusunda 27, merkezde 31 yol.
+- **Gövdeler:** serbest metin alan yazma istekleri gerçek gövdelerle bir kez daha gönderilir, etkin taramanın saldıracağı alan olsun diye. Bunlar kasiyer, kullanıcı, ürün, fiyat, mal kabul ve sayım istekleri.
+- **Tarama dışı:** giriş, çıkış ve parola değiştirme. Tarama oturumu bitirir, deneme hesaplarını kilitlerdi.
+- **Kapsam:** her ekranda pasif ve etkin tarama.
+
+**Sonuç:** gerçek bir açık bulunmadı.
+
+| Bulgu | Nerede | Değerlendirme |
+|---|---|---|
+| Path Traversal (High, güven düşük) | Mağaza sunucusunda `POST /api/cashiers` (`id`), merkezde `POST /api/users` (`username`) | **Sahte bulgu.** ZAP alana yolun son parçasını ("cashiers", "users") yazdı ve yanıt rastgele değerdekinden farklı çıktı. Fark, taramanın kendisinin daha önce aynı kodla kişi oluşturmuş olmasından (409). Gerçek yol geçişi değeri (`../../etc/passwd`) doğrulamada reddediliyor (422). Bu alanlar veritabanına ve NATS konusuna gidiyor, dosya yolu olmuyor; ilgili paketlerde dosya açan kod yok. |
+| CSP, tıklama korsanlığı (X-Frame-Options), X-Content-Type-Options başlıkları yok (Medium/Low) | Yalnız kasa ekranı (gateway) | **Bilinen ve kabul edilmiş** ([PENTEST-PREP.md](PENTEST-PREP.md), madde 2): kasa ekranı yalnız kasanın kendisinde (`127.0.0.1`) sunuluyor. Mağaza sunucusu ve merkez ekranında bu başlıklar var ve tarama eksik bulmadı. |
+| HTTP Only Site (Medium) | Üç ekran | **Test yığınından.** Compose yığını düz HTTP. Gerçek kurulumda mağaza sunucusu ekranı HTTPS, merkez Caddy arkasında HTTPS ve HSTS'li, kasa yalnız yerel. |
+| Modern Web Application, User Agent Fuzzer, Authentication Request Identified (bilgi) | | Bilgi amaçlı; açık değil. |
+
+**Sınırlar:**
+
+- **Kimlikli tarama:** her ekranda tek bir rolle yapıldı: kasada kasiyer, mağaza sunucusunda mağaza parolası, merkezde yönetici. Rol başına yetki atlama (ör. kasiyerin müdür işlemi yapması, bir mağaza kullanıcısının başka mağazayı görmesi) ZAP'ın denetlemediği bir konu. Bu, sızma testinin kapsamında ([PENTEST-PREP.md](PENTEST-PREP.md)).
+- **Var olmayan kayıtlar:** yol parametreli isteklerin çoğu var olmayan bir kimlikle gitti (`zap1`). Bu yüzden 404 döndüler ve gövdeleri işlenmedi. Gerçek gövdeyle gönderilenler yukarıdaki yazma istekleri.
+- **Süre:** etkin tarama ekran başına 2–3 dakika sürdü. Tavan 20 dakikaydı, ama taranacak alan az olduğu için erken bitti.
+- **Dışarıda kalanlar:** NATS (leaf TLS ve NKey yetkileri) ve kurulum betikleri ZAP'ın kapsamında değil.
+
 ## Yapılmayanlar (açık)
 
 - **SonarQube for IDE:** IDE eklentisi olduğundan komut satırından çalıştırılamadı; IDE'de açılıp bulgular elle gözden geçirilmeli. Alternatif: SonarQube Community container'ı + `sonar-scanner`.
-- **OWASP ZAP** (çalışan ekran ve API'lere dinamik tarama) ve çalıştırılmadı. Bağımlılık ve imaj taraması Dependency-Track ile yapıldı (yukarıda), ayrıca Trivy gerekmedi.
 - Bu belgedeki gosec ve npm bulguları yalnızca sınıflandırıldı; incelenen üç konuda ([PENTEST-PREP.md](PENTEST-PREP.md)) kod değişikliği gerekmedi.
