@@ -25,6 +25,17 @@
 | P7 | Performans | Düşük | Raporlar birincile gidiyor, iki senkron replika okumada boşta |
 | G8 | Go | Düşük | Adlandırma kuralı kalıntıları: `nats.conf` yorumları ve `ingest` hata metinleri |
 
+## Çözüm durumu
+
+Bulgular aşağıda yazıldıkları gibi duruyor; yapılanlar bu tabloda izleniyor.
+
+| # | Durum | Ne yapıldı |
+|---|---|---|
+| D9 | Çözüldü (14.11.2026) | Kilit bağlantısı `idle_session_timeout` koyuyor (varsayılan 5 × denetim aralığı = 10 sn, `pkg/leader`); susan kopyanın oturumunu PostgreSQL kapatıyor, kilit diğer kopyaya geçiyor. Kümede sunucu genelinde `idle_session_timeout=15min` (`pkg/pgtune.ForHeadquartersCluster`): kaybolan makinenin havuz bağlantıları 15 dk'da kapanıyor; havuzlar boştaki bağlantıyı 5 dk'da kendisi kapatır. Test: bağlantıları kapatmadan susan bir vekil arkasındaki kopya; diğeri devralıyor, ikisi aynı anda çalışmıyor. Ayar olmadan aynı test başarısız oluyor. `ha-db-test.sh` ayarın Patroni kümesinde geçerli olduğunu denetliyor. Rootless Podman'da (pasta) gerçek makinede denenmedi; ayar ağ durumuna değil boşta geçen süreye baktığı için orada da geçerli olmalı. |
+| D10 | Çözüldü (14.11.2026) | `headquarters-install.sh ... --cluster-import <dosya> --rejoin`: makinenin eski etcd kaydı diğer iki makineden silinip yeniden ekleniyor, etcd'si mevcut kümenin üyesi olarak boş başlıyor (`ETCD_INITIAL_CLUSTER_STATE=existing`); Patroni veritabanını birincilden kopyalıyor ([deploy/quadlet/README.md](../deploy/quadlet/README.md) "Makine değiştirme"). `ha-db-test.sh` 3. aşama: 3. makinenin etcd'si ve veritabanı silinip boş başlatılıyor; `--rejoin` olmadan etcd 20 sn içinde kümeye dönmüyor, kurulumun aynı fonksiyonuyla dönüyor ve `hq-3` replika olarak akıyor. Gerçek makinede denenmedi. |
+| D11 | Kısmen (14.11.2026) | Rol ayrımı şimdilik yapılmıyor (karar 14.11.2026): servisler süper kullanıcıyla bağlanmayı sürdürüyor. Kümede kurulum özeti portların yalnız üç makineye açılması gerektiğini söylüyor; güvenlik duvarına dokunmuyor. [deploy/quadlet/README.md](../deploy/quadlet/README.md)'de nftables örnek kuralı var; gerçek makinede denenmedi. |
+| M5 | Çözüldü (14.11.2026) | `natsauth -routes` ile `cluster {}` ve `leafnodes {}` bloklarında `no_advertise: true`; tek makineli merkez ve mağaza değişmedi. NATS küme testi (üç merkez sunucusu ve bir mağaza, stream lideri kapatılıyor) bu ayarla geçti. Ayrı ağlarda (container adreslerine ulaşılamayan makineler) denenmedi. |
+
 İlk incelemeden açık kalanlar:
 - **B2 (kısmen):** satışın ödeme ve ÖKC'ye senkron bağı bilinçli olarak kaldı.
 - **M1 (kısmen):** OpenTelemetry izi ve bir metrik toplayıcının kurulumu yok.

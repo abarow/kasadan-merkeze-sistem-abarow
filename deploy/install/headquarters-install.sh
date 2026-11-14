@@ -716,6 +716,10 @@ install)
 		leaf=$(cluster_names | sed 's|^\(.*\)$|tls://\1:7422|' | paste -sd, -)
 	fi
 	printf '\n    sudo deploy/install/store-install.sh --store-id store-1 --address 192.168.1.10 --headquarters %s --headquarters-ca ca.pem\n\n' "$leaf"
+	if [ -n "$cluster" ]; then
+		# The install does not touch the firewall (docs/REVIEW-2.md D11): the machine may have its own.
+		say "Firewall: open 2379, 2380, 5432, 6222 and 8008 only to the three machines ($cluster); the install does not do it (example: deploy/quadlet/README.md, \"Üç makinede merkez\")"
+	fi
 	if [ -n "$cluster" ] && [ "$node" = 1 ]; then
 		say "The other two machines take this machine's keys: sudo deploy/install/headquarters-install.sh cluster-export /root/abarow-cluster.tar.gz"
 	fi

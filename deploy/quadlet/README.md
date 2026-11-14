@@ -396,6 +396,21 @@ Bir makine giderse veritabanı yaklaşık 30 saniyede başka makineye geçer; on
 
 Makineler arasında (yalnızca birbirlerine) 2379, 2380 (etcd), 5432, 8008 (PostgreSQL, Patroni) ve 6222 (NATS kümesi) açık olmalıdır. Aradaki her bağlantı merkezin CA'sıyla TLS'dir.
 
+**Güvenlik duvarı:** kurulum güvenlik duvarına dokunmaz; makinede başka bir güvenlik duvarı ayarı olabilir. Bu portlar başka bir yerden erişilebilir olmamalıdır. Kimlik doğrulama TLS ve parolayla yapılır, ama servislerin veritabanı hesabı süper kullanıcıdır ([REVIEW-2.md](../../docs/REVIEW-2.md) D11). Patroni'nin okuma uçları da parolasızdır. nftables ile örnek kural (`/etc/nftables.d/abarow-cluster.nft` ya da makinenin kendi kural dosyası). Adres listesi bu makine dahil üç makinenin IP'leridir: bir makine kendi etcd'sine de dış adıyla bağlanır.
+
+```nft
+table inet abarow_cluster {
+    chain input {
+        type filter hook input priority -10; policy accept;
+        tcp dport { 2379, 2380, 5432, 6222, 8008 } iif "lo" accept
+        tcp dport { 2379, 2380, 5432, 6222, 8008 } ip saddr { 192.168.1.11, 192.168.1.12, 192.168.1.13 } accept
+        tcp dport { 2379, 2380, 5432, 6222, 8008 } drop
+    }
+}
+```
+
+Kural yalnız bu beş portu süzer; diğer trafiği makinenin kendi kurallarına bırakır (`policy accept`). Gerçek üç makinede denenmedi; uygulandıktan sonra makinelerin birbirine ulaştığı `patronictl list` ile görülmelidir.
+
 ```sh
 # 1. makine
 sudo deploy/install/headquarters-install.sh --address hq1.example.com   --cluster hq1.example.com,hq2.example.com,hq3.example.com --node 1 [--vip 192.168.1.50/24]
