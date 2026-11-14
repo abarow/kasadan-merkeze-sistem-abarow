@@ -24,6 +24,9 @@ RUN apk add --no-cache python3 && \
 
 COPY --chmod=0755 deploy/container/patroni/entrypoint.sh /usr/local/bin/abarow-patroni
 COPY --chmod=0755 deploy/container/patroni/post-bootstrap.sh /usr/local/bin/abarow-post-bootstrap
+# The licenses: abarow's, the notices of the dependencies, and the LGPL-3.0 and GPL-3.0 texts that psycopg2-binary
+# (LGPL) asks to be given (THIRD_PARTY_NOTICES, section 3).
+COPY --chmod=0644 LICENSE NOTICE THIRD_PARTY_NOTICES deploy/container/patroni/licenses/LGPL-3.0.txt deploy/container/patroni/licenses/GPL-3.0.txt /licenses/
 
 USER postgres
 # 5432: PostgreSQL; 8008: Patroni's REST API (HAProxy asks it which machine is primary).

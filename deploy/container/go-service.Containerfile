@@ -30,5 +30,9 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 FROM scratch
 COPY --from=build /out/service /service
 COPY --from=build --chown=65532:65532 /out/data /data
+# The license of abarow, its NOTICE and the notices of the code inside the image (Apache-2.0 section 4:
+# whoever gets the image gets the license text; the licenses of the dependencies ask for their notices
+# to travel with the binary). THIRD_PARTY_NOTICES is made by scripts/third-party-notices.py.
+COPY --chmod=0644 LICENSE NOTICE THIRD_PARTY_NOTICES /licenses/
 USER 65532:65532
 ENTRYPOINT ["/service"]
