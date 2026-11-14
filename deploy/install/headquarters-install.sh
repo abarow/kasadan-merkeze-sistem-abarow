@@ -19,6 +19,7 @@
 #   sudo deploy/install/headquarters-install.sh backup-copy
 #   sudo deploy/install/headquarters-install.sh --address hq1.example.com --cluster hq1.example.com,hq2.example.com,hq3.example.com --node 1 [--vip 192.168.1.50/24 [--vip-interface eth0]] [other options]
 #   sudo deploy/install/headquarters-install.sh cluster-export <file>                     (on the first machine; then on the 2nd and 3rd: --node 2|3 --cluster-import <file>)
+#   (a machine whose disk was replaced: the same install with --cluster-import <file> --rejoin)
 #
 # What the install does (running it again is safe; it does not break what exists):
 #   1. Checks that Podman 5, aardvark-dns and nftables are present.
@@ -100,7 +101,7 @@ quadlet="$here/deploy/quadlet/headquarters"
 [ -f "$quadlet/abarow-ingest.container" ] || die "Quadlet files not found: $quadlet"
 
 usage() {
-	sed -n '9,21p' "$0" | sed 's/^# \{0,1\}//'
+	sed -n '9,22p' "$0" | sed 's/^# \{0,1\}//'
 	exit 2
 }
 
@@ -128,6 +129,7 @@ confirmed=
 cluster=
 node=
 cluster_import=
+rejoin=
 vip=
 vip_interface=
 command=install
@@ -165,6 +167,7 @@ while [ $# -gt 0 ]; do
 	--cluster) cluster=$2; shift 2 ;;
 	--node) node=$2; shift 2 ;;
 	--cluster-import) cluster_import=$2; shift 2 ;;
+	--rejoin) rejoin=1; shift ;;
 	--vip) vip=$2; shift 2 ;;
 	--vip-interface) vip_interface=$2; shift 2 ;;
 	--yes) confirmed=1; shift ;;
@@ -205,9 +208,11 @@ if [ "$command" = install ]; then
 	if [ -n "$cluster" ]; then
 		cluster_validate
 		hosts=$(cluster_hosts)
-	elif [ -n "$node" ] || [ -n "$cluster_import" ] || [ -n "$vip" ] || [ -n "$vip_interface" ]; then
-		die "--node, --cluster-import, --vip and --vip-interface are only used with --cluster."
+	elif [ -n "$node" ] || [ -n "$cluster_import" ] || [ -n "$rejoin" ] || [ -n "$vip" ] || [ -n "$vip_interface" ]; then
+		die "--node, --cluster-import, --rejoin, --vip and --vip-interface are only used with --cluster."
 	fi
+elif [ -n "$rejoin" ]; then
+	die "--rejoin is only used with the install (--cluster)."
 fi
 
 preflight
@@ -473,6 +478,7 @@ dropins_before=$(dropin_digest)
 install_units "$quadlet"
 install_units "$quadlet/backup"
 [ -z "$cluster" ] || cluster_units
+[ -z "$rejoin" ] || cluster_etcd_rejoin
 # Update (optional): the agent registers with the publisher; the server approves the store and register registrations.
 # Nothing updates by itself.
 update_units=

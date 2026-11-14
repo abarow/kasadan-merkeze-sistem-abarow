@@ -44,7 +44,7 @@ user=$(id -un)
 channel=0.1
 quadlet="$here/deploy/quadlet/headquarters"
 cluster=hq1.example.com,hq2.example.com,hq3.example.com
-domain='' vip='' vip_interface='' screen=127.0.0.1:9090
+domain='' vip='' vip_interface='' rejoin='' screen=127.0.0.1:9090
 
 machine() {
 	home="$work/m$1" node=$1
@@ -119,6 +119,11 @@ grep -q "^Environment=ABAROW_ETCD=abarow-etcd:2379,hq1.example.com:2379,hq3.exam
 grep -q "^Environment=ETCD_INITIAL_CLUSTER=etcd-1=https://hq1.example.com:2380,etcd-2=https://hq2.example.com:2380,etcd-3=https://hq3.example.com:2380$" \
 	"$units/abarow-etcd.container.d/node.conf" || { echo "etcd node.conf:" >&2; cat "$units/abarow-etcd.container.d/node.conf" >&2; exit 1; }
 grep -q "^Environment=ABAROW_NATS_REPLICAS=3$" "$units/abarow-ingest.container.d/cluster.conf" || { echo "ingest has no replicas" >&2; exit 1; }
+# A machine that rejoins (--rejoin) starts its etcd as a member of the existing cluster.
+! grep -q "ETCD_INITIAL_CLUSTER_STATE" "$units/abarow-etcd.container.d/node.conf" || { echo "the state is written without --rejoin" >&2; exit 1; }
+rejoin=1 cluster_units >/dev/null
+grep -q "^Environment=ETCD_INITIAL_CLUSTER_STATE=existing$" "$units/abarow-etcd.container.d/node.conf" || { echo "--rejoin: the state is not existing" >&2; exit 1; }
+rejoin='' cluster_units >/dev/null
 if ! grep -q "server hq-2 abarow-patroni:5432" "$headquarters/haproxy.cfg" || ! grep -q "server hq-1 hq1.example.com:5432" "$headquarters/haproxy.cfg"; then
 	echo "haproxy.cfg:" >&2
 	cat "$headquarters/haproxy.cfg" >&2

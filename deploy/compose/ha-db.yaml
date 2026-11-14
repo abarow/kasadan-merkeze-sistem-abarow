@@ -73,6 +73,8 @@ services:
       ETCD_NAME: etcd-3
       ETCD_ADVERTISE_CLIENT_URLS: https://ha-etcd-3:2379
       ETCD_INITIAL_ADVERTISE_PEER_URLS: https://ha-etcd-3:2380
+      # "existing" after the --rejoin of phase 3 (scripts/ha-db-test.sh).
+      ETCD_INITIAL_CLUSTER_STATE: ${ABAROW_HA_ETCD3_STATE:-new}
 
   db-1:
     <<: *db

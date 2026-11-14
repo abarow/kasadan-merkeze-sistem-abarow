@@ -411,6 +411,7 @@ sudo deploy/install/headquarters-install.sh --address hq2.example.com   --cluste
 - **Mağaza ekleme ve çıkarma:** `store-add` ve `store-remove` üç makinede de çalıştırılır.
 - **Yedekler:** her makine günlük `pg_dump` yedeğini birincilden alır. Haftalık fiziksel yedeği ve bakımı kendi veritabanından alır; replikada bakım yalnız arşivi denetler. Her makine WAL'i kendi arşivler (`archive_mode=always`).
 - **Geri yükleme:** `restore` ve `restore-to` üç makinede çalıştırılmaz; diğer makinelerin servisleri yazmayı sürdürürdü. Adımlar için [HA-HEADQUARTERS.md](../../docs/decisions/HA-HEADQUARTERS.md) "Kümede geri yükleme" bölümüne bakın.
+- **Makine değiştirme:** diski değişen ya da baştan kurulan makine aynı kurulum komutuyla, `--cluster-import` dosyası ve `--rejoin` ile kurulur. etcd tanıdığı bir üyenin boş başlamasını kabul etmez; `--rejoin` makinenin eski etcd kaydını diğer iki makineden siler, yeniden ekler ve bu makinenin etcd'sini mevcut kümenin üyesi olarak boş başlatır. Diğer iki makine açık olmalıdır. Veritabanını Patroni birincilden kendisi kopyalar.
 - **Tek makineden geçiş:** tek makineli merkezin verisi Patroni'nin klasörüne taşınmaz. Kümeye geçerken günlük yedek (`pg_dump`) yeni kümeye `pg_restore` ile yüklenir, ardından `reprocess` çalıştırılır.
 
 ## PostgreSQL ana sürüm yükseltmesi

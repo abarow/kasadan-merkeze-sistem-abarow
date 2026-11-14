@@ -10,7 +10,7 @@
 #
 # The variables come from headquarters-install.sh: cluster (the three machines' names,
 # comma-separated), node (1, 2 or 3), vip and vip_interface (keepalived, optional), auth,
-# config, headquarters, home, user, here, screen.
+# config, headquarters, home, user, here, screen, rejoin (--rejoin).
 
 # cluster_names prints the machines' names, one per line.
 cluster_names() { printf '%s\n' "$cluster" | tr ',' '\n'; }
@@ -133,6 +133,7 @@ Environment=ETCD_NAME=etcd-$node
 Environment=ETCD_ADVERTISE_CLIENT_URLS=https://$self:2379
 Environment=ETCD_INITIAL_ADVERTISE_PEER_URLS=https://$self:2380
 Environment=ETCD_INITIAL_CLUSTER=$initial
+${rejoin:+Environment=ETCD_INITIAL_CLUSTER_STATE=existing}
 EOF
 	as tee "$units_dir/abarow-patroni.container.d/node.conf" >/dev/null <<EOF
 # written by headquarters-install.sh --cluster: this machine in the database of the three machines.
@@ -205,6 +206,45 @@ EOF
 			fi
 		} | as tee "$units_dir/$d.container.d/cluster.conf" >/dev/null
 	done
+}
+
+# cluster_etcd_others are the etcd addresses of the other two machines.
+cluster_etcd_others() {
+	local h i=0 out=''
+	for h in $(cluster_names); do
+		i=$((i + 1))
+		[ "$i" = "$node" ] || out="$out${out:+,}https://$h:2379"
+	done
+	printf '%s' "$out"
+}
+
+# etcd_ctl runs etcdctl against the other two machines' etcd with this machine's certificate.
+etcd_ctl() {
+	local image
+	image=$(sed -n 's/^Image=//p' "$quadlet/cluster/abarow-etcd.container")
+	as podman run --rm --network abarow-headquarters 		--secret abarow-headquarters-tls-ca,type=mount,target=/tls/ca.pem 		--secret abarow-headquarters-tls-cert,type=mount,target=/tls/server.pem 		--secret abarow-headquarters-tls-key,type=mount,target=/tls/server.key 		"$image" etcdctl --endpoints "$(cluster_etcd_others)" --cacert /tls/ca.pem --cert /tls/server.pem --key /tls/server.key "$@"
+}
+
+# cluster_etcd_rejoin takes this machine back into the etcd of the other two (--rejoin): after
+# its disk was replaced, or when it is installed again from the start (docs/REVIEW-2.md D10).
+# etcd does not take back a member it knows that starts with no data, so the old entry is
+# removed and added again, and this machine's etcd starts empty as a member of the existing
+# cluster (ETCD_INITIAL_CLUSTER_STATE=existing, cluster_units). The other two machines must be
+# up: adding a member needs the majority. Patroni copies the database from the primary by itself.
+cluster_etcd_rejoin() {
+	local peer id
+	peer="https://$(cluster_self):2380"
+	as systemctl --user stop abarow-etcd.service 2>/dev/null || true
+	as podman volume rm --force abarow-etcd-data >/dev/null 2>&1 || true
+	# id, status, name, peer addresses, client addresses, is learner; a member added but not
+	# started yet has no name.
+	id=$(etcd_ctl member list -w simple | awk -F', ' -v name="etcd-$node" -v peer="$peer" '$3 == name || $4 == peer { print $1 }') ||
+		die "the etcd of the other two machines cannot be reached ($(cluster_etcd_others)); both must be up for --rejoin."
+	if [ -n "$id" ]; then
+		etcd_ctl member remove "$id" >/dev/null || die "the old etcd entry of this machine could not be removed."
+	fi
+	etcd_ctl member add "etcd-$node" --peer-urls "$peer" >/dev/null || die "this machine could not be added to the etcd of the other two."
+	say "This machine was taken back into the etcd of the other two machines"
 }
 
 # cluster_db_url is the services' database address: this machine's HAProxy, TLS.

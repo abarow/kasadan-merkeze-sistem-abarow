@@ -10,6 +10,9 @@
 #     write must be on the new primary. The old primary comes back as a replica.
 #  2. Both replicas are stopped: the primary must not accept a write (synchronous and strict;
 #     a commit is not on one machine only). When they come back the writes go on.
+#  3. Machine 3's disk is replaced: its etcd does not come back empty by itself; after the
+#     install's --rejoin (cluster_etcd_rejoin, deploy/install/headquarters-cluster.sh) it does,
+#     and Patroni copies the database to it.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export MSYS_NO_PATHCONV=1
@@ -153,12 +156,52 @@ fi
 echo "the write does not complete (as it should); the replicas come back"
 for r in $replicas; do docker start "$(container "$r")" >/dev/null; done
 wait_healthy "replicas returning"
+resumed=false
 for _ in $(seq 60); do
 	if psql_proxy "INSERT INTO failover (id) VALUES (-2)" >/dev/null 2>&1; then
-		echo "ha-db-test: OK"
-		exit 0
+		resumed=true
+		break
 	fi
 	sleep 1
 done
-echo "writes did not resume after the replicas returned" >&2
-exit 1
+$resumed || { echo "writes did not resume after the replicas returned" >&2; exit 1; }
+
+echo "== 3. machine 3's disk is replaced"
+etcd_all="https://ha-etcd-1:2379,https://ha-etcd-2:2379,https://ha-etcd-3:2379"
+etcd_healthy() {
+	docker exec ha-etcd-1 etcdctl --endpoints "$etcd_all" --cacert /tls/ca.pem --cert /tls/server.pem --key /tls/server.key 		endpoint health >/dev/null 2>&1
+}
+docker rm -f ha-etcd-3 ha-db-3 >/dev/null
+compose up -d --no-deps etcd-3 >/dev/null 2>&1
+for _ in $(seq 20); do
+	if etcd_healthy; then
+		echo "an empty etcd was taken back without --rejoin" >&2
+		exit 1
+	fi
+	sleep 1
+done
+echo "without --rejoin the empty etcd does not come back; its last error: $(docker logs ha-etcd-3 2>&1 | grep -iE '"level":"(error|fatal|panic)"' | tail -n 1 | cut -c1-300 || true)"
+docker rm -f ha-etcd-3 >/dev/null
+(
+	# shellcheck source=deploy/install/headquarters-cluster.sh
+	. deploy/install/headquarters-cluster.sh
+	# The install's commands; the unit and the volume are the containers here.
+	as() { :; }
+	die() { echo "$*" >&2; exit 1; }
+	say() { echo "$*"; }
+	etcd_ctl() {
+		docker exec ha-etcd-1 etcdctl --endpoints "$(cluster_etcd_others)" --cacert /tls/ca.pem --cert /tls/server.pem --key /tls/server.key "$@"
+	}
+	cluster=ha-etcd-1,ha-etcd-2,ha-etcd-3 node=3
+	cluster_etcd_rejoin
+)
+ABAROW_HA_ETCD3_STATE=existing compose up -d --no-deps etcd-3 db-3 >/dev/null 2>&1
+for _ in $(seq 60); do
+	etcd_healthy && break
+	sleep 1
+done
+etcd_healthy || { docker logs --tail 30 ha-etcd-3 >&2; echo "etcd of machine 3 did not come back after --rejoin" >&2; exit 1; }
+wait_healthy "machine 3 after --rejoin"
+members | cut -f1 | grep -qx hq-3 || { echo "hq-3 is not in the cluster" >&2; exit 1; }
+echo "after --rejoin: three etcd members healthy, hq-3 streaming"
+echo "ha-db-test: OK"
