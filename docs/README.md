@@ -12,6 +12,7 @@
 - [PENTEST-PREP.md](PENTEST-PREP.md): saldırı yüzeyi ve bilinen noktalar
 - [STANDARDS.md](STANDARDS.md): uyulan ve hedeflenen standartlar
 - [E2E.md](E2E.md): uçtan uca testler
+- [LICENSES.md](LICENSES.md): abarow'un lisansı, içindeki üçüncü taraf kodun lisansları ve imajlardaki bildirimler
 
 **Karar günlükleri ve araştırma notları** ([decisions/](decisions/)): tarihli çalışma notları; güncel durum için yukarıdaki belgelere bakın.
 - [CONSOLIDATION.md](decisions/CONSOLIDATION.md), [LOGIN.md](decisions/LOGIN.md), [PEOPLE.md](decisions/PEOPLE.md), [STORE-POSTGRES.md](decisions/STORE-POSTGRES.md)

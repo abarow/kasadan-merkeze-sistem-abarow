@@ -50,10 +50,19 @@ Kendi satırını eklerken:
 ```sh
 bash scripts/check.sh           # gofmt, build, vet, test (her modül)
 bash scripts/check-headers.sh   # telif başlıkları
+python3 scripts/third-party-notices.py --check   # bağımlılık lisansları ve THIRD_PARTY_NOTICES güncel mi
 bash scripts/gen.sh             # proto değiştiyse: lint + kod üretimi
 ```
 
 Aynı kontroller ve Docker simülasyonu CI'da (`.github/workflows/ci.yml`) her push'ta çalışır. CI ayrıca proto sözleşmelerinde kırıcı değişikliği (`buf breaking`; alan silme, numara ya da tür değiştirme) reddeder: yayınlanmış bir alanı değiştirmek yerine yeni alan ekleyin.
+
+## Bağımlılık eklerken
+
+Yeni bir Go modülü ya da ekranlara giren bir npm paketi eklemeden önce lisansına bakın.
+
+- **Karar gerektirmeyenler:** Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause ve ISC.
+- **Karar gerekenler:** GPL, LGPL, AGPL, MPL ya da belirsiz lisans. Bunları proje sahibine sorun; eklenmeden önce `docs/LICENSES.md`ye yazılır.
+- **Listeyi yenileyin:** `python3 scripts/third-party-notices.py` komutu `THIRD_PARTY_NOTICES` dosyasını yeniden yazar; dosyayı değişiklikle birlikte gönderin. CI `--check` ile listenin güncel olduğunu ve karar gerektiren bir lisansın girmediğini denetler.
 
 ## Kod kuralları
 
