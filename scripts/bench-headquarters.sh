@@ -18,6 +18,7 @@
 #   DURATION     load duration (default 60s)
 #   RATE         sales per second per register (default 0.2)
 #   REGISTERS    registers per store (default 2)
+#   BATCH        the most waiting sales written in one transaction (default 1; ingest uses 100)
 #   PGTUNE_ARGS  these postgres flags instead of pgtune ("-c a=b ...")
 #   PGTUNE_MEM   this container memory (MB) instead of pgtune
 #   PGTUNE_SHM   this /dev/shm size (MB) with PGTUNE_ARGS (default 64)
@@ -79,7 +80,7 @@ base="$out/$label-$n"
 ) &
 sampler=$!
 "$out/headquartersbench.exe" -dsn "postgres://abarow:bench@127.0.0.1:$port/abarow?sslmode=disable" \
-	-stores "$n" -registers-per-store "$per" -duration "${DURATION:-60s}" -rate "${RATE:-0.2}" >"$base.json"
+	-stores "$n" -registers-per-store "$per" -duration "${DURATION:-60s}" -rate "${RATE:-0.2}" -batch "${BATCH:-1}" >"$base.json"
 kill "$sampler" 2>/dev/null || true
 # The memory peak (cgroup) and whether it was killed for lack of memory.
 {

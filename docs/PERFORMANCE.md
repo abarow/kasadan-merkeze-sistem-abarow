@@ -4,6 +4,54 @@
 
 > **Yük oranı (13.11.2026):** Merkez ölçümlerinde 13.11.2026'dan önce kasa başına saniyede 0,2 satış (50 mağazada 20 satış/sn) kullanıldı. Bir satış en az 30 saniye sürdüğü için bu oran gerçek üst sınırın yaklaşık 6 katıdır; bu tablolar **stres testi**dir. Gerçekçi yük kasa başına 20 saniyede 1 satıştır (0,05/sn, 50 mağazada 5 satış/sn); sonuçlar "Gerçekçi yük" bölümündedir.
 
+## Yenileme: gerçekçi yükte veritabanı ölçümü (14.11.2026)
+
+> Geliştirici bilgisayarı (Docker Desktop, Windows 11), tek çalıştırma. Sayılar sıralama ve oran için güvenilirdir; mağaza donanımının değerini vermez, garanti değildir.
+
+Kasa ve mağaza sayısına göre operasyon ve merkez veritabanı tabloları (aşağıda, 05–08.11.2026) stres yüküyle ölçülmüştü: kasa başına saniyede 0,5 (operasyon) ve 0,2 (merkez) satış. O günden beri kapsayıcı rapor anahtarları, paralel sorgu, aylık raporun tek sorgusu, merkezde toplu kayıt ve bugünkü ayarlar geldi. Bu ölçüm iki ölçeği bugünkü kodla ve **gerçekçi yükle** yeniliyor.
+
+**Yöntem:**
+
+- **Araçlar:** `scripts/bench-store.sh` ve `scripts/bench-headquarters.sh`. Veri ve sorgular aşağıdaki bölümlerdekiyle aynı: kasa başına 30 gün × 300 satış.
+- **Yük:** kasa başına 20 saniyede 1 satış (`RATE=0.05`), 120 sn.
+- **Ayarlar:** `pgtune`'un kasa ve mağaza sayısına göre verdiği ayarlar ve bellek sınırı.
+- **Merkezde kayıt:** ingest gibi toplu yazıyor (`BATCH=100`; betiğe bugün eklendi).
+- **Ekran sayısı:** operasyonda kasa/10 + 1, merkezde mağaza/5 + 1. Merkezin 50 mağazada 11 ekranı, gerçekte açık olan 1–3 ekrandan fazladır (aşağıda "Gerçekçi yük").
+- **Ölçüm yeri:** araç ana makinede çalışıp veritabanına port üzerinden bağlanıyor. Merkezin "Gerçekçi yük" ölçümü (13.11.2026) ise Docker ağı içinden yapılmıştı.
+- **Hata:** iki seride de **0**.
+
+### Operasyon: kasa sayısına göre
+
+| Kasa | Satış | Veritabanı | Kasa durumu p50 / p95 | Günlük özet p50 / p95 | Aylık özet p50 / p95 | Ürün sıralaması p50 / p95 | Kayıt işleme p50 / p95 (satış) | DB CPU ort. | DB bellek en çok / sınır | Bağlantı en çok |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 9.000 | 29 MB | 11 / 13 ms | 12 / 15 ms | 56 / 64 ms | 55 / 66 ms | 17,6 / 20,0 ms (4) | %2 | 74 / 256 MiB | 3 |
+| 2 | 18.000 | 47 MB | 16 / 21 ms | 15 / 17 ms | 95 / 98 ms | 90 / 97 ms | 13,8 / 15,6 ms (8) | %6 | 110 / 256 MiB | 3 |
+| 5 | 45.000 | 102 MB | 30 / 32 ms | 24 / 26 ms | 205 / 216 ms | 184 / 199 ms | 14,3 / 16,4 ms (31) | %14 | 149 / 320 MiB | 3 |
+| 10 | 90.000 | 193 MB | 59 / 75 ms | 40 / 44 ms | 364 / 402 ms | 348 / 381 ms | 13,9 / 19,7 ms (62) | %33 | 261 / 576 MiB | 5 |
+| 50 | 450.000 | 944 MB | 306 / 412 ms | 179 / 251 ms | 2,26 / 3,70 sn | 1,79 / 2,79 sn | 18,2 / 40,6 ms (301) | %278 | 912 / 1024 MiB | 9 |
+
+Kayıt kuyruğu her ölçümde en çok 1 satış. Tek işçinin kuyruksuz kapasitesi saniyede 84–85 satış, 50 kasada 66 satış. 50 kasada bu, gelen yükün (2,5 satış/sn) 26 katı.
+
+### Merkez: mağaza sayısına göre (mağaza başına 2 kasa)
+
+| Mağaza | Satış | Veritabanı | Mağaza durumu p50 / p95 | Günlük özet (hepsi) p50 / p95 | Bir mağazanın günlüğü p50 / p95 | Aylık özet p50 / p95 | Ürün sıralaması p50 / p95 | Kayıt işleme p50 / p95 (satış) | DB CPU ort. | DB bellek en çok / sınır | Bağlantı en çok |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | 18.000 | 55 MB | 3 / 4 ms | 15 / 16 ms | 15 / 16 ms | 88 / 94 ms | 90 / 93 ms | 19,2 / 33,7 ms (11) | %4 | 118 / 256 MiB | 3 |
+| 2 | 36.000 | 98 MB | 3 / 3 ms | 21 / 27 ms | 16 / 19 ms | 157 / 169 ms | 152 / 155 ms | 18,3 / 24,9 ms (27) | %10 | 141 / 256 MiB | 4 |
+| 5 | 90.000 | 230 MB | 3 / 4 ms | 36 / 42 ms | 16 / 20 ms | 385 / 401 ms | 347 / 468 ms | 18,1 / 26,6 ms (72) | %21 | 258 / 576 MiB | 5 |
+| 10 | 180.000 | 452 MB | 4 / 16 ms | 81 / 104 ms | 17 / 21 ms | 723 / 891 ms | 680 / 745 ms | 21,5 / 40,5 ms (134) | %45 | 475 / 896 MiB | 6 |
+| 50 | 900.000 | 2,28 GB | 24 / 807 ms | 0,56 / 1,30 sn | 54 / 1322 ms | 6,92 / 9,53 sn | 6,94 / 9,77 sn | 25,8 / 55,8 ms (619) | %285 | 2302 / 2560 MiB | 13 |
+
+Kayıt kuyruğu en çok 2 satış. Kapasite ölçümü burada kaba: 100'lük gruplarla yazınca ölçüm 100'ün katlarıyla sayıyor ve ana makineden port üzerinden 5 saniyede 5 grup sığdı. Bu yüzden her ölçekte "saniyede 100" çıktı. Docker ağı içinden ölçülen kapasite saniyede 260 satıştı (12.11.2026).
+
+### Bulgular
+
+- **Kayıt işleme geride kalmıyor:** iki katmanda da kuyruk 1–2 satışta kalıyor. Kayıt gecikmesi p95 en çok 56 ms.
+- **Operasyonda raporlar hızlı:** 10 kasaya kadar her ekran 0,4 sn'nin altında. 50 kasada aylık özet 2,3 sn, ürün sıralaması 1,8 sn. Eski stres tablosunda bunlar 7,5 ve 8,5 sn'ydi; ancak hem yük (yazma 10 kat az) hem kod değiştiği için fark tek bir nedene bağlanamaz.
+- **Merkezde 50 mağazada aylık rapor 6,9 sn:** bu, 13.11.2026'daki gerçekçi yük ölçümüyle aynı (11 ekranda 6,75–6,87 sn). Süreyi aynı anda rapor isteyen ekran sayısı belirliyor; 1–3 ekranda aylık rapor 1,8–2,5 sn ("Gerçekçi yük" bölümü). 10 mağazaya kadar aylık rapor 0,9 sn'nin altında.
+- **50'lik ölçeklerde p95 yükselmesi:** merkezde mağaza durumu ve bir mağazanın günlüğü p95'te 0,8–1,3 sn'ye çıkıyor. Bu istekler, aynı anda çalışan aylık raporların arkasında bekliyor (CPU ortalaması %285).
+- **Bellek sınırına yakın:** 50 kasada operasyon veritabanı bellek sınırının %89'unu (912 / 1024 MiB), 50 mağazada merkez %90'ını (2302 / 2560 MiB) kullandı. `docker stats`'ın bu değeri sayfa önbelleğinin bir kısmını da içeriyor; OOM ya da hata olmadı. Aylarca çalışmış veride ne olduğu hâlâ ölçülmedi ("Ölçülmeyenler").
+
 ## Güncelleme: HTTPS sonrası yeniden ölçüm (06.11.2026)
 
 Operasyon ekranı HTTPS'e geçti (karar 06.11.2026) ve veritabanı migration'ları tek dosyada birleşti; bu yüzden ölçümler yeniden alındı. Aşağıdaki değerler güncel olandır; sonraki bölümler 05.11.2026 ölçümüdür ve tarihsel kayıt olarak kalır. Aynı makine ve aynı yük üreteci; **Dependency-Track container'ları koşumdan önce durduruldu**. Ana makinede abarow dışı birkaç boşta container (ve boşta bir `abarow-pgtest`) çalışıyordu, ölçüme alınmadı.
@@ -209,6 +257,8 @@ Aynı yükün hafif hâlinde (okuyucu başına 2) tam satış p50 213 ms, p95 31
 
 ### Sonuç (son ayarlar, son indeksler)
 
+> Stres yükü (kasa başına 0,5 satış/sn), 05.11.2026. Bugünkü kodla gerçekçi yükte ölçüm: en üstteki "Yenileme" bölümü (14.11.2026).
+
 | Kasa | Satış | Veritabanı | Kasa durumu p50 | Günlük özet p50 | Aylık özet p50 | Ürün sıralaması p50 | Kayıt işleme p50 / p95 | Kuyruk | DB CPU ort. | DB bellek en çok |
 |---|---|---|---|---|---|---|---|---|---|---|
 | 1 | 9.000 | 26 MB | 9 ms | 10 ms | 107 ms | 89 ms | 14 ms / 20 ms | 1 | %7 | 72 MiB |
@@ -280,6 +330,8 @@ Değişen ayarlar yalnızca 10 kasadan sonra ya da bellek sınırında kendini g
 - Bağlantı havuzu sınırlıdır (reporting 8, ingest 4, catalog-admin 4, envanter 4); `max_connections` 30.
 
 ### Sonuç (son ayarlar; yenilendi 08.11.2026)
+
+> Stres yükü (kasa başına 0,2 satış/sn). Bugünkü kodla gerçekçi yükte ölçüm: en üstteki "Yenileme" bölümü (14.11.2026).
 
 > Bu tablo, `00002_report_index.sql` (kapsayıcı `sale_lines` anahtarı) ve `random_page_cost = 1,1` eklendikten sonra aynı yöntemle yeniden ölçüldü. Veri hâlâ 30 günlüktür; aylık pencere tablonun tamamını kapsar (bu yüzden aylık rakamlar indeksten kazanç görmez, aşağıdaki nota bakın).
 
