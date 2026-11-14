@@ -64,6 +64,7 @@ code { background: color-mix(in srgb, var(--fg) 8%, transparent); padding: .08em
   border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px 12px; cursor: pointer;
 }
 .btn:hover { border-color: var(--fg); }
+a.btn { text-decoration: none; display: inline-block; white-space: nowrap; }
 .btn[aria-pressed="true"] { background: color-mix(in srgb, var(--bad) 14%, var(--card)); border-color: var(--bad); }
 
 /* sections */
@@ -195,6 +196,7 @@ footer { margin-top: 64px; padding: 24px 0 40px; border-top: 1px solid var(--lin
       <a href="#kesinti">Bağlantı kesilince</a>
       <a href="#kaynak">Kaynak</a>
     </nav>
+    <a class="btn" href="https://github.com/abarow/abarow" rel="noopener">GitHub</a>
     <button class="btn" id="theme" type="button" aria-label="Temayı değiştir">Tema</button>
   </div>
 </header>
