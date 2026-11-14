@@ -525,8 +525,9 @@ install -o "$user" -g "$user" -m 0644 "$quadlet/backup/abarow-backup.timer" "$ho
 oidc_dropin headquarters-install.sh "$units_dir/abarow-reporting.container.d/oidc.conf" abarow-headquarters-oidc-secret "$login" "$oidc_issuer" "$oidc_client" "https://$domain"
 # The database settings are computed from the number of connected stores
 # (reporting pgtune, pkg/pgtune.ForHeadquarters): rewritten when a store is added
-# or removed; if the settings changed the database is restarted (shared_buffers
-# and max_connections do not change without a restart). The values in the Quadlet
+# or removed; if a setting that needs a restart changed (shared_buffers,
+# max_connections) the database is restarted, the others wait for its next
+# restart (tune_restart). The values in the Quadlet
 # file are the base for a single store.
 db_dropin="$units_dir/abarow-db.container.d"
 machines=1
@@ -546,7 +547,7 @@ db_memory=$(printf '%s\n' "$tune" | sed -n 's/^MEMORY_MB=//p')
 db_flags=$(printf '%s\n' "$tune" | sed -n 's/^ARGS=//p')
 db_shm=$(printf '%s\n' "$tune" | sed -n 's/^SHM_MB=//p')
 [ -n "$db_memory" ] && [ -n "$db_flags" ] || die "could not read the database settings: $tune"
-tune_before=$( (cat "$db_dropin/tune.conf" 2>/dev/null || true) | sha256sum)
+tune_before=$(cat "$db_dropin/tune.conf" 2>/dev/null || true)
 as mkdir -p "$db_dropin"
 # The single-machine database is started as "postgres -c ...", Patroni's image takes the
 # "-c ..." list alone (on three machines it is used when the cluster is created; later
@@ -560,13 +561,18 @@ as tee "$db_dropin/tune.conf" >/dev/null <<EOF
 Exec=$db_exec
 PodmanArgs=--memory=${db_memory}m --shm-size=${db_shm:-64}m
 EOF
+tune_after=$(cat "$db_dropin/tune.conf" 2>/dev/null || true)
 tune_changed=false
-[ "$tune_before" = "$( (cat "$db_dropin/tune.conf" 2>/dev/null || true) | sha256sum)" ] || tune_changed=true
+[ "$tune_before" = "$tune_after" ] || tune_changed=true
 as systemctl --user daemon-reload
 if $tune_changed && [ -n "$cluster" ]; then
 	cluster_tune_apply "$db_flags"
 elif $tune_changed && as systemctl --user is-active --quiet abarow-db.service; then
-	as systemctl --user restart abarow-db.service || true
+	if [ "$(tune_restart abarow-db "$tune_before" "$tune_after")" = true ]; then
+		as systemctl --user restart abarow-db.service || true
+	else
+		say "The database's new settings need no restart; they take effect at its next restart (an update, a reboot)"
+	fi
 fi
 if [ "$dropins_before" != "$(dropin_digest)" ] && as systemctl --user is-active --quiet abarow-reporting.service; then
 	as systemctl --user restart abarow-reporting.service || true

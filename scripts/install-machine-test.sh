@@ -87,4 +87,36 @@ disk /dev/sda2 1 false # a virtual machine: its disk's flag is not trusted
 disk_warning false | grep -q . && fail "a warning for an SSD"
 disk_warning true | grep -qF "WARNING: the database is on a spinning disk" || fail "no warning for a spinning disk"
 
+echo "== restart only for the settings that need it"
+# The made-up database answers the pg_settings question like PostgreSQL 18 (tried on a real one):
+# the settings it knows that do not need a restart. basic_archive's setting is not in pg_settings
+# of a session. With db_down it does not answer.
+db_down=''
+as() {
+	local sql=${*: -1} n=0 name
+	[ "$1 $2 $3" = "podman exec abarow-store-db" ] && [ -z "$db_down" ] || return 125
+	for name in $(printf '%s\n' "$sql" | sed -n "s/.*name IN (\(.*\))$/\1/p" | tr -d "'" | tr ',' ' '); do
+		case $name in
+		max_wal_size | min_wal_size | work_mem | random_page_cost | effective_io_concurrency | maintenance_io_concurrency) n=$((n + 1)) ;;
+		esac
+	done
+	printf '%s\n' "$n"
+}
+tune() { printf '[Container]\nExec=postgres %s\nPodmanArgs=--memory=%sm --shm-size=64m\n' "$1" "$2"; }
+base="-c shared_buffers=256MB -c max_connections=20 -c random_page_cost=1.1 -c max_wal_size=480MB -c basic_archive.archive_directory=/var/lib/postgresql"
+restart() {
+	local got
+	got=$(tune_restart abarow-store-db "$(tune "$base" 1024)" "$(tune "$2" "${3:-1024}")")
+	[ "$got" = "$1" ] || fail "restart for $2 (${3:-1024} MB): $got, want $1"
+}
+restart false "$base"
+restart false "${base/480MB/496MB}" # a new register above the ceiling
+restart false "${base/random_page_cost=1.1/random_page_cost=4 -c effective_io_concurrency=2}" # a setting added
+restart true "${base/256MB/264MB}" # shared_buffers
+restart true "$base" 1088 # the container's memory
+restart true "${base/\/var\/lib\/postgresql/\/srv}" # not in pg_settings
+restart true "${base/ -c max_connections=20/}" # a setting removed (back to the default)
+db_down=1
+restart true "${base/480MB/496MB}" # the database does not answer
+
 echo "install-machine-test: OK"

@@ -45,7 +45,7 @@
   - `shared_buffers`, `max_connections`, `max_worker_processes`, `wal_buffers` ve `shared_preload_libraries` yeniden başlatma ister.
   - `work_mem`, `effective_cache_size`, `random_page_cost`, `effective_io_concurrency`, WAL boyutları ve `checkpoint_completion_target` yeniden yüklemeyle geçer.
 
-  Kurulum bugün ayar değişince veritabanını her durumda yeniden başlatıyor. Değişen ayarlar yalnız yeniden yükleme istiyorsa kesinti gereksiz (plana alınanlar 4).
+  Kurulum bugün ayar değişince veritabanını her durumda yeniden başlatıyor. Değişen ayarlar yalnız yeniden yükleme istiyorsa kesinti gereksiz (plana alınanlar 4; 14.11.2026'da yapıldı, yeniden yükleme yerine sonraki yeniden başlamayı bekleyerek).
 - **Parametre listesi:** listedekilerin hepsi `pgtune`'de var, şu ikisi dışında:
   - **`effective_io_concurrency`:** hiç verilmiyor.
   - **`random_page_cost = 1.1`:** her kurulumda SSD varsayıyor. Ucuz bir kasa kutusunda eMMC ya da dönen disk varsa bu değer yanlış (plana alınanlar 3).
@@ -86,6 +86,12 @@
      - **Üç makineli merkez:** ayarlar Patroni'de bütün küme için ortak. Makinelerin diskleri farklıysa son kurulan makinenin değeri geçerli olur.
      - **Test:** `pkg/pgtune` ve iki `pgtune` komutu için birim testleri; `scripts/install-machine-test.sh`.
 4. **Yeniden başlatmayı yalnız gerekince yapmak:** `store-add` ya da `store-remove` ayarları değiştirince kurulum yalnız yeniden başlatma isteyen bir ayar değiştiyse veritabanını yeniden başlatır. Diğer durumlarda ayarı yeniden yükler (`pg_reload_conf`). Kümede bunu zaten Patroni yapıyor (`restart --pending`).
+   - **Yapıldı, değişiklikle (14.11.2026):**
+     - **Yeniden yükleme işe yaramıyor:** ayarlar komut satırında (`-c`) ve yeniden yükleme komut satırı ayarlarını değiştirmez. Bu ayarlar `ALTER SYSTEM` ile de verilemez (yukarıda, Aşama 2). Yeniden başlatma istemeyen bir ayar bu yüzden veritabanının bir sonraki yeniden başlamasını (güncelleme ya da makinenin yeniden açılması) bekliyor. Kurulum bunu özette söylüyor.
+     - **Hangi ayarın yeniden başlatma istediği:** kurulum bunu çalışan veritabanına soruyor (`pg_settings.context = 'postmaster'`, `tune_restart`). Şu durumlarda veritabanı eskisi gibi yeniden başlatılıyor: container belleği değiştiyse, veritabanının tanımadığı bir ayar değiştiyse (ör. `basic_archive.archive_directory` oturumun `pg_settings`'inde yok) ya da veritabanı cevap vermiyorsa.
+     - **Ne kazandırıyor:** taramada (`pkg/pgtune`, 1000 kasaya ve mağazaya kadar) yalnız yeniden başlatma istemeyen ayarların değiştiği tek durum, `shared_buffers` tavanının üstünde `max_wal_size`'ın büyümesi. Bu, mağaza sunucusunda 28 kasadan, merkezde 62 mağazadan sonra her yeni kasa ya da mağaza demek; artık bunlar için veritabanı durmuyor. Altında her değişiklik `shared_buffers`'ı ya da belleği değiştirdiği için yeniden başlatma yine gerekiyor. Disk türünün değişmesi de yeniden başlatmasız.
+     - **Kapsam:** tek makineli mağaza sunucusu ve merkez. Kümede Patroni kendisi karar veriyor.
+     - **Test:** `scripts/install-machine-test.sh`; sorgu PostgreSQL 18'de gerçek `pgtune` çıktısıyla denendi (30 → 31 kasa yeniden başlatmasız, 5 → 6 kasa yeniden başlatmalı).
 5. **Haftalık bakım raporuna ekler:** ortalama süresi en uzun 10 sorgu, diskten en çok okuyan 10 sorgu, hiç kullanılmamış indeksler ve tam taramanın çok olduğu tablolar. Rapor yalnız okur, bir şey değiştirmez.
 
 ## Reddedilenler

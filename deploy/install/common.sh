@@ -663,3 +663,39 @@ disk_warning() {
 	[ "$1" = true ] || return 0
 	say "WARNING: the database is on a spinning disk (HDD); its settings follow it (random_page_cost 4, effective_io_concurrency 2), but reports and writes are much slower than on an SSD. An SSD is recommended (docs/HARDWARE.md)."
 }
+
+# tune_pairs <drop-in>: the "name=value" settings of the drop-in's Exec line, sorted.
+tune_pairs() {
+	printf '%s\n' "$1" | sed -n 's/^Exec=//p' | grep -o -- '-c [^ ]*' | sed 's/^-c //' | LC_ALL=C sort
+}
+
+# tune_restart <database-container> <old-drop-in> <new-drop-in>: prints true if the database
+# must be restarted for the new settings (the tune.conf drop-in's contents), false if not.
+#
+# The settings are on the command line (-c), which a reload does not change; but a setting
+# that does not need a restart can wait for the database's next restart (an update, a
+# reboot). Above the shared_buffers ceiling (pkg/pgtune) a new register or store changes
+# only max_wal_size, and the database is not stopped for that. Whether a setting needs a
+# restart is asked of the running database (pg_settings.context postmaster): a changed
+# memory limit, a setting the database does not know or a database that does not answer
+# mean a restart, as before.
+tune_restart() {
+	local db=$1 old=$2 new=$3 names list known
+	if [ "$(printf '%s\n' "$old" | grep '^PodmanArgs=' || true)" != "$(printf '%s\n' "$new" | grep '^PodmanArgs=' || true)" ]; then
+		printf true
+		return 0
+	fi
+	names=$(LC_ALL=C comm -3 <(tune_pairs "$old") <(tune_pairs "$new") | sed 's/^[[:space:]]*//; s/=.*//' | LC_ALL=C sort -u)
+	if [ -z "$names" ]; then
+		printf false
+		return 0
+	fi
+	if printf '%s\n' "$names" | grep -qvE '^[a-z_.]+$'; then
+		printf true
+		return 0
+	fi
+	# shellcheck disable=SC2086 # the names are checked above: letters, _ and .
+	list=$(printf "'%s'," $names)
+	known=$(as podman exec "$db" psql -U abarow -d abarow -XtAc "SELECT count(*) FROM pg_settings WHERE context <> 'postmaster' AND name IN (${list%,})" 2>/dev/null || true)
+	if [ "$known" = "$(printf '%s\n' "$names" | wc -l | tr -d ' ')" ]; then printf false; else printf true; fi
+}

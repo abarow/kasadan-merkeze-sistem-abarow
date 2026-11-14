@@ -502,9 +502,9 @@ fi
 # Corporate sign-in (OIDC): only report offers the screen sign-in.
 oidc_dropin store-install.sh "$report_dropin/oidc.conf" abarow-store-oidc-secret "$login" "$oidc_issuer" "$oidc_client" "$oidc_url"
 # The database settings are computed from the number of registers (report
-# pgtune, pkg/pgtune): rewritten when a register is added or removed; if the
-# settings changed the database is restarted (shared_buffers and max_connections
-# do not change without a restart). The values in the Quadlet file are the base for up to four registers.
+# pgtune, pkg/pgtune): rewritten when a register is added or removed; if a
+# setting that needs a restart changed (shared_buffers, max_connections) the
+# database is restarted, the others wait for its next restart (tune_restart). The values in the Quadlet file are the base for up to four registers.
 db_dropin="$home/.config/containers/systemd/abarow-store-db.container.d"
 # On a spinning disk the I/O settings follow it (disk_rotational).
 db_rotational=$(disk_rotational)
@@ -516,7 +516,7 @@ db_memory=$(printf '%s\n' "$tune" | sed -n 's/^MEMORY_MB=//p')
 db_flags=$(printf '%s\n' "$tune" | sed -n 's/^ARGS=//p')
 db_shm=$(printf '%s\n' "$tune" | sed -n 's/^SHM_MB=//p')
 [ -n "$db_memory" ] && [ -n "$db_flags" ] || die "could not read the database settings: $tune"
-tune_before=$( (cat "$db_dropin/tune.conf" 2>/dev/null || true) | sha256sum)
+tune_before=$(cat "$db_dropin/tune.conf" 2>/dev/null || true)
 as mkdir -p "$db_dropin"
 as tee "$db_dropin/tune.conf" >/dev/null <<EOF
 # written by store-install.sh: database settings according to the number of
@@ -525,11 +525,16 @@ as tee "$db_dropin/tune.conf" >/dev/null <<EOF
 Exec=postgres $db_flags
 PodmanArgs=--memory=${db_memory}m --shm-size=${db_shm:-64}m
 EOF
+tune_after=$(cat "$db_dropin/tune.conf" 2>/dev/null || true)
 tune_changed=false
-[ "$tune_before" = "$( (cat "$db_dropin/tune.conf" 2>/dev/null || true) | sha256sum)" ] || tune_changed=true
+[ "$tune_before" = "$tune_after" ] || tune_changed=true
 as systemctl --user daemon-reload
 if $tune_changed && as systemctl --user is-active --quiet abarow-store-db.service; then
-	as systemctl --user restart abarow-store-db.service || true
+	if [ "$(tune_restart abarow-store-db "$tune_before" "$tune_after")" = true ]; then
+		as systemctl --user restart abarow-store-db.service || true
+	else
+		say "The database's new settings need no restart; they take effect at its next restart (an update, a reboot)"
+	fi
 fi
 if [ "$before" != "$(sha256sum <"$auth/nats.conf")" ] || [ "$command" != install ] || [ "$dropins_before" != "$(dropin_digest)" ]; then
 	for unit in abarow-store abarow-report abarow-inventory abarow-store-catalog-admin; do
