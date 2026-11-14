@@ -10,7 +10,7 @@
 - **Kopya:** kasanın satışları ve gün ayrıntıları. Kasa, mağaza sunucusu satışı veritabanına işlediğini makbuzla doğrulayana kadar tek kopyadır. Makbuz gelmeden hiçbir şey silinmez.
 - **Teknik iz:** yayınlanmış olay kuyruğu satırları, eski makbuzlar ve merkezdeki ham olay içeriği.
 
-Her servis yalnızca kendi şemasını temizler. Temizlik servis açıldıktan 1 dakika sonra başlar, sonra her 24 saatte bir çalışır. Silme 1000 (kasa) ya da 5000 (mağaza, merkez) satırlık kısa adımlarla yapılır. Kasada servisin tek bağlantısı olduğu için bir satış en fazla bir adım kadar bekler.
+Her servis yalnızca kendi şemasını temizler. Temizlik her gün 03:00'te (`ABAROW_TZ`, varsayılan Türkiye saati) çalışır (14.11.2026): kasada servisin tek bağlantısını tuttuğu için satışın olmadığı saatte. `ABAROW_RETENTION_INTERVAL` verilirse eskisi gibi servis açıldıktan 1 dakika sonra başlar ve o aralıkla çalışır. Silme 1000 (kasa) ya da 5000 (mağaza, merkez) satırlık kısa adımlarla yapılır. Kasada servisin tek bağlantısı olduğu için bir satış en fazla bir adım kadar bekler.
 
 ## Ne, nerede, ne kadar
 
@@ -28,7 +28,8 @@ Süreler ortam değişkeniyle değişir. Değer `90d`, `36h`, `2d12h` biçiminde
 
 | Değişken | Varsayılan | Asgari |
 |---|---|---|
-| `ABAROW_RETENTION_INTERVAL` | 24h | 1 dakika |
+| `ABAROW_RETENTION_AT` | 03:00 | `SS:DD`; `ABAROW_RETENTION_INTERVAL` ile birlikte verilmez |
+| `ABAROW_RETENTION_INTERVAL` | (verilmez; turlar günlük) | 1 dakika |
 | `ABAROW_OUTBOX_KEEP` | 7d | 1 saat |
 | `ABAROW_REGISTER_KEEP` | 90d | 1 gün |
 | `ABAROW_RECEIPTS_KEEP` | 180d | Akış temizleyicisinin süresi (`ABAROW_CLEAN_MAX_AGE`, kasada 30, mağazada 90 gün) + 7 gün |

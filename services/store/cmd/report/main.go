@@ -336,7 +336,7 @@ func startRetention(ctx context.Context, reports *postgres.Store, log *slog.Logg
 	if err := keep.CheckReceipts(clean.MaxAge); err != nil {
 		return err
 	}
-	go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+	go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Next: keep.Daily(), Log: log, Jobs: []retention.Job{
 		{Name: "outbox", Keep: keep.Outbox, Clean: reports.PruneOutbox},
 		{Name: "receipts", Keep: keep.Receipts, Clean: reports.PruneReceipts},
 	}}.Run(ctx)

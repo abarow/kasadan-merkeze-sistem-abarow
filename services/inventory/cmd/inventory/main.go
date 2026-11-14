@@ -121,7 +121,7 @@ func main() {
 		work := leader.All(append(b.consumers(js, log),
 			// Movements are recorded even while NATS is down; they wait in the outbox.
 			outbox.NewRelay(b.store, b.publisher(js), time.Second, log).Run,
-			retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+			retention.Runner{Interval: keep.Interval, Delay: time.Minute, Next: keep.Daily(), Log: log, Jobs: []retention.Job{
 				{Name: "outbox", Keep: keep.Outbox, Clean: b.store.PruneOutbox},
 			}}.Run)...)
 		if b.headquarters {

@@ -182,7 +182,7 @@ func main() {
 			// Retention (docs/decisions/RETENTION.md): the details of old days go once the
 			// store server confirmed the shift events; without a store server nothing goes.
 			if receiptSource != "" {
-				go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+				go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Next: keep.Daily(), Log: log, Jobs: []retention.Job{
 					{Name: "outbox", Keep: keep.Outbox, Clean: store.PruneOutbox},
 					{Name: "day details", Keep: keep.Register, Clean: store.PruneDays},
 					{Name: "received receipts", Keep: keep.Receipts, Clean: store.PruneReceipts},

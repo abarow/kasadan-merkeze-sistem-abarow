@@ -144,7 +144,7 @@ func main() {
 		// confirmed with a receipt. Without a store server nothing is confirmed and nothing
 		// is removed: the register's copy is the only one.
 		if receiptSource != "" {
-			go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+			go retention.Runner{Interval: keep.Interval, Delay: time.Minute, Next: keep.Daily(), Log: log, Jobs: []retention.Job{
 				{Name: "outbox", Keep: keep.Outbox, Clean: store.PruneOutbox},
 				{Name: "sales", Keep: keep.Register, Clean: store.PruneSales},
 				{Name: "received receipts", Keep: keep.Receipts, Clean: store.PruneReceipts},

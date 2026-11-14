@@ -129,7 +129,7 @@ func main() {
 		}
 		work := leader.All(
 			outbox.NewRelay(db, pub, time.Second, log).Run,
-			retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+			retention.Runner{Interval: keep.Interval, Delay: time.Minute, Next: keep.Daily(), Log: log, Jobs: []retention.Job{
 				{Name: "outbox", Keep: keep.Outbox, Clean: db.PruneOutbox},
 			}}.Run,
 		)

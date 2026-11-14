@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"log/slog"
 	"time"
+	_ "time/tzdata" // the services' images (scratch) have no time zone data
 
 	"abarow.com/pkg/delivery"
 )
@@ -22,8 +23,16 @@ import (
 // The environment variables that set the durations. A duration is of the form "90d",
 // "36h", "2d12h" (delivery.ParseDuration).
 const (
-	// EnvInterval is the interval of the cleaning rounds (default 24 hours).
+	// EnvInterval is the interval of the cleaning rounds. If it is given the rounds run at that
+	// interval from the start; if not, every day at EnvAt.
 	EnvInterval = "ABAROW_RETENTION_INTERVAL"
+	// EnvAt is the time of day of the cleaning rounds, "HH:MM" in the time zone EnvZone
+	// (default 03:00): a round deletes in short steps but holds a service's connection while it
+	// runs (a register service has one), so it runs at night, not when the register sells.
+	EnvAt = "ABAROW_RETENTION_AT"
+	// EnvZone is the time zone of EnvAt (default Europe/Istanbul; the same variable as the
+	// reports' day).
+	EnvZone = "ABAROW_TZ"
 	// EnvOutboxKeep is how long a published outbox message is kept (default 7 days).
 	EnvOutboxKeep = "ABAROW_OUTBOX_KEEP"
 	// EnvReceiptsKeep is how long a given or received delivery receipt is kept
@@ -39,6 +48,9 @@ const (
 
 // Config is the durations of the cleaning.
 type Config struct {
+	// At is the time of day of the rounds ("HH:MM" in Zone); "" when they run by Interval.
+	At           string
+	Zone         string
 	Interval     time.Duration
 	Outbox       time.Duration
 	Receipts     time.Duration
@@ -48,6 +60,8 @@ type Config struct {
 
 // Defaults are the durations used when the environment gives none.
 var Defaults = Config{
+	At:           "03:00",
+	Zone:         "Europe/Istanbul",
 	Interval:     24 * time.Hour,
 	Outbox:       7 * 24 * time.Hour,
 	Receipts:     180 * 24 * time.Hour,
@@ -83,8 +97,49 @@ func ConfigFromEnv(getenv func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("%s: %q is too short; it must be at least %s", v.name, s, v.min)
 		}
 		*v.to = d
+		if v.name == EnvInterval {
+			c.At = ""
+		}
+	}
+	if at := getenv(EnvAt); at != "" {
+		if getenv(EnvInterval) != "" {
+			return Config{}, fmt.Errorf("give %s or %s, not both", EnvAt, EnvInterval)
+		}
+		c.At = at
+	}
+	if z := getenv(EnvZone); z != "" {
+		c.Zone = z
+	}
+	if c.At != "" {
+		if _, err := time.Parse("15:04", c.At); err != nil {
+			return Config{}, fmt.Errorf("%s: %q is invalid (example: 03:00)", EnvAt, c.At)
+		}
+		if _, err := time.LoadLocation(c.Zone); err != nil {
+			return Config{}, fmt.Errorf("%s: %q: %w", EnvZone, c.Zone, err)
+		}
 	}
 	return c, nil
+}
+
+// Daily gives the time of the next round after a moment when the rounds run every day at
+// At; nil when they run by Interval (Runner.Next).
+func (c Config) Daily() func(time.Time) time.Time {
+	if c.At == "" {
+		return nil
+	}
+	at, err1 := time.Parse("15:04", c.At)
+	loc, err2 := time.LoadLocation(c.Zone)
+	if err1 != nil || err2 != nil {
+		return nil // ConfigFromEnv refuses these
+	}
+	return func(now time.Time) time.Time {
+		n := now.In(loc)
+		next := time.Date(n.Year(), n.Month(), n.Day(), at.Hour(), at.Minute(), 0, 0, loc)
+		if !next.After(now) {
+			next = time.Date(n.Year(), n.Month(), n.Day()+1, at.Hour(), at.Minute(), 0, 0, loc)
+		}
+		return next
+	}
 }
 
 // CheckReceipts fails if the received receipts would be removed before the stream cleaner
@@ -113,22 +168,30 @@ type Job struct {
 // the register keeps its sales while an older event has no receipt). The reason is wrapped.
 var ErrSkipped = errors.New("skipped")
 
-// Runner runs the jobs at intervals.
+// Runner runs the jobs at intervals, or at the times Next gives.
 type Runner struct {
 	Interval time.Duration
 	// Delay is the wait before the first round (so that it does not slow the start).
 	Delay time.Duration
-	Jobs  []Job
-	Log   *slog.Logger
-	Now   func() time.Time
+	// Next, if not nil, gives the time of the next round after a moment (Config.Daily);
+	// Interval and Delay are not used then.
+	Next func(time.Time) time.Time
+	Jobs []Job
+	Log  *slog.Logger
+	Now  func() time.Time
 }
 
-// Run cleans after Delay and then at every Interval until ctx ends.
+// Run cleans after Delay and then at every Interval until ctx ends; with Next, at the times
+// it gives.
 func (r Runner) Run(ctx context.Context) {
 	if r.Now == nil {
 		r.Now = time.Now
 	}
 	wait := r.Delay
+	if r.Next != nil {
+		now := r.Now()
+		wait = r.Next(now).Sub(now)
+	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -137,6 +200,10 @@ func (r Runner) Run(ctx context.Context) {
 		}
 		r.Round(ctx)
 		wait = r.Interval
+		if r.Next != nil {
+			now := r.Now()
+			wait = r.Next(now).Sub(now)
+		}
 	}
 }
 

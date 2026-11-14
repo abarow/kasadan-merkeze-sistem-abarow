@@ -106,7 +106,7 @@ func main() {
 			func(ctx context.Context) { svc.PublishLinks(ctx, log) },
 			// Retention (docs/decisions/RETENTION.md): the sales ledger is never removed; the
 			// published receipts, the old given receipts and the raw event content are.
-			retention.Runner{Interval: keep.Interval, Delay: time.Minute, Log: log, Jobs: []retention.Job{
+			retention.Runner{Interval: keep.Interval, Delay: time.Minute, Next: keep.Daily(), Log: log, Jobs: []retention.Job{
 				{Name: "receipt outbox", Keep: keep.Outbox, Clean: db.PruneOutbox},
 				{Name: "given receipts", Keep: keep.Receipts, Clean: db.PruneReceipts},
 				{Name: "event content", Keep: keep.EventPayload, Clean: db.PruneEventPayloads},
