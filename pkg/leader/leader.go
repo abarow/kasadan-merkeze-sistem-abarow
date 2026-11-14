@@ -13,12 +13,19 @@
 // and stops its work. So the copy that takes the lock waits Grace before starting; Grace
 // must be longer than Check plus the time the work needs to stop. When the primary
 // changes the old copy's connections are cut too (HAProxy), so its writes cannot complete.
+//
+// A copy whose machine loses power or its network does not close its connection: the primary
+// would keep the session, and the lock, until TCP notices (about two hours on Linux). The lock
+// connection therefore sets idle_session_timeout (Idle): a working copy asks every Check, so
+// only a copy that stopped answering is idle that long, and PostgreSQL ends its session
+// (docs/REVIEW-2.md D9).
 package leader
 
 import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"fmt"
 	"hash/fnv"
 	"log/slog"
 	"sync"
@@ -49,6 +56,9 @@ type Leader struct {
 	Check time.Duration
 	// Grace is the wait after taking the lock before the work starts (default 10 s).
 	Grace time.Duration
+	// Idle is how long the database keeps the lock of a copy that stopped answering
+	// (default 5 × Check).
+	Idle time.Duration
 }
 
 func (l Leader) defaults() Leader {
@@ -60,6 +70,9 @@ func (l Leader) defaults() Leader {
 	}
 	if l.Grace <= 0 {
 		l.Grace = 10 * time.Second
+	}
+	if l.Idle <= 0 {
+		l.Idle = 5 * l.Check
 	}
 	if l.Log == nil {
 		l.Log = slog.Default()
@@ -105,6 +118,11 @@ func (l Leader) acquire(ctx context.Context) (*sql.Conn, error) {
 	var got bool
 	if err := conn.QueryRowContext(ctx, "SELECT pg_try_advisory_lock($1)", l.Key).Scan(&got); err != nil || !got {
 		conn.Close()
+		return nil, err
+	}
+	if _, err := conn.ExecContext(ctx, "SELECT set_config('idle_session_timeout', $1, false)",
+		fmt.Sprintf("%dms", l.Idle.Milliseconds())); err != nil {
+		l.release(conn)
 		return nil, err
 	}
 	return conn, nil

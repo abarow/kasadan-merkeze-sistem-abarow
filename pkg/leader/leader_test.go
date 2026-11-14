@@ -8,6 +8,8 @@ import (
 	"database/sql"
 	"io"
 	"log/slog"
+	"net"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -120,6 +122,112 @@ func TestOneCopyWorks(t *testing.T) {
 	if err := admin.QueryRow("SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'").Scan(&locks); err != nil || locks != 0 {
 		t.Errorf("locks left: %d, %v", locks, err)
 	}
+	if c.most != 1 {
+		t.Errorf("%d copies worked at the same time", c.most)
+	}
+}
+
+// silentProxy passes the connections to addr until silence. Then it passes nothing on, in either
+// direction, and closes nothing: as when the machine of a copy loses power or its network, the
+// database gets neither a FIN nor an RST. New connections are refused.
+type silentProxy struct {
+	ln    net.Listener
+	quiet atomic.Bool
+	mu    sync.Mutex
+	conns []net.Conn
+}
+
+func newSilentProxy(t *testing.T, addr string) *silentProxy {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := &silentProxy{ln: ln}
+	t.Cleanup(func() {
+		ln.Close()
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		for _, c := range p.conns {
+			c.Close()
+		}
+	})
+	go func() {
+		for {
+			down, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			up, err := net.Dial("tcp", addr)
+			if err != nil {
+				down.Close()
+				continue
+			}
+			p.mu.Lock()
+			p.conns = append(p.conns, down, up)
+			p.mu.Unlock()
+			go p.pass(down, up)
+			go p.pass(up, down)
+		}
+	}()
+	return p
+}
+
+func (p *silentProxy) pass(from, to net.Conn) {
+	buf := make([]byte, 32<<10)
+	for {
+		n, err := from.Read(buf)
+		if err != nil || p.quiet.Load() {
+			return
+		}
+		if _, err := to.Write(buf[:n]); err != nil {
+			return
+		}
+	}
+}
+
+func (p *silentProxy) silence() {
+	p.quiet.Store(true)
+	p.ln.Close()
+}
+
+// TestSilentCopy: the working copy's machine vanishes without closing its connections. The
+// database ends the silent session after Idle, so the other copy takes over; without Idle the
+// lock would stay for about two hours (docs/REVIEW-2.md D9). At no moment do both work.
+func TestSilentCopy(t *testing.T) {
+	dsn := pgdbtest.URL(t)
+	u, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := newSilentProxy(t, u.Host)
+	u.Host = proxy.ln.Addr().String()
+	c := &copies{working: map[string]bool{}}
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	run := func(name, dsn string) {
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		l := Leader{DB: open(t, dsn), Key: Key("test"), Name: name, Log: log,
+			Retry: 100 * time.Millisecond, Check: 100 * time.Millisecond, Grace: 400 * time.Millisecond, Idle: time.Second}
+		go func() {
+			defer close(done)
+			l.Run(ctx, c.work(name))
+		}()
+		t.Cleanup(func() { cancel(); <-done })
+	}
+	only := func(name string) func() bool {
+		return func() bool { w := c.who(); return len(w) == 1 && w[0] == name }
+	}
+
+	run("a", u.String())
+	waitFor(t, "a works", only("a"))
+	run("b", dsn)
+	time.Sleep(time.Second)
+	if !only("a")() {
+		t.Fatalf("working: %v; only a should", c.who())
+	}
+	proxy.silence()
+	waitFor(t, "b takes over from the silent a", only("b"))
 	if c.most != 1 {
 		t.Errorf("%d copies worked at the same time", c.most)
 	}

@@ -206,6 +206,10 @@ func TestForHeadquartersCluster(t *testing.T) {
 		if one := ForHeadquarters(n); s.SharedBuffersMB != one.SharedBuffersMB || s.WorkMemMB != one.WorkMemMB {
 			t.Errorf("%d registers: %+v differs from one machine %+v", n, s, one)
 		}
+		// The sessions of a vanished machine end (docs/REVIEW-2.md D9); one machine has none.
+		if !strings.Contains(s.Args(), "-c idle_session_timeout=15min") || strings.Contains(ForHeadquarters(n).Args(), "idle_session_timeout") {
+			t.Errorf("%d registers: idle_session_timeout: %s", n, s.Args())
+		}
 	}
 }
 

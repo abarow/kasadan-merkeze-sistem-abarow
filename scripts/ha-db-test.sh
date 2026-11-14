@@ -97,6 +97,7 @@ echo "== 0. TLS between the machines"
 [ "$(psql_proxy "SELECT count(*) FROM pg_stat_replication r JOIN pg_stat_ssl s USING (pid) WHERE s.ssl")" = 2 ] ||
 	{ echo "the replication is not TLS on both replicas" >&2; exit 1; }
 [ "$(psql_proxy "SHOW archive_mode")" = always ] || { echo "archive_mode is not always" >&2; exit 1; }
+[ "$(psql_proxy "SHOW idle_session_timeout")" = 15min ] || { echo "idle_session_timeout is not 15min (docs/REVIEW-2.md D9)" >&2; exit 1; }
 if docker run --rm --network "$network" -e PGPASSWORD="$db_password" -e PGCONNECT_TIMEOUT=5 postgres:18-alpine \
 	psql "host=ha-proxy-1 user=abarow dbname=abarow sslmode=disable" -tAc "SELECT 1" >/dev/null 2>&1; then
 	echo "a connection without TLS was accepted" >&2

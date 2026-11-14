@@ -127,6 +127,9 @@ type Settings struct {
 	// Statements loads pg_stat_statements and turns on track_io_timing (store server
 	// and headquarters).
 	Statements bool
+	// IdleSessionMin ends a session idle (outside a transaction) longer than this many
+	// minutes; 0 is never (idle_session_timeout).
+	IdleSessionMin int
 }
 
 // ForStore computes the settings of a store (store server) with registers registers.
@@ -176,6 +179,13 @@ func ForHeadquarters(registers int) Settings {
 	})
 }
 
+// ClusterIdleSessionMin is idle_session_timeout at headquarters on several machines. The
+// connections of a machine that lost power or its network are not closed; the primary would
+// keep them in max_connections for about two hours, until TCP notices (docs/REVIEW-2.md D9).
+// The pools close a connection idle for 5 minutes themselves (pkg/pgpool), so a live one is
+// not cut; Patroni asks every 10 seconds.
+const ClusterIdleSessionMin = 15
+
 // PatroniConnections are the connections Patroni keeps to its own database on every machine
 // (the heartbeat and the REST API).
 const PatroniConnections = 2
@@ -189,11 +199,13 @@ func ForHeadquartersCluster(registers, machines int) Settings {
 	if machines <= 1 {
 		return ForHeadquarters(registers)
 	}
-	return compute(max(registers, 0), profile{
+	s := compute(max(registers, 0), profile{
 		maxShared: MaxHeadquartersSharedBuffersMB, pool: HeadquartersPoolConnections * machines,
 		maxConns:       HeadquartersMaxConnections + HeadquartersPoolConnections*(machines-1) + PatroniConnections,
 		maxMaintenance: 128, bigWorkMem: 32,
 	})
+	s.IdleSessionMin = ClusterIdleSessionMin
+	return s
 }
 
 // profile holds the constants where ForStore and ForHeadquarters diverge.
@@ -312,6 +324,12 @@ func (s Settings) Flags() []string {
 			{"pg_stat_statements.max", "1000"},
 			{"track_io_timing", "on"},
 		}...)
+	}
+	if s.IdleSessionMin > 0 {
+		kv = append(kv, struct {
+			k string
+			v string
+		}{"idle_session_timeout", fmt.Sprintf("%dmin", s.IdleSessionMin)})
 	}
 	out := make([]string, 0, 2*len(kv))
 	for _, e := range kv {
