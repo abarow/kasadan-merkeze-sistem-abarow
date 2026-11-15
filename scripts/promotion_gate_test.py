@@ -19,7 +19,7 @@ gate = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gate)
 
 SHA = "1dcd54d080f2d15d1c89f3d9c016d8c214721aa9"
-REPO = "abarow/abarow"
+REPO = "abarow/kasadan-merkeze-sistem-abarow"
 AMD, ARM = "sha256:" + "a" * 64, "sha256:" + "b" * 64
 ATT_AMD, ATT_ARM = "sha256:" + "c" * 64, "sha256:" + "d" * 64
 
@@ -61,7 +61,7 @@ def sbom(platforms=("linux/amd64", "linux/arm64"), packages=15):
     return {p: {"SPDX": {"spdxVersion": "SPDX-2.3", "packages": [{"name": f"p{i}"} for i in range(packages)]}} for p in platforms}
 
 
-def prov(platforms=("linux/amd64", "linux/arm64"), rev=SHA, source="https://github.com/abarow/abarow.git"):
+def prov(platforms=("linux/amd64", "linux/arm64"), rev=SHA, source="https://github.com/abarow/kasadan-merkeze-sistem-abarow.git"):
     args = {"vcs:revision": rev, "vcs:source": source} if rev else {}
     doc = {"buildDefinition": {"externalParameters": {"request": {"root": {"request": {"args": args}}}}}, "runDetails": {}}
     return {p: {"SLSA": doc} for p in platforms}
@@ -171,7 +171,7 @@ class Attestations(unittest.TestCase):
 
     def test_revision_from_label_only(self):
         # In real GitHub builds vcs:revision may be missing; the label from release.yml is enough.
-        def labeled(rev, src="https://github.com/abarow/abarow"):
+        def labeled(rev, src="https://github.com/abarow/kasadan-merkeze-sistem-abarow"):
             doc = {"buildDefinition": {"externalParameters": {"request": {"args": {
                 "label:org.opencontainers.image.revision": rev, "label:org.opencontainers.image.source": src}}}}}
             return {p: {"SLSA": doc} for p in ("linux/amd64", "linux/arm64")}
@@ -185,7 +185,7 @@ class Attestations(unittest.TestCase):
 
     def test_provenance_v02_layout(self):
         # SLSA v0.2 keeps the source information under invocation.parameters; the search does not depend on the layout.
-        v02 = {"SLSA": {"buildType": "x", "invocation": {"parameters": {"args": {"vcs:revision": SHA, "vcs:source": "https://github.com/abarow/abarow.git"}}}}}
+        v02 = {"SLSA": {"buildType": "x", "invocation": {"parameters": {"args": {"vcs:revision": SHA, "vcs:source": "https://github.com/abarow/kasadan-merkeze-sistem-abarow.git"}}}}}
         self.assertEqual(self.check(pv={p: v02 for p in ("linux/amd64", "linux/arm64")}), [])
 
 

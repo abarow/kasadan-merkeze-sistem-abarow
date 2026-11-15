@@ -4,5 +4,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Güvenlik açığı bildirimi
-    url: https://github.com/abarow/abarow/security/advisories/new
+    url: https://github.com/abarow/kasadan-merkeze-sistem-abarow/security/advisories/new
     about: Güvenlik açıklarını herkese açık issue olarak değil, buradan özel olarak bildirin.
