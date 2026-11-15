@@ -983,7 +983,7 @@ pointofsale/
 └── docs/
 ```
 
-Depo şimdilik yerel git (`main` dalı) üzerinde; ara ara GitHub'daki özel (private) depoya ([abarow/abarow](https://github.com/abarow/abarow)) gönderilir. Açık kaynak olarak yayınlanana kadar private kalır.
+Depo şimdilik yerel git (`main` dalı) üzerinde; ara ara GitHub'daki özel (private) depoya ([abarow/kasadan-merkeze-sistem-abarow](https://github.com/abarow/kasadan-merkeze-sistem-abarow)) gönderilir. Açık kaynak olarak yayınlanana kadar private kalır.
 
 Her Go modülü workspace'teki diğer modüllere `replace` ile bağlanır (ör. `replace abarow.com/pkg => ../../pkg`). Neden: `go mod tidy` `go.work`'ü dikkate almaz ve depo private olduğu için `abarow.com` modülleri indirilemez. Kök dizin bir modül olmadığından `go test ./...` çalışmaz; tüm modüller `scripts/check.sh` ile kontrol edilir (gofmt, build, vet, test).
 
@@ -1002,7 +1002,7 @@ Ortak önek `com.abarow`. Go modül yolu ise projenin kendi alan adı `abarow.co
 
 - Go modül yolu `com.abarow/...` olamaz: `go get` ilk parçayı gerçek bir alan adı olarak çözmeye çalışır. `com.abarow` çözülemediği için dışarıdan kimse paketi indiremez.
 - Depo private olduğu sürece geliştirme makinelerinde `GOPRIVATE=abarow.com` ayarlanır; Go araçları paketi herkese açık proxy'de aramaz.
-- Depo herkese açılınca `abarow.com`'a küçük bir yönlendirme sayfası (`<meta name="go-import" content="abarow.com git https://github.com/abarow/abarow">`) konur; böylece `go get abarow.com/...` GitHub'daki depoyu bulur.
+- Depo herkese açılınca `abarow.com`'a küçük bir yönlendirme sayfası (`<meta name="go-import" content="abarow.com git https://github.com/abarow/kasadan-merkeze-sistem-abarow">`) konur; böylece `go get abarow.com/...` GitHub'daki depoyu bulur.
 - Alan adının süresi dolarsa import yolları kırılır; alan adı otomatik yenilemede tutulmalı.
 
 ## 18. Açık sorular ve kararlar
