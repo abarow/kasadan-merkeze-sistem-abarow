@@ -1,0 +1,16 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The weekly maintenance of the store server database (abarow-store-dbmaint.service), after the
+# base backup. If the machine is off at that time it runs when it comes on. It is not a
+# Quadlet unit: it is installed as a systemd user unit (~/.config/systemd/user).
+[Unit]
+Description=abarow store server weekly database maintenance
+
+[Timer]
+OnCalendar=Sun *-*-* 05:30:00
+RandomizedDelaySec=15m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

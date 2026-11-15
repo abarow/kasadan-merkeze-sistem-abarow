@@ -1,0 +1,17 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Copies the backups off the machine (backup-copy.sh). Installed only by store-install.sh
+# with --backup-target; abarow-store-backup.service starts it after every successful
+# backup (drop-in file: abarow-store-backup.container.d/copy.conf). It is not a Quadlet
+# unit: it is installed as a systemd user unit
+# (~/.config/systemd/user); the copying is done with the machine's rsync and ssh.
+[Unit]
+Description=abarow copies the store server backups off the machine
+
+[Service]
+Type=oneshot
+# ABAROW_BACKUP_TARGET: the target (store-install.sh writes it).
+EnvironmentFile=%h/abarow/store/backup-target.env
+ExecStart=%h/abarow/store/backup-copy.sh %h/abarow/store/backups
+TimeoutStartSec=3600

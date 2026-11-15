@@ -1,0 +1,374 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.staff.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// StaffService is the cashier, shift and end-of-day (X/Z) operations. The reports are
+// built from sales' events (sale.completed.v1, sale.voided.v1).
+// The fields follow the layout of GİB's YN ÖKC Z report; while a real ÖKC is connected
+// the official Z report is the ÖKC's own report, this report is a management summary.
+service StaffService {
+  // GetXReport is the instant report of the open period; it does not close the period.
+  rpc GetXReport(GetXReportRequest) returns (GetXReportResponse);
+  // CloseDay closes the open period, returns the Z report and opens a new period.
+  // A manager does it (or a cashier with manager approval).
+  rpc CloseDay(CloseDayRequest) returns (CloseDayResponse);
+
+  // ListCashiers returns the cashiers to be shown on the sign-in screen.
+  rpc ListCashiers(ListCashiersRequest) returns (ListCashiersResponse);
+  // Login verifies the cashier's PIN and opens a session. After successive wrong
+  // attempts the cashier is locked for a while.
+  rpc Login(LoginRequest) returns (LoginResponse);
+  // ValidateSession validates the session and returns the cashier.
+  rpc ValidateSession(ValidateSessionRequest) returns (ValidateSessionResponse);
+  // Logout closes the session.
+  rpc Logout(LogoutRequest) returns (LogoutResponse);
+  // Approve produces an approval key for a single operation with the manager's PIN
+  // while in a cashier session (valid for one minute, single use). The key
+  // is carried in the approval_token field of the relevant request; the approving manager
+  // counts as having done the operation. A wrong PIN counts toward the manager's attempt counter.
+  rpc Approve(ApproveRequest) returns (ApproveResponse);
+  // Authorize gives authority to a manager operation to be done in another service:
+  // if the cashier in the session is a manager or there is manager approval (approval_token)
+  // it returns the manager's identity, otherwise PERMISSION_DENIED. The approval is used
+  // olur.
+  rpc Authorize(AuthorizeRequest) returns (AuthorizeResponse);
+
+  // GetCurrentShift returns the open shift at the register; shift is empty if none.
+  rpc GetCurrentShift(GetCurrentShiftRequest) returns (GetCurrentShiftResponse);
+  // OpenShift opens the cashier's shift with the opening cash. Only one shift can be open
+  // at the register at a time (a single drawer); FAILED_PRECONDITION if one is open.
+  rpc OpenShift(OpenShiftRequest) returns (OpenShiftResponse);
+  // CloseShift closes the open shift with the counted cash and returns the shift report.
+  // The shift can be closed by its owner or a manager.
+  rpc CloseShift(CloseShiftRequest) returns (CloseShiftResponse);
+  // RecordCashMovement records cash put into or taken out of the register apart from sales
+  // in the open shift (small change, interim cash, expense). The shift's owner or a manager can put
+  // money in, only a manager can take money out. It is not a sale, it needs no
+  // fiscal document.
+  rpc RecordCashMovement(RecordCashMovementRequest) returns (RecordCashMovementResponse);
+  // OpenDrawer opens the drawer without a sale (device) and records it in the open shift;
+  // its count shows in the shift report. A manager opens it (in a cashier session
+  // with manager approval, ACTION_OPEN_DRAWER); a reason is mandatory.
+  rpc OpenDrawer(OpenDrawerRequest) returns (OpenDrawerResponse);
+  // ListShifts returns the closed shifts from newest to oldest. A manager sees all the
+  // shifts, a cashier only their own shifts.
+  rpc ListShifts(ListShiftsRequest) returns (ListShiftsResponse);
+  // GetShiftReport recomputes the closed shift's report from the records.
+  // The report of an open shift is not given (blind count).
+  rpc GetShiftReport(GetShiftReportRequest) returns (GetShiftReportResponse);
+
+  // PrintDayReport prints the X report of the open period (z_no 0) or the Z report of a
+  // closed period on the receipt printer (device). The report is a management
+  // summary; "MALİ DEĞERİ YOKTUR" is printed.
+  rpc PrintDayReport(PrintDayReportRequest) returns (PrintDayReportResponse);
+  // PrintShiftReport prints the report of a closed shift; the permission to view it is the same as
+  // GetShiftReport's.
+  rpc PrintShiftReport(PrintShiftReportRequest) returns (PrintShiftReportResponse);
+}
+
+// Role is the cashier's authority. The end of day (Z) belongs only to a manager.
+enum Role {
+  ROLE_UNSPECIFIED = 0;
+  ROLE_CASHIER = 1;
+  ROLE_MANAGER = 2;
+}
+
+// Cashier is a person who works at the register. The PIN is never returned.
+message Cashier {
+  string id = 1;
+  string name = 2;
+  Role role = 3;
+}
+
+message ListCashiersRequest {}
+
+message ListCashiersResponse {
+  repeated Cashier cashiers = 1;
+}
+
+message LoginRequest {
+  string cashier_id = 1;
+  string pin = 2;
+}
+
+message LoginResponse {
+  // The session key; the client carries it in every request. Only its digest is stored on the server.
+  string token = 1;
+  Cashier cashier = 2;
+  google.protobuf.Timestamp expires_at = 3;
+}
+
+message ValidateSessionRequest {
+  string token = 1;
+}
+
+message ValidateSessionResponse {
+  Cashier cashier = 1;
+}
+
+message LogoutRequest {
+  string token = 1;
+}
+
+message LogoutResponse {}
+
+// PaymentMethod is the payment method.
+enum PaymentMethod {
+  PAYMENT_METHOD_UNSPECIFIED = 0;
+  PAYMENT_METHOD_CASH = 1;
+  PAYMENT_METHOD_CARD = 2;
+  // Meal card or voucher (Multinet, Pluxee, Ticket, Setcard ...); a separate
+  // line in Z, no change is given.
+  PAYMENT_METHOD_MEAL_CARD = 3;
+}
+
+// TaxTotal is the VAT-included total and the VAT of the sales at a VAT rate.
+message TaxTotal {
+  int64 rate_bp = 1;
+  int64 gross_kurus = 2;
+  int64 tax_kurus = 3;
+}
+
+// PaymentTotal is the collection by payment method. In cash the change
+// is deducted (the amount that entered the drawer).
+message PaymentTotal {
+  PaymentMethod method = 1;
+  int64 amount_kurus = 2;
+}
+
+// DayReport is the report of a period (between two Z reports).
+message DayReport {
+  int64 z_no = 1;
+  google.protobuf.Timestamp opened_at = 2;
+  // Empty in the X report.
+  google.protobuf.Timestamp closed_at = 3;
+  int64 receipt_count = 4;
+  int64 first_receipt_no = 5;
+  int64 last_receipt_no = 6;
+  repeated TaxTotal taxes = 7;
+  int64 total_kurus = 8;
+  int64 tax_total_kurus = 9;
+  repeated PaymentTotal payments = 10;
+  // Sales cancelled before their payment was taken.
+  int64 voided_count = 11;
+  int64 voided_total_kurus = 12;
+}
+
+message GetXReportRequest {}
+
+message GetXReportResponse {
+  DayReport report = 1;
+}
+
+message CloseDayRequest {
+  // The cashier closing the day (in the session); approval_token is needed if not a manager.
+  string cashier_id = 1;
+  // Manager approval (Approve, ACTION_CLOSE_DAY).
+  string approval_token = 2;
+}
+
+message CloseDayResponse {
+  DayReport report = 1;
+}
+
+// Shift is a cashier's working period at the register. The sales are tied to the shift
+// by their cashier and time.
+message Shift {
+  int64 id = 1;
+  string cashier_id = 2;
+  string cashier_name = 3;
+  google.protobuf.Timestamp opened_at = 4;
+  // Empty in an open shift.
+  google.protobuf.Timestamp closed_at = 5;
+  // The cash in the drawer at the start of the shift.
+  int64 opening_cash_kurus = 6;
+  // The cash counted at closing; 0 in an open shift.
+  int64 counted_cash_kurus = 7;
+  // The one who closed the shift (the owner or a manager).
+  string closed_by = 8;
+}
+
+// ShiftReport is the report of the closed shift.
+message ShiftReport {
+  Shift shift = 1;
+  int64 receipt_count = 2;
+  int64 total_kurus = 3;
+  repeated PaymentTotal payments = 4;
+  int64 voided_count = 5;
+  int64 voided_total_kurus = 6;
+  // Opening cash + cash collection (change deducted) + put into the register -
+  // taken out of the register.
+  int64 expected_cash_kurus = 7;
+  // Counted - expected; minus is a cash shortage, plus a cash surplus.
+  int64 difference_kurus = 8;
+  // The cash put into and taken out of the register in the shift.
+  int64 cash_in_kurus = 9;
+  int64 cash_out_kurus = 10;
+  // The number of times the drawer was opened without a sale.
+  int64 drawer_opens = 11;
+}
+
+message GetCurrentShiftRequest {}
+
+message GetCurrentShiftResponse {
+  Shift shift = 1;
+}
+
+message OpenShiftRequest {
+  string cashier_id = 1;
+  int64 opening_cash_kurus = 2;
+}
+
+message OpenShiftResponse {
+  Shift shift = 1;
+}
+
+message CloseShiftRequest {
+  // The cashier closing the shift (in the session).
+  string cashier_id = 1;
+  int64 counted_cash_kurus = 2;
+  // Manager approval for someone else's shift (Approve, ACTION_CLOSE_SHIFT).
+  string approval_token = 3;
+}
+
+message CloseShiftResponse {
+  ShiftReport report = 1;
+}
+
+// CashMovementKind is the direction of the cash movement.
+enum CashMovementKind {
+  CASH_MOVEMENT_KIND_UNSPECIFIED = 0;
+  // Kasaya para koyma.
+  CASH_MOVEMENT_KIND_IN = 1;
+  // Kasadan para alma.
+  CASH_MOVEMENT_KIND_OUT = 2;
+}
+
+// CashMovement is cash that enters or leaves the drawer apart from sales in an open
+// nakittir.
+message CashMovement {
+  int64 id = 1;
+  int64 shift_id = 2;
+  CashMovementKind kind = 3;
+  // Always positive; kind determines the direction.
+  int64 amount_kurus = 4;
+  string note = 5;
+  // Kaydeden kasiyer.
+  string cashier_id = 6;
+  google.protobuf.Timestamp at = 7;
+}
+
+message RecordCashMovementRequest {
+  // Kaydeden kasiyer (oturumdaki).
+  string cashier_id = 1;
+  CashMovementKind kind = 2;
+  int64 amount_kurus = 3;
+  // Mandatory description (at most 200 characters).
+  string note = 4;
+  // Manager approval for taking money out of the register (Approve, ACTION_CASH_OUT).
+  string approval_token = 5;
+}
+
+message RecordCashMovementResponse {
+  CashMovement movement = 1;
+}
+
+message ListShiftsRequest {
+  // The requesting cashier (in the session).
+  string cashier_id = 1;
+  // At most how many shifts (1-100).
+  int32 limit = 2;
+}
+
+message ListShiftsResponse {
+  repeated Shift shifts = 1;
+}
+
+message GetShiftReportRequest {
+  // The requesting cashier (in the session).
+  string cashier_id = 1;
+  int64 shift_id = 2;
+}
+
+message GetShiftReportResponse {
+  ShiftReport report = 1;
+}
+
+// Action is an operation that requires manager authority.
+enum Action {
+  ACTION_UNSPECIFIED = 0;
+  // End of day (Z).
+  ACTION_CLOSE_DAY = 1;
+  // Kasadan para alma.
+  ACTION_CASH_OUT = 2;
+  // Closing someone else's shift.
+  ACTION_CLOSE_SHIFT = 3;
+  // Refunding the payment of a sale whose receipt could not be printed.
+  ACTION_REFUND_CHARGED = 4;
+  // Opening the drawer without a sale.
+  ACTION_OPEN_DRAWER = 5;
+  // Restaurant: cancelling an order sent to the kitchen.
+  ACTION_VOID_ORDER_LINE = 6;
+  // Restaurant: editing the floor and tables.
+  ACTION_EDIT_FLOOR = 7;
+  // Approving the installation of the new version at the register (the update agent).
+  ACTION_APPLY_UPDATE = 8;
+}
+
+message ApproveRequest {
+  // The cashier in the session who requests the approval.
+  string requested_by = 1;
+  string manager_id = 2;
+  string pin = 3;
+  Action action = 4;
+}
+
+message ApproveResponse {
+  // Single-use approval key; only its digest is stored on the server.
+  string approval_token = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+message PrintDayReportRequest {
+  // 0: the X report of the open period.
+  int64 z_no = 1;
+}
+
+message PrintDayReportResponse {}
+
+message PrintShiftReportRequest {
+  // The requesting cashier (in the session).
+  string cashier_id = 1;
+  int64 shift_id = 2;
+}
+
+message PrintShiftReportResponse {}
+
+message AuthorizeRequest {
+  // Oturumdaki kasiyer.
+  string cashier_id = 1;
+  // Manager approval (Approve); can be empty if the cashier in the session is a manager.
+  string approval_token = 2;
+  Action action = 3;
+}
+
+message AuthorizeResponse {
+  // The manager who gave the authority.
+  string manager_id = 1;
+}
+
+message OpenDrawerRequest {
+  // Oturumdaki kasiyer.
+  string cashier_id = 1;
+  // Manager approval (Approve, ACTION_OPEN_DRAWER); can be empty if the cashier is a manager.
+  string approval_token = 2;
+  // Mandatory reason (at most 200 characters).
+  string reason = 3;
+}
+
+message OpenDrawerResponse {}

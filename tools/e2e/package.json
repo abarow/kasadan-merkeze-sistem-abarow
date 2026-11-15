@@ -1,0 +1,17 @@
+{
+  "name": "@abarow/e2e",
+  "private": true,
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:standalone": "playwright test tests/standalone.spec.mjs",
+    "test:headquarters": "playwright test tests/headquarters.spec.mjs",
+    "test:restaurant": "playwright test tests/restaurant.spec.mjs",
+    "test:update": "playwright test tests/update.spec.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}

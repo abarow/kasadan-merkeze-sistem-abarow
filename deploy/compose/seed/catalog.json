@@ -1,0 +1,17 @@
+[
+  {"id": "ekmek", "name": "Ekmek 250 g", "unit": "piece", "unit_price_kurus": 1500, "tax_rate_bp": 100, "barcodes": ["8690000000012"], "quick_key": true},
+  {"id": "sut", "name": "Süt 1 L", "unit": "piece", "unit_price_kurus": 3990, "tax_rate_bp": 100, "barcodes": ["8690000000029"], "quick_key": true},
+  {"id": "yumurta", "name": "Yumurta 10'lu", "unit": "piece", "unit_price_kurus": 8950, "tax_rate_bp": 100, "barcodes": ["8690000000036"], "quick_key": true},
+  {"id": "beyaz-peynir", "name": "Beyaz Peynir 500 g", "unit": "piece", "unit_price_kurus": 18990, "tax_rate_bp": 100, "barcodes": ["8690000000043"], "quick_key": true},
+  {"id": "makarna", "name": "Makarna 500 g", "unit": "piece", "unit_price_kurus": 2490, "tax_rate_bp": 100, "barcodes": ["8690000000050"], "quick_key": true},
+  {"id": "pirinc", "name": "Pirinç 1 kg", "unit": "piece", "unit_price_kurus": 6990, "tax_rate_bp": 100, "barcodes": ["8690000000067"], "quick_key": false},
+  {"id": "cay", "name": "Çay 1 kg", "unit": "piece", "unit_price_kurus": 24990, "tax_rate_bp": 100, "barcodes": ["8690000000074"], "quick_key": false},
+  {"id": "su", "name": "Su 1,5 L", "unit": "piece", "unit_price_kurus": 1250, "tax_rate_bp": 100, "barcodes": ["8690000000081"], "quick_key": true},
+  {"id": "cikolata", "name": "Çikolata 80 g", "unit": "piece", "unit_price_kurus": 3750, "tax_rate_bp": 100, "barcodes": ["8690000000098"], "quick_key": true},
+  {"id": "deterjan", "name": "Çamaşır Deterjanı 4 kg", "unit": "piece", "unit_price_kurus": 34990, "tax_rate_bp": 2000, "barcodes": ["8690000000104"], "quick_key": true},
+  {"id": "sampuan", "name": "Şampuan 500 ml", "unit": "piece", "unit_price_kurus": 12990, "tax_rate_bp": 2000, "barcodes": ["8690000000111"], "quick_key": true},
+  {"id": "pil", "name": "Pil AA 4'lü", "unit": "piece", "unit_price_kurus": 9990, "tax_rate_bp": 2000, "barcodes": ["8690000000128"], "quick_key": false},
+  {"id": "televizyon", "name": "Televizyon 55 inç", "unit": "piece", "unit_price_kurus": 2499900, "tax_rate_bp": 2000, "barcodes": ["8690000000135"], "quick_key": false},
+  {"id": "domates", "name": "Domates", "unit": "kg", "unit_price_kurus": 3990, "tax_rate_bp": 100, "barcodes": ["2700001"], "quick_key": true},
+  {"id": "muz", "name": "Muz", "unit": "kg", "unit_price_kurus": 7990, "tax_rate_bp": 100, "barcodes": ["2700002"], "quick_key": true}
+]

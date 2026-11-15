@@ -1,0 +1,32 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow store server database backup (abarow-store-backup.timer starts it once a day)
+Wants=abarow-store-db.service
+After=abarow-store-db.service
+
+[Container]
+ContainerName=abarow-store-backup
+# pg_dump comes from the same major version as the database.
+Image=docker.io/library/postgres:18-alpine
+Network=abarow-store.network
+Entrypoint=/bin/sh
+Exec=/backup.sh
+Environment=PGHOST=abarow-store-db
+Environment=PGUSER=abarow
+Environment=PGDATABASE=abarow
+# Backups are kept for at least this many days; older ones are deleted.
+Environment=ABAROW_BACKUP_DAYS=14
+Secret=abarow-store-db-password,type=env,target=PGPASSWORD
+Volume=%h/abarow/store/backups:/backup:Z
+Volume=%h/abarow/store/backup.sh:/backup.sh:ro,Z
+
+[Service]
+# The container ends once the backup is taken; the service does not stay running.
+Type=oneshot
+TimeoutStartSec=3600
+
+[Quadlet]
+# The store server does not wait for the external network (see abarow-store.container).
+DefaultDependencies=false

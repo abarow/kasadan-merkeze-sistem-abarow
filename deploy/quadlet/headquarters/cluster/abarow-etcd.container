@@ -1,0 +1,47 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Headquarters on three machines (docs/decisions/HA-HEADQUARTERS.md): etcd keeps who the
+# primary database is; the decision needs the majority (two of three machines). The machine's
+# name and the addresses of the others are written by headquarters-install.sh --cluster
+# (abarow-etcd.container.d/node.conf). The machines talk to each other only with TLS, with the
+# certificate of headquarters' CA (the same as the machine's NATS).
+
+[Unit]
+Description=abarow headquarters etcd (decides the primary database; three machines)
+
+[Container]
+ContainerName=abarow-etcd
+Image=gcr.io/etcd-development/etcd:v3.6.14
+Network=abarow-headquarters.network
+Volume=abarow-etcd-data:/etcd-data
+Secret=abarow-headquarters-tls-ca,type=mount,target=/tls/ca.pem
+Secret=abarow-headquarters-tls-cert,type=mount,target=/tls/server.pem
+Secret=abarow-headquarters-tls-key,type=mount,target=/tls/server.key
+Environment=ETCD_DATA_DIR=/etcd-data
+Environment=ETCD_INITIAL_CLUSTER_STATE=new
+Environment=ETCD_INITIAL_CLUSTER_TOKEN=abarow-headquarters
+Environment=ETCD_LISTEN_CLIENT_URLS=https://0.0.0.0:2379
+Environment=ETCD_LISTEN_PEER_URLS=https://0.0.0.0:2380
+Environment=ETCD_CERT_FILE=/tls/server.pem
+Environment=ETCD_KEY_FILE=/tls/server.key
+Environment=ETCD_TRUSTED_CA_FILE=/tls/ca.pem
+Environment=ETCD_CLIENT_CERT_AUTH=true
+Environment=ETCD_PEER_CERT_FILE=/tls/server.pem
+Environment=ETCD_PEER_KEY_FILE=/tls/server.key
+Environment=ETCD_PEER_TRUSTED_CA_FILE=/tls/ca.pem
+Environment=ETCD_PEER_CLIENT_CERT_AUTH=true
+# Opened only to the other two headquarters machines (firewall).
+PublishPort=2379:2379
+PublishPort=2380:2380
+PodmanArgs=--memory=256m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

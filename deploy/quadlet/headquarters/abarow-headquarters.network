@@ -1,0 +1,11 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The network of the headquarters services. In a small business headquarters can run
+# on the same machine as the store server; their networks are separate.
+[Network]
+NetworkName=abarow-headquarters
+
+[Quadlet]
+# Headquarters does not wait for the external network (see the container units).
+DefaultDependencies=false

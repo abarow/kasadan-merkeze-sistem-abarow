@@ -1,0 +1,11 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The common network of the register services; containers reach each other by name
+# (like abarow-sales:9000). Only the gateway is opened to the outside (127.0.0.1).
+[Network]
+NetworkName=abarow
+
+[Quadlet]
+# The register does not wait for the external network (see the container units).
+DefaultDependencies=false

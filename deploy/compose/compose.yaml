@@ -1,0 +1,300 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The Docker simulation of a register: gateway + the market module (with its screen),
+# catalog, sales, payment (with the POS simulator), staff, the ÖKC simulator,
+# device (printer and drawer simulator) and NATS JetStream. The memory limits follow the targets of a 4 GB register.
+# From the repository root:
+#   docker compose -f deploy/compose/compose.yaml up --build -d
+#   http://localhost:8088 in the browser                         # register screen
+#   docker compose -f deploy/compose/compose.yaml run --rm register-sim
+#   docker compose -f deploy/compose/compose.yaml logs device   # printed receipts, drawer
+#   docker compose -f deploy/compose/compose.yaml down -v       # verilerle birlikte kapat
+# Store simulation with registers connected to the store server: scripts/store-sim.sh
+# (the register id and ports change with ABAROW_REGISTER_ID, ABAROW_*_PORT).
+# To imitate an ARM register: run with DOCKER_DEFAULT_PLATFORM=linux/arm64.
+name: abarow-register
+
+x-go-build: &go-build
+  context: ../..
+  dockerfile: deploy/container/go-service.Containerfile
+
+x-healthcheck: &healthcheck
+  test: ["CMD", "/service", "healthcheck"]
+  interval: 5s
+  timeout: 3s
+  retries: 12
+
+services:
+  # The screen's single entry point; Chromium in the kiosk connects here.
+  gateway:
+    build:
+      <<: *go-build
+      args: { MODULE: services/core/gateway, PKG: ./cmd/gateway }
+    image: ghcr.io/abarow/abarow-gateway:dev
+    environment:
+      ABAROW_SALES_ADDR: sales:9000
+      ABAROW_STAFF_ADDR: staff:9000
+      # What the barcode reader reads flows from device to the screen.
+      ABAROW_DEVICE_ADDR: device:9000
+      ABAROW_MODULE_URL: http://retail:8080
+      ABAROW_MODULE: retail
+      ABAROW_FISCAL_MODE: simulator
+      ABAROW_STORE_ID: store-1
+      ABAROW_REGISTER_ID: ${ABAROW_REGISTER_ID:-register-1}
+      GOMEMLIMIT: 24MiB
+    mem_limit: 32m
+    # Port 8080 could not be opened on the development machine; the port can be
+    # changed with ABAROW_UI_PORT.
+    ports: ["127.0.0.1:${ABAROW_UI_PORT:-8088}:8080"]
+    healthcheck: *healthcheck
+    depends_on:
+      retail: { condition: service_healthy }
+      staff: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Cashier sign-in, shift and end of day (X/Z); it listens to the sale events
+  # from NATS. Before Z and shift closing it asks sales' outbox.
+  staff:
+    build:
+      <<: *go-build
+      args: { MODULE: services/core/staff, PKG: ./cmd/staff }
+    image: ghcr.io/abarow/abarow-staff:dev
+    environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
+      ABAROW_NATS_URL: nats://nats:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      ABAROW_SALES_ADDR: sales:9000
+      ABAROW_DEVICE_ADDR: device:9000
+      ABAROW_TZ: Europe/Istanbul
+      ABAROW_STAFF_SEED: /seed/cashiers.json
+      # The identities in the shift events (the store server sees the cashier on the shift).
+      ABAROW_STORE_ID: store-1
+      ABAROW_REGISTER_ID: ${ABAROW_REGISTER_ID:-register-1}
+      # Delivery receipt cleanup (the service's default if empty: 30 days, 1 minute);
+      # the end-to-end tests shorten it.
+      ABAROW_CLEAN_MAX_AGE: ${ABAROW_CLEAN_MAX_AGE:-}
+      ABAROW_CLEAN_INTERVAL: ${ABAROW_CLEAN_INTERVAL:-}
+      GOMEMLIMIT: 48MiB
+    volumes:
+      - ./seed:/seed:ro
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: staff } }
+    mem_limit: 64m
+    healthcheck: *healthcheck
+    depends_on:
+      register-db: { condition: service_healthy }
+      nats: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Vertical module: market. When switching to a restaurant this service changes.
+  retail:
+    build:
+      context: ../..
+      dockerfile: deploy/container/module-ui.Containerfile
+      args: { MODULE: services/modules/retail, PKG: ./cmd/retail, UI: ui/apps/retail }
+    image: ghcr.io/abarow/abarow-retail:dev
+    environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
+      ABAROW_CATALOG_ADDR: catalog:9000
+      ABAROW_SALES_ADDR: sales:9000
+      # When a weighed product is selected the weight is read from device's scale.
+      ABAROW_DEVICE_ADDR: device:9000
+      GOMEMLIMIT: 48MiB
+    mem_limit: 64m
+    healthcheck: *healthcheck
+    depends_on:
+      register-db: { condition: service_healthy }
+      catalog: { condition: service_healthy }
+      sales: { condition: service_healthy }
+    restart: unless-stopped
+
+  catalog:
+    build:
+      <<: *go-build
+      args: { MODULE: services/core/catalog, PKG: ./cmd/catalog }
+    image: ghcr.io/abarow/abarow-catalog:dev
+    environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
+      ABAROW_CATALOG_SEED: /seed/catalog.json
+      GOMEMLIMIT: 48MiB
+    volumes: [./seed:/seed:ro]
+    depends_on:
+      register-db: { condition: service_healthy }
+    mem_limit: 64m
+    healthcheck: *healthcheck
+    restart: unless-stopped
+
+  sales:
+    build:
+      <<: *go-build
+      args: { MODULE: services/core/sales, PKG: ./cmd/sales }
+    image: ghcr.io/abarow/abarow-sales:dev
+    environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
+      ABAROW_STORE_ID: store-1
+      ABAROW_REGISTER_ID: ${ABAROW_REGISTER_ID:-register-1}
+      ABAROW_PAYMENT_ADDR: payment:9000
+      ABAROW_FISCAL_ADDR: fiscal:9000
+      ABAROW_NATS_URL: nats://nats:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      # Delivery receipt cleanup (the service's default if empty: 30 days, 1 minute);
+      # the end-to-end tests shorten it.
+      ABAROW_CLEAN_MAX_AGE: ${ABAROW_CLEAN_MAX_AGE:-}
+      ABAROW_CLEAN_INTERVAL: ${ABAROW_CLEAN_INTERVAL:-}
+      GOMEMLIMIT: 96MiB
+    volumes:
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: sales } }
+    mem_limit: 128m
+    ports: ["127.0.0.1:${ABAROW_SALES_PORT:-9000}:9000"]
+    healthcheck: *healthcheck
+    depends_on:
+      register-db: { condition: service_healthy }
+      payment: { condition: service_healthy }
+      fiscal: { condition: service_healthy }
+      nats: { condition: service_healthy }
+    restart: unless-stopped
+
+  # NATS identities: an NKey (private key) for each service and the server's
+  # permission configuration. It runs once at start, keeps the existing keys;
+  # the keys do not go into the repository, they stay in the nats-auth volume. Each service
+  # sees only its own key folder (subpath).
+  nats-auth:
+    build:
+      <<: *go-build
+      args: { MODULE: tools/natsauth, PKG: . }
+    image: abarow-natsauth:dev
+    user: "0:0"
+    # The server name is the register id; it is also the register's JetStream domain.
+    command: ["-out", "/auth", "-users", "sales,staff,register-sim", "-server-name", "${ABAROW_REGISTER_ID:-register-1}"]
+    volumes: [nats-auth:/auth]
+
+  # Event path. Sales do not depend on NATS: while NATS is down the events
+  # accumulate in sales' outbox and are published in order once NATS comes. A connection
+  # without an identity is not accepted; only sales can publish a sale event.
+  nats:
+    image: nats:2.12-alpine
+    command: ["-c", "/auth/nats.conf"]
+    environment:
+      GOMEMLIMIT: 48MiB
+    volumes: [nats-data:/data, nats-auth:/auth:ro]
+    mem_limit: 64m
+    ports: ["127.0.0.1:${ABAROW_NATS_PORT:-4222}:4222"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8222/healthz?js-enabled-only=true"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      nats-auth: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # The register's database: every service works in its own schema (pkg/pgdb). The
+  # values are pgtune.ForRegister; pkg/pgtune's test checks this file.
+  register-db:
+    image: postgres:18-alpine
+    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=12", "-c", "work_mem=2MB", "-c", "maintenance_work_mem=8MB", "-c", "wal_buffers=1MB", "-c", "effective_cache_size=96MB", "-c", "random_page_cost=1.1", "-c", "min_wal_size=32MB", "-c", "max_wal_size=128MB", "-c", "checkpoint_completion_target=0.9", "-c", "autovacuum_max_workers=2", "-c", "max_worker_processes=4", "-c", "max_parallel_workers=0", "-c", "max_parallel_workers_per_gather=0", "-c", "max_parallel_maintenance_workers=0", "-c", "log_min_duration_statement=1s", "-c", "log_lock_waits=on", "-c", "log_autovacuum_min_duration=10s", "-c", "idle_in_transaction_session_timeout=5min"]
+    environment:
+      POSTGRES_DB: abarow
+      POSTGRES_USER: abarow
+      POSTGRES_PASSWORD: ${ABAROW_DB_PASSWORD:-register-test}
+    volumes: [register-db-data:/var/lib/postgresql]
+    mem_limit: 192m
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "abarow", "-d", "abarow"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    restart: unless-stopped
+
+  payment:
+    build:
+      <<: *go-build
+      args: { MODULE: services/core/payment, PKG: ./cmd/payment }
+    image: ghcr.io/abarow/abarow-payment:dev
+    environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
+      # The POS simulator rejects card charges over 5,000 TL.
+      ABAROW_PAYMENT_SIM_LIMIT_KURUS: "500000"
+      GOMEMLIMIT: 48MiB
+    depends_on:
+      register-db: { condition: service_healthy }
+    mem_limit: 64m
+    healthcheck: *healthcheck
+    restart: unless-stopped
+
+  fiscal:
+    build:
+      <<: *go-build
+      args: { MODULE: services/fiscal/simulator, PKG: ./cmd/simulator }
+    image: ghcr.io/abarow/abarow-fiscal-simulator:dev
+    environment:
+      # The receipt is printed on device's printer; the width is taken from the printer.
+      ABAROW_DEVICE_ADDR: device:9000
+      ABAROW_FISCAL_HEADER: "ÖRNEK MARKET|Örnek Cad. No:1 İstanbul|Örnek VD 1234567890"
+      ABAROW_TZ: Europe/Istanbul
+      GOMEMLIMIT: 24MiB
+    mem_limit: 32m
+    healthcheck: *healthcheck
+    depends_on:
+      device: { condition: service_healthy }
+    restart: unless-stopped
+
+  # Peripherals: receipt printer and cash drawer. A simulator here;
+  # the printed documents and the drawer are seen with "docker compose logs device".
+  # To try with an ESC/POS printer on the network ABAROW_PRINTER:
+  # "escpos-tcp:192.168.1.50:9100" (code page ABAROW_PRINTER_CODEPAGE).
+  device:
+    build:
+      <<: *go-build
+      args: { MODULE: services/core/device, PKG: ./cmd/device }
+    image: ghcr.io/abarow/abarow-device:dev
+    environment:
+      ABAROW_PRINTER: simulator
+      # 58 mm paper: 32 columns, 80 mm paper: 48 columns.
+      ABAROW_PRINTER_COLUMNS: "32"
+      # Okutma testlerden taklit edilir (POST /api/device/scans).
+      ABAROW_SCANNER: simulator
+      # The scale's weight is set from the tests (POST /api/device/weight).
+      ABAROW_SCALE: simulator
+      GOMEMLIMIT: 24MiB
+    mem_limit: 32m
+    healthcheck: *healthcheck
+    restart: unless-stopped
+
+  register-sim:
+    build:
+      <<: *go-build
+      args: { MODULE: tools/register-sim, PKG: . }
+    image: abarow-register-sim:dev
+    environment:
+      ABAROW_SALES_ADDR: sales:9000
+      ABAROW_GATEWAY_URL: http://gateway:8080
+      ABAROW_NATS_URL: nats://nats:4222
+      ABAROW_NATS_NKEY: /run/nats/nats.nk
+      ABAROW_DEVICE_ADDR: device:9000
+      ABAROW_SIM_SKIP_EVENTS: ${ABAROW_SIM_SKIP_EVENTS:-}
+    volumes:
+      - { type: volume, source: nats-auth, target: /run/nats, read_only: true, volume: { subpath: register-sim } }
+    depends_on:
+      sales: { condition: service_healthy }
+      gateway: { condition: service_healthy }
+    profiles: [sim]
+
+  # Uses the register screen in a real browser and takes screenshots.
+  ui-smoke:
+    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    # The dependencies are installed inside the container; only the images are written to the repository.
+    working_dir: /tmp/ui-smoke
+    command: ["sh", "-c", "cp /work/smoke.mjs /work/package.json . && npm install --no-audit --no-fund --silent && mkdir -p /work/out && node smoke.mjs"]
+    environment:
+      ABAROW_UI_URL: http://gateway:8080
+      ABAROW_UI_OUT: /work/out
+    volumes: [../../tools/ui-smoke:/work]
+    depends_on:
+      gateway: { condition: service_healthy }
+    profiles: [ui-test]
+
+volumes:
+  nats-auth:
+  register-db-data:
+  nats-data:

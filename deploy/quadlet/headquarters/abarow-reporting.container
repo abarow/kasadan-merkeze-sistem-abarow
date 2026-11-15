@@ -1,0 +1,44 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow headquarters reports and screen
+# ingest creates the sales tables; it starts first. The screen's catalog
+# requests are forwarded to catalog management.
+Wants=abarow-db.service abarow-ingest.service abarow-catalog-admin.service
+After=abarow-db.service abarow-ingest.service abarow-catalog-admin.service
+
+[Container]
+ContainerName=abarow-reporting
+Image=ghcr.io/abarow/abarow-reporting:0.1
+Network=abarow-headquarters.network
+Environment=ABAROW_TZ=Europe/Istanbul
+Environment=ABAROW_CATALOG_ADMIN_URL=http://abarow-catalog-admin:8080
+# Stock module: the screen's stock requests are forwarded to the headquarters inventory.
+Environment=ABAROW_INVENTORY_URL=http://abarow-inventory-headquarters:8080
+Environment=GOMEMLIMIT=48MiB
+Secret=abarow-db-url,type=env,target=ABAROW_DATABASE_URL
+# By default the screen can only be opened from this machine: so that passwords do not go
+# onto the network over plain HTTP. Outside access is over HTTPS (headquarters-install.sh --domain
+# installs Caddy in front of it) or a VPN; to open it to the local network use headquarters-install.sh
+# --screen (bkz. README).
+PublishPort=127.0.0.1:9090:8080
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# Headquarters does not wait for the external network: the services connect to each other inside the machine,
+# the stores renew the connection themselves. On a machine where network-online.target
+# never comes the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

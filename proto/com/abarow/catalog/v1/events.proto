@@ -1,0 +1,85 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.catalog.v1;
+
+import "com/abarow/catalog/v1/catalog.proto";
+import "google/protobuf/timestamp.proto";
+
+// Headquarters' catalog is published to the ABAROW_CATALOG stream in NATS with one subject
+// per product (catalog.product.<product code>);
+// CloudEvents type com.abarow.catalog.product.v1'dir. Stream konu
+// only the last message per subject is kept: the stream is the current catalog itself.
+// The store servers and registers take the stream as a source; a newly installed register
+// gets the whole catalog without history. The content is the protobuf encoding of this message
+// (content-type: application/protobuf).
+
+// ProductState (catalog.product.v1) is the full state of a product at headquarters.
+// The register applies it as it is: whatever the earlier state, the latest state is valid.
+message ProductState {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  // product.unit_price_kurus is not used; the headquarters prices are in prices.
+  Product product = 3;
+  // The headquarters price schedule, sorted by effective moment. The register uses the last
+  // price in effect at the time of sale (if there is no store exception).
+  repeated PriceChange prices = 4;
+  // Withdrawn from sale: not searched at the register, not found when scanned.
+  bool discontinued = 5;
+  // The headquarters user who made the change (for audit).
+  string updated_by = 6;
+}
+
+// ProductImage (catalog.image.<product code>, CloudEvents type
+// com.abarow.catalog.image.v1) is the product's image. It is on a separate subject next to the
+// product in the catalog stream (the last state per subject): when the product's
+// details change the image is not sent again. If data is empty the image
+// has been removed. image_sha256 in the product message says which image is
+// valid; the register does not show an image whose digest does not match.
+message ProductImage {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  string product_id = 3;
+  string sha256 = 4;
+  string content_type = 5;
+  bytes data = 6;
+}
+
+// PriceChange is a record of the price schedule: the VAT-included price is valid
+// from the moment from (from the beginning if from is empty).
+message PriceChange {
+  int64 unit_price_kurus = 1;
+  google.protobuf.Timestamp from = 2;
+}
+
+// StorePrices is a product's price schedule at a store (the store exception):
+// the store manager gives it on the store server screen. It is used in two places:
+//   - config.price.<product code> (ABAROW_STORE_CONFIG, the last state per
+//     product): goes down to the registers; the register uses the store price in effect
+//     ahead of the headquarters price.
+//   - store.price.changed.v1 (the store stream): reported to headquarters;
+//     the products priced differently are reported at headquarters.
+message StorePrices {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  string store_id = 3;
+  string product_id = 4;
+  // The store price schedule, sorted by effective moment. If empty there is no
+  // exception at the store: the headquarters price is valid.
+  repeated StorePriceChange prices = 5;
+  // The one who made the change (the store server screen).
+  string updated_by = 6;
+  // The product's name (so that it is readable in the headquarters report).
+  string product_name = 7;
+}
+
+// StorePriceChange is a record of the store price schedule: the VAT-included
+// price valid from the moment from; if clear, from that moment the exception
+// is lifted and the headquarters price becomes valid.
+message StorePriceChange {
+  int64 unit_price_kurus = 1;
+  google.protobuf.Timestamp from = 2;
+  bool clear = 3;
+}

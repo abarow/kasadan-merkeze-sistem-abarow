@@ -1,0 +1,43 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow store server database (PostgreSQL)
+
+[Container]
+ContainerName=abarow-store-db
+# The major version is fixed (18): minor versions (18.x) are taken once an update is approved;
+# a major version upgrade needs a data migration and is done by hand.
+Image=docker.io/library/postgres:18-alpine
+Network=abarow-store.network
+Environment=POSTGRES_DB=abarow
+Environment=POSTGRES_USER=abarow
+Environment=POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+# The password is generated at random at install (store-install.sh); the database is not
+# opened to the outside, only the services on the store server network (report, inventory) connect.
+Secret=abarow-store-db-password,type=mount,target=/run/secrets/db-password
+Volume=abarow-store-db-data:/var/lib/postgresql
+HealthCmd=pg_isready -U abarow -d abarow
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+# The settings are computed from the number of registers (pkg/pgtune; `report pgtune`). These
+# are the base values for up to four registers; store-install.sh rewrites them
+# with a drop-in file (abarow-store-db.container.d/tune.conf) according to the real
+# number of registers. If the settings change, services/store/cmd/report/pgtune_test.go checks this file.
+Exec=postgres -c shared_buffers=64MB -c max_connections=20 -c work_mem=4MB -c maintenance_work_mem=16MB -c wal_buffers=2MB -c effective_cache_size=112MB -c random_page_cost=1.1 -c min_wal_size=32MB -c max_wal_size=256MB -c checkpoint_completion_target=0.9 -c autovacuum_max_workers=2 -c max_worker_processes=4 -c max_parallel_workers=0 -c max_parallel_workers_per_gather=0 -c max_parallel_maintenance_workers=0 -c archive_mode=on -c archive_library=basic_archive -c basic_archive.archive_directory=/var/lib/postgresql -c archive_timeout=15min -c log_min_duration_statement=1s -c log_lock_waits=on -c log_autovacuum_min_duration=10s -c idle_in_transaction_session_timeout=5min -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.max=1000 -c track_io_timing=on
+PodmanArgs=--memory=256m
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+# At shutdown PostgreSQL is given time to flush what it wrote to disk.
+TimeoutStopSec=120
+
+[Quadlet]
+# The store server does not wait for the external network (see abarow-store.container).
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

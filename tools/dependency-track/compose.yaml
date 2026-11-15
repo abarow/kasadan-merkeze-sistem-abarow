@@ -1,0 +1,31 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# OWASP Dependency-Track: continuous scanning of the dependencies (SBOM) against
+# known vulnerabilities. Only for the development machine; the ports are bound to the local
+# interface. Setup, settings and scanning: scripts/dt-scan.sh
+name: abarow-dt
+
+services:
+  apiserver:
+    image: dependencytrack/apiserver:4.14.6
+    environment:
+      # Embedded H2 database: enough for a single-use scan environment.
+      EXTRA_JAVA_OPTIONS: "-Xmx3g"
+      ALPINE_CORS_ENABLED: "true"
+      ALPINE_CORS_ALLOW_ORIGIN: "http://localhost:${ABAROW_DT_UI_PORT:-8180}"
+    volumes: [dt-data:/data]
+    ports: ["127.0.0.1:${ABAROW_DT_API_PORT:-8181}:8080"]
+    mem_limit: 4500m
+    restart: unless-stopped
+
+  frontend:
+    image: dependencytrack/frontend:4.14.6
+    environment:
+      API_BASE_URL: "http://localhost:${ABAROW_DT_API_PORT:-8181}"
+    ports: ["127.0.0.1:${ABAROW_DT_UI_PORT:-8180}:8080"]
+    depends_on: [apiserver]
+    restart: unless-stopped
+
+volumes:
+  dt-data:

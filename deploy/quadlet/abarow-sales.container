@@ -1,0 +1,52 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow sales
+# Wants (not Requires): while the dependency is updated/restarted this
+# service does not stop, it renews the connection itself. After + Notify=healthy makes the start
+# wait for the dependency to be healthy.
+Wants=abarow-register-db.service
+After=abarow-register-db.service
+Wants=abarow-payment.service
+After=abarow-payment.service
+Wants=abarow-fiscal.service
+After=abarow-fiscal.service
+Wants=abarow-nats.service
+After=abarow-nats.service
+
+[Container]
+ContainerName=abarow-sales
+Image=ghcr.io/abarow/abarow-sales:0.1
+# Every service is updated on its own, but not by itself: a new release
+# is applied once approved on the screen (docs/UPDATE.md).
+Network=abarow.network
+Environment=ABAROW_STORE_ID=store-1
+Environment=ABAROW_REGISTER_ID=register-1
+Environment=ABAROW_PAYMENT_ADDR=abarow-payment:9000
+Environment=ABAROW_FISCAL_ADDR=abarow-fiscal:9000
+Environment=ABAROW_NATS_URL=nats://abarow-nats:4222
+Environment=ABAROW_NATS_NKEY=/run/secrets/nats.nk
+Environment=GOMEMLIMIT=96MiB
+Secret=abarow-register-db-url,type=env,target=ABAROW_DATABASE_URL
+# NATS identity (secret key; only this container reads it).
+Secret=abarow-nats-sales,type=mount,target=/run/secrets/nats.nk,uid=65532,mode=0400
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy; dependent services wait.
+Notify=healthy
+PodmanArgs=--memory=128m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The register does not wait for the external network: the services only use the local abarow network; on a register
+# with no connection network-online.target may never come and the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

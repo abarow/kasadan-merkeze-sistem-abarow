@@ -1,0 +1,391 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+// Package pgtune computes the PostgreSQL settings on the store server by the
+// store's number of registers. The database is small (a store's daily sales)
+// and a few services connect to it; the default settings (128 MB buffers, 100
+// connections) are larger than this job needs.
+//
+// The fixed points (decision 05.11.2026): up to 4 registers shared_buffers 64 MB,
+// max_connections 20, work_mem 4 MB. The other settings derive from these:
+//
+//   - max_connections 20 = the services' connection pools (pgpool: report 8,
+//     inventory 4, catalog-admin 4 = 16) + superuser_reserved_connections (3)
+//   - 1 for backup/psql. 20 connections are not enough unless the pools are limited.
+//   - The sales volume grows with the number of registers: after the fourth register each register
+//     adds 8 MB to shared_buffers (at most 256 MB); the WAL size grows too.
+//   - Container memory = 2 × shared_buffers + 128 MB (rounded up to a multiple
+//     of 64 MB; at least shared_buffers + 6 MB for the connections in the pools
+//   - 48 MB for the background share). At least shared_buffers of room is left for
+//     the operating system page cache: in measurement (10 and 50 registers) memory hit the
+//     ceiling when the limit was just shared_buffers + the connection share.
+//   - effective_cache_size = container memory - 144 MB: it tells the planner the cache
+//     it can actually use (telling it more than the container has makes it choose
+//     a wrong plan).
+//   - random_page_cost = 1.1 (the default 4.0 assumes a spinning disk): the registers and
+//     the store server run on SSD/NVMe, and with 4.0 the planner never chooses the index
+//     for the sale_lines join of the month summary and scans the whole table
+//     (measured: 1.2 million sales, the product ranking 1996 ms → 685 ms with the
+//     covering key of migration 00002 together with this setting). If the install finds the
+//     database on a spinning disk (Settings.Rotational, 14.11.2026) random_page_cost stays 4 and
+//     effective_io_concurrency is 2; on SSD it keeps PostgreSQL 18's default (16).
+//   - work_mem is 4 MB up to 4 registers, 8 MB up to 16 registers, 16 MB beyond that:
+//     as the data grows the summary queries' hash joins no longer fit in 4 MB and spill
+//     to disk (at 50 registers it was split into 4 parts). The memory limit is
+//     set aside accordingly.
+//   - maintenance_work_mem = shared_buffers / 4 (at most 64 MB), wal_buffers =
+//     shared_buffers / 32 (1–16 MB).
+//   - Parallel query is off below 10 registers: a small store's machine has few cores and its
+//     reports are already short. From 10 registers the period summaries use 2 workers, from 50
+//     registers 4 (the database machine of that size is expected to be a strong one).
+//   - Parallel hash joins live in /dev/shm; with Docker's 64 MB default the workers failed
+//     ("could not resize shared memory segment"). ShmMB is sized from that measurement and added
+//     to the memory limit, because /dev/shm is charged to the container.
+//   - The store server and headquarters archive their WAL continuously (decision 12.11.2026,
+//     deploy/quadlet/README.md): with a base backup (deploy/quadlet/backup/basebackup.sh) the database
+//     can be restored to any moment since. The archive is the root of the data volume
+//     (ArchiveDir): it exists in every volume and the postgres user can write to it, so the
+//     archive cannot stop for a missing directory and fill the disk with WAL. A segment
+//     is archived at the latest after archive_timeout, also when it is not full.
+//   - Every tier logs the statements that take a second or longer, the waits for a lock
+//     longer than deadlock_timeout (1 s) and the autovacuum runs that take 10 s or longer
+//     (decision 12.11.2026, REVIEW.md D3): what is slow in the field is seen in the
+//     service log, not only in a benchmark. The store server and headquarters also load
+//     pg_stat_statements (1000 statements, about 2 MB) and measure the I/O time; the
+//     weekly maintenance (deploy/quadlet/backup/dbmaint.sh) prints the slowest ones.
+//   - Every tier ends a session that stays idle inside a transaction for 5 minutes
+//     (idle_in_transaction_session_timeout, 14.11.2026): its row locks and the rows autovacuum
+//     cannot clean while it is open are not held without end.
+package pgtune
+
+import (
+	"fmt"
+	"strings"
+)
+
+// Fixed points and limits.
+const (
+	// BaseRegisters is the number of registers for which the base settings are enough.
+	BaseRegisters = 4
+	// BaseSharedBuffersMB is shared_buffers up to the base number of registers.
+	BaseSharedBuffersMB = 64
+	// ExtraSharedBuffersMB is what each register adds after the base number of registers.
+	ExtraSharedBuffersMB = 8
+	// MaxSharedBuffersMB is the upper limit of shared_buffers.
+	MaxSharedBuffersMB = 256
+	// MaxConnections is the connection limit of the store server database.
+	MaxConnections = 20
+	// ReservedConnections are the connections set aside for the administrator
+	// (superuser_reserved_connections; PostgreSQL's default).
+	ReservedConnections = 3
+	// WorkMemMB is the memory per sort and hash operation up to 4 registers.
+	WorkMemMB = 4
+	// PoolConnections is the total of the services' connection pools
+	// (the pkg/pgpool defaults).
+	PoolConnections = 16
+	// perConnectionMB is the approximate private memory of a connected session.
+	perConnectionMB = 6
+	// overheadMB is the share of the postmaster and background workers.
+	overheadMB = 48
+	// roundMB is the step the container memory limit is rounded to.
+	roundMB = 64
+	// ParallelMinRegisters is the number of registers from which parallel query is on,
+	// with ParallelWorkers workers.
+	ParallelMinRegisters = 10
+	// ParallelWorkers is both the workers of one query and the total workers of the
+	// database, so that several open report screens cannot take every core from the
+	// sales being recorded.
+	ParallelWorkers = 2
+	// ParallelManyRegisters is the number of registers from which ParallelManyWorkers are used.
+	ParallelManyRegisters = 50
+	// ParallelManyWorkers is ParallelWorkers for the largest installations.
+	ParallelManyWorkers = 4
+	// DefaultShmMB is the container's /dev/shm size while parallel query is off.
+	DefaultShmMB = 64
+	// ArchiveDir is the WAL archive inside the database container (the root of the data
+	// volume; PGDATA is under it).
+	ArchiveDir = "/var/lib/postgresql"
+	// ArchiveTimeout is the longest a written change waits before its WAL segment is archived.
+	ArchiveTimeout = "15min"
+	// parallelLeaders is the connection pool of the report service (pkg/pgpool.Report).
+	parallelLeaders = 8
+)
+
+// Settings are the PostgreSQL settings (memory in MB).
+type Settings struct {
+	SharedBuffersMB      int
+	MaxConnections       int
+	WorkMemMB            int
+	MaintenanceWorkMemMB int
+	WalBuffersMB         int
+	EffectiveCacheSizeMB int
+	MinWalSizeMB         int
+	MaxWalSizeMB         int
+	// MemoryLimitMB is the recommended memory limit for the database container.
+	MemoryLimitMB int
+	// ParallelWorkers is the number of parallel query workers; 0 is off.
+	ParallelWorkers int
+	// ShmMB is the size of the container's /dev/shm.
+	ShmMB int
+	// Archive turns on the continuous WAL archive (store server and headquarters).
+	Archive bool
+	// Statements loads pg_stat_statements and turns on track_io_timing (store server
+	// and headquarters).
+	Statements bool
+	// IdleSessionMin ends a session idle (outside a transaction) longer than this many
+	// minutes; 0 is never (idle_session_timeout).
+	IdleSessionMin int
+	// Rotational: the database is on a spinning disk (the install reads it); the I/O
+	// settings follow it (RotationalRandomPageCost, RotationalIOConcurrency).
+	Rotational bool
+}
+
+// ForStore computes the settings of a store (store server) with registers registers.
+// A negative number counts as zero.
+func ForStore(registers int) Settings {
+	return compute(max(registers, 0), profile{
+		maxShared: MaxSharedBuffersMB, pool: PoolConnections, maxConns: MaxConnections, maxMaintenance: 64, bigWorkMem: 16,
+	})
+}
+
+// ForRegister is the setting of the database on a register: fixed, small, one connection
+// per service (pkg/pgdb). A register keeps its sales until the retention cleanup removes
+// them (they are delivered to the store server before that).
+func ForRegister() Settings {
+	return Settings{
+		SharedBuffersMB: 32, MaxConnections: 12, WorkMemMB: 2, MaintenanceWorkMemMB: 8, WalBuffersMB: 1,
+		EffectiveCacheSizeMB: 96, MinWalSizeMB: 32, MaxWalSizeMB: 128, MemoryLimitMB: 192, ShmMB: DefaultShmMB,
+	}
+}
+
+// Constants for headquarters. Headquarters holds the data of all the stores
+// (~110 thousand sales per register per year; queries look at the recent months) and the database
+// grows with the number of stores: 50 stores × 2 registers × 30 days = 900 thousand sales, 2 GB.
+const (
+	// HeadquartersRegistersPerStore is the default number of registers per store for the headquarters
+	// setting (2 in the measurements; used when the real number is not known).
+	HeadquartersRegistersPerStore = 2
+	// MaxHeadquartersSharedBuffersMB is the upper limit of shared_buffers at headquarters.
+	MaxHeadquartersSharedBuffersMB = 1024
+	// HeadquartersPoolConnections is the total of the services' pools at headquarters (reporting 8,
+	// ingest 4, catalog-admin 4, inventory 4).
+	HeadquartersPoolConnections = 20
+	// HeadquartersMaxConnections is the headquarters database's connection limit: pools (20) +
+	// reserved (3) + backup/psql (1) + a share for new services.
+	HeadquartersMaxConnections = 30
+)
+
+// ForHeadquarters computes the headquarters database's settings by the stores' total number
+// of registers (registers). The same logic as the store server formula, with higher
+// ceilings: shared_buffers goes up to 1 GB, work_mem to 32 MB.
+// In measurement (50 stores, 100 registers, 2 GB of data) with the store server settings (256 MB buffers,
+// 640 MB memory) the monthly summary took 27 s and the product ranking never finished; with
+// large memory the monthly summary came down to 15 s and the record processing p95 from 2.5 s to 0.75 s.
+func ForHeadquarters(registers int) Settings {
+	return compute(max(registers, 0), profile{
+		maxShared: MaxHeadquartersSharedBuffersMB, pool: HeadquartersPoolConnections, maxConns: HeadquartersMaxConnections, maxMaintenance: 128, bigWorkMem: 32,
+	})
+}
+
+// IdleInTransaction is idle_in_transaction_session_timeout on every tier: a session idle inside
+// a transaction for longer is ended, and its locks with it.
+const IdleInTransaction = "5min"
+
+// ClusterIdleSessionMin is idle_session_timeout at headquarters on several machines. The
+// connections of a machine that lost power or its network are not closed; the primary would
+// keep them in max_connections for about two hours, until TCP notices (docs/REVIEW-2.md D9).
+// The pools close a connection idle for 5 minutes themselves (pkg/pgpool), so a live one is
+// not cut; Patroni asks every 10 seconds.
+const ClusterIdleSessionMin = 15
+
+// The I/O settings by disk type (decision 14.11.2026, docs/decisions/DB-TUNING.md): on SSD,
+// NVMe and eMMC random_page_cost is 1.1 and effective_io_concurrency stays at PostgreSQL 18's
+// default (16). On a spinning disk a random read costs much more than a sequential one, the
+// planner's default 4 holds, and the disk serves only a few reads at once.
+const (
+	RandomPageCost           = "1.1"
+	RotationalRandomPageCost = "4"
+	RotationalIOConcurrency  = "2"
+)
+
+// PatroniMemoryMB is the share of Patroni (Python, its helper processes) in the memory limit of
+// the database container on several machines: measured idle 78 MB PSS (14.11.2026,
+// docs/REVIEW-2.md D12); the limit was computed for PostgreSQL alone.
+const PatroniMemoryMB = 96
+
+// PatroniConnections are the connections Patroni keeps to its own database on every machine
+// (the heartbeat and the REST API).
+const PatroniConnections = 2
+
+// ForHeadquartersCluster computes the settings of headquarters on several machines
+// (docs/decisions/HA-HEADQUARTERS.md). The services of every machine connect to the primary, so
+// the pools are counted once per machine; Patroni's own connections are added. The other
+// settings are those of ForHeadquarters: every machine can become primary and must carry the
+// same load. One machine is ForHeadquarters.
+func ForHeadquartersCluster(registers, machines int) Settings {
+	if machines <= 1 {
+		return ForHeadquarters(registers)
+	}
+	s := compute(max(registers, 0), profile{
+		maxShared: MaxHeadquartersSharedBuffersMB, pool: HeadquartersPoolConnections * machines,
+		maxConns:       HeadquartersMaxConnections + HeadquartersPoolConnections*(machines-1) + PatroniConnections,
+		maxMaintenance: 128, bigWorkMem: 32,
+	})
+	s.IdleSessionMin = ClusterIdleSessionMin
+	s.MemoryLimitMB += PatroniMemoryMB
+	return s
+}
+
+// profile holds the constants where ForStore and ForHeadquarters diverge.
+type profile struct {
+	maxShared, pool, maxConns, maxMaintenance int
+	// bigWorkMem is work_mem after 40 registers (at the store server 16 MB after 16
+	// registers; at headquarters 32 MB after 40 registers).
+	bigWorkMem int
+}
+
+func compute(registers int, p profile) Settings {
+	shared := min(BaseSharedBuffersMB+ExtraSharedBuffersMB*max(registers-BaseRegisters, 0), p.maxShared)
+	overhead := perConnectionMB*p.pool + overheadMB
+	limit := roundUp(max(shared+overhead, 2*shared+128), roundMB)
+	wm := workMem(registers)
+	if p.bigWorkMem > 16 && registers > 40 {
+		wm = p.bigWorkMem
+	}
+	parallel, shm, shmInLimit := workers(registers), DefaultShmMB, 0
+	if parallel > 0 {
+		// Parallel hash tables live in /dev/shm and take work_mem × hash_mem_multiplier (2) per
+		// participant. The participants are the workers and the leaders; a leader runs its
+		// part even when no worker is free, so up to the report pool (8) can be at work.
+		// Measured at 50 stores with 11 screens: 16 × work_mem still ran out, seldom.
+		shm = 2 * (parallelLeaders + ParallelManyWorkers) * wm
+		shmInLimit = shm
+	}
+	return Settings{
+		SharedBuffersMB:      shared,
+		MaxConnections:       p.maxConns,
+		WorkMemMB:            wm,
+		MaintenanceWorkMemMB: min(shared/4, p.maxMaintenance),
+		WalBuffersMB:         min(max(shared/32, 1), 16),
+		EffectiveCacheSizeMB: limit - overhead,
+		MinWalSizeMB:         32,
+		MaxWalSizeMB:         max(256, 16*registers),
+		MemoryLimitMB:        roundUp(limit+shmInLimit, roundMB),
+		ParallelWorkers:      parallel,
+		ShmMB:                shm,
+		Archive:              true,
+		Statements:           true,
+	}
+}
+
+// workMem is the sort/hash memory by the number of registers (the store server base).
+func workMem(registers int) int {
+	switch {
+	case registers <= BaseRegisters:
+		return WorkMemMB
+	case registers <= 16:
+		return 2 * WorkMemMB
+	}
+	return 4 * WorkMemMB
+}
+
+// workers is the number of parallel query workers by the number of registers.
+func workers(registers int) int {
+	switch {
+	case registers >= ParallelManyRegisters:
+		return ParallelManyWorkers
+	case registers >= ParallelMinRegisters:
+		return ParallelWorkers
+	}
+	return 0
+}
+
+func roundUp(n, step int) int { return (n + step - 1) / step * step }
+
+// Flags are the "-c setting=value" pairs to be given to the postgres command.
+func (s Settings) Flags() []string {
+	kv := []struct {
+		k string
+		v string
+	}{
+		{"shared_buffers", mb(s.SharedBuffersMB)},
+		{"max_connections", fmt.Sprint(s.MaxConnections)},
+		{"work_mem", mb(s.WorkMemMB)},
+		{"maintenance_work_mem", mb(s.MaintenanceWorkMemMB)},
+		{"wal_buffers", mb(s.WalBuffersMB)},
+		{"effective_cache_size", mb(s.EffectiveCacheSizeMB)},
+		{"random_page_cost", RandomPageCost},
+	}
+	if s.Rotational {
+		kv[len(kv)-1].v = RotationalRandomPageCost
+		kv = append(kv, []struct {
+			k string
+			v string
+		}{
+			{"effective_io_concurrency", RotationalIOConcurrency},
+			{"maintenance_io_concurrency", RotationalIOConcurrency},
+		}...)
+	}
+	kv = append(kv, []struct {
+		k string
+		v string
+	}{
+		{"min_wal_size", mb(s.MinWalSizeMB)},
+		{"max_wal_size", mb(s.MaxWalSizeMB)},
+		{"checkpoint_completion_target", "0.9"},
+		{"autovacuum_max_workers", "2"},
+		{"max_worker_processes", fmt.Sprint(4 + s.ParallelWorkers)},
+		{"max_parallel_workers", fmt.Sprint(s.ParallelWorkers)},
+		{"max_parallel_workers_per_gather", fmt.Sprint(s.ParallelWorkers)},
+		{"max_parallel_maintenance_workers", "0"},
+	}...)
+	if s.Archive {
+		kv = append(kv, []struct {
+			k string
+			v string
+		}{
+			{"archive_mode", "on"},
+			{"archive_library", "basic_archive"},
+			{"basic_archive.archive_directory", ArchiveDir},
+			{"archive_timeout", ArchiveTimeout},
+		}...)
+	}
+	kv = append(kv, []struct {
+		k string
+		v string
+	}{
+		{"log_min_duration_statement", "1s"},
+		{"log_lock_waits", "on"},
+		{"log_autovacuum_min_duration", "10s"},
+		// A transaction left open and idle (a bug, a client gone in the middle) would hold its
+		// row locks and keep autovacuum back without end; no service waits inside a
+		// transaction; decision 14.11.2026.
+		{"idle_in_transaction_session_timeout", IdleInTransaction},
+	}...)
+	if s.Statements {
+		kv = append(kv, []struct {
+			k string
+			v string
+		}{
+			{"shared_preload_libraries", "pg_stat_statements"},
+			{"pg_stat_statements.max", "1000"},
+			{"track_io_timing", "on"},
+		}...)
+	}
+	if s.IdleSessionMin > 0 {
+		kv = append(kv, struct {
+			k string
+			v string
+		}{"idle_session_timeout", fmt.Sprintf("%dmin", s.IdleSessionMin)})
+	}
+	out := make([]string, 0, 2*len(kv))
+	for _, e := range kv {
+		out = append(out, "-c", e.k+"="+e.v)
+	}
+	return out
+}
+
+// Args is Flags on a single line (for the unit file's Exec line).
+func (s Settings) Args() string { return strings.Join(s.Flags(), " ") }
+
+func mb(n int) string { return fmt.Sprintf("%dMB", n) }

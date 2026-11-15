@@ -1,0 +1,363 @@
+/* Copyright 2026 Mehmet ERGULCU and the abarow contributors */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/* The shared look of the register screens (market, restaurant). Touch register
+   ekranı: büyük hedefler (en az 48 px, ana düğmeler 64 px), ağır animasyon
+   ve gölge yok. */
+
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --text: #1c1f24;
+  --muted: #6b7280;
+  --line: #e2e5ea;
+  --primary: #0b6e4f;
+  --primary-text: #ffffff;
+  --danger: #b42318;
+  --warning-bg: #fff4d6;
+  --banner-bg: #b42318;
+  --printer-bg: #93370d;
+  font-family: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 18px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+button,
+input {
+  font: inherit;
+  min-height: 48px;
+  border-radius: 8px;
+}
+
+button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  padding: 0 16px;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+input {
+  width: 100%;
+  border: 2px solid var(--line);
+  padding: 0 12px;
+  background: var(--panel);
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.primary {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--primary-text);
+  min-height: 64px;
+  font-weight: 700;
+  width: 100%;
+}
+
+.secondary {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* The simulator warning is clearly visible on every screen, above the open windows too. */
+.banner {
+  position: relative;
+  z-index: 2;
+  background: var(--banner-bg);
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  padding: 8px 16px;
+}
+
+/* Printer problem: below the simulator warning, on every screen. If paper is low
+   basar, uyarı sarıdır; basamıyorsa koyu turuncu. */
+.banner.printer {
+  background: var(--printer-bg);
+}
+
+.banner.printer.soon {
+  background: var(--warning-bg);
+  color: var(--text);
+}
+
+h1,
+h2 {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.error {
+  color: var(--danger);
+  font-weight: 600;
+  margin: 0;
+}
+
+.warning {
+  background: var(--warning-bg);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.overlay {
+  position: fixed;
+  z-index: 1;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dialog {
+  background: var(--panel);
+  border-radius: 12px;
+  padding: 24px;
+  width: min(520px, 92vw);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.due {
+  font-size: 1.4rem;
+  margin: 0;
+}
+
+.cash {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cash label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Payments taken from the POS (card, meal card) side by side. */
+.pos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.quick {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.quick button {
+  padding: 0 4px;
+  font-size: 0.85rem;
+}
+
+.change {
+  font-size: 1.3rem;
+  margin: 0;
+}
+
+.done dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.done dt {
+  color: var(--muted);
+}
+
+.done dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.done .change {
+  font-size: 1.8rem;
+}
+
+/* Sign-in screen: cashier selection and the large PIN keypad. */
+.login {
+  max-width: 480px;
+  margin: 48px auto;
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+
+.cashiers {
+  display: grid;
+  gap: 8px;
+}
+
+.cashier {
+  min-height: 64px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 1.2rem;
+}
+
+.cashier small {
+  color: var(--muted);
+}
+
+.pin {
+  min-height: 48px;
+  font-size: 2rem;
+  letter-spacing: 8px;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.keypad button {
+  min-height: 64px;
+  font-size: 1.5rem;
+}
+
+.primary.danger {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.report {
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.report h2 small {
+  color: var(--muted);
+  font-size: 1rem;
+  font-weight: 400;
+}
+
+.report dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.report dt {
+  color: var(--muted);
+}
+
+.report dd {
+  margin: 0;
+  text-align: right;
+  font-weight: 600;
+}
+
+.report table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.report th,
+.report td {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+
+.report th:first-child,
+.report td:first-child {
+  text-align: left;
+}
+
+.approval {
+  text-align: center;
+}
+
+/* Past shifts list. */
+.shifts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.shifts button {
+  width: 100%;
+  min-height: 56px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+}
+
+.shifts small {
+  color: var(--muted);
+}
+
+.unfinished {
+  margin: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.notice {
+  background: #e3f4ec;
+  color: var(--primary);
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 12px;
+  margin: 0;
+}
+
+/* Cash count in the shift report; shown in light red. */
+.report .cashup {
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.report dd.short {
+  color: var(--danger);
+}
+
+.login .cash {
+  text-align: left;
+}
+

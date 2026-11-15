@@ -1,0 +1,19 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# The weekly physical backup (base backup) of the store server database and the cleaning of
+# the WAL archive (basebackup.sh). With the archive the database can be restored to any
+# moment since the oldest kept base backup (store-install.sh restore-to). The next
+# daily backup copies it off the machine with the dumps (--backup-target). It is not a
+# Quadlet unit: it is installed as a systemd user unit (~/.config/systemd/user).
+[Unit]
+Description=abarow store server weekly base backup
+Wants=abarow-store-db.service
+After=abarow-store-db.service
+
+[Service]
+Type=oneshot
+# The number of base backups kept; the archive goes back to the oldest one.
+Environment=ABAROW_BASEBACKUP_KEEP=2
+ExecStart=%h/abarow/store/basebackup.sh abarow-store-db %h/abarow/store/backups
+TimeoutStartSec=6h

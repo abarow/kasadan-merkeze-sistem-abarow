@@ -1,0 +1,45 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow product and price management at the store (catalog-admin)
+Wants=abarow-store.service abarow-store-db.service
+After=abarow-store.service abarow-store-db.service
+
+[Container]
+ContainerName=abarow-store-catalog-admin
+# The same image as headquarters' catalog-admin: the code is shared, only the settings
+# differ (the store's database and NATS, the write authority is the store manager's).
+Image=ghcr.io/abarow/abarow-catalog-admin:0.1
+Network=abarow-store.network
+Environment=ABAROW_NATS_URL=nats://abarow-store:4222
+Environment=ABAROW_NATS_NKEY=/run/secrets/nats.nk
+Environment=ABAROW_TZ=Europe/Istanbul
+# report creates the catalog stream (fed from headquarters if it is connected); this
+# only publishes.
+Environment=ABAROW_CATALOG_STREAM=shared
+Environment=ABAROW_CATALOG_WRITERS=manager
+# report's catalog mirror uses the tables with the same names (catalog_products):
+# catalog-admin works in its own schema in the same database.
+Environment=ABAROW_DB_SCHEMA=catalog
+Environment=GOMEMLIMIT=32MiB
+Secret=abarow-store-db-url,type=env,target=ABAROW_DATABASE_URL
+Secret=abarow-store-nats-catalog,type=mount,target=/run/secrets/nats.nk,uid=65532,mode=0400
+# The port is not opened to the outside: report forwards the screen's catalog requests. While headquarters
+# counts as connected report already refuses write requests.
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+PodmanArgs=--memory=48m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,40 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow register database (PostgreSQL)
+
+[Container]
+ContainerName=abarow-register-db
+# The major version is fixed (18): minor versions (18.x) are taken once an update is approved;
+# a major version upgrade needs a data migration.
+Image=docker.io/library/postgres:18-alpine
+Network=abarow.network
+Environment=POSTGRES_DB=abarow
+Environment=POSTGRES_USER=abarow
+Environment=POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+# The password is generated at random at install (register-install.sh); the database is not
+# opened to the outside, only the services on the register network connect.
+Secret=abarow-register-db-password,type=mount,target=/run/secrets/db-password
+Volume=abarow-register-db-data:/var/lib/postgresql
+HealthCmd=pg_isready -U abarow -d abarow
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+# The values are pgtune.ForRegister; pkg/pgtune's test checks this file.
+Exec=postgres -c shared_buffers=32MB -c max_connections=12 -c work_mem=2MB -c maintenance_work_mem=8MB -c wal_buffers=1MB -c effective_cache_size=96MB -c random_page_cost=1.1 -c min_wal_size=32MB -c max_wal_size=128MB -c checkpoint_completion_target=0.9 -c autovacuum_max_workers=2 -c max_worker_processes=4 -c max_parallel_workers=0 -c max_parallel_workers_per_gather=0 -c max_parallel_maintenance_workers=0 -c log_min_duration_statement=1s -c log_lock_waits=on -c log_autovacuum_min_duration=10s -c idle_in_transaction_session_timeout=5min
+PodmanArgs=--memory=192m
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+# At shutdown PostgreSQL is given time to flush what it wrote to disk.
+TimeoutStopSec=120
+
+[Quadlet]
+# The register does not wait for the external network (see the other container units).
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

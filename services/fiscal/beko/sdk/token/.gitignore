@@ -1,0 +1,4 @@
+# Token'ın IntegrationHubWrapper.h ve libIntegrationHub.so dosyaları buraya konur.
+# Lisansı belli olmadığı için depoya girmez (bkz. docs/decisions/beko-x30tr-prep.md).
+*
+!.gitignore

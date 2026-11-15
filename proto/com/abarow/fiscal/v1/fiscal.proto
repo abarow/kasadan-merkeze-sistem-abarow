@@ -1,0 +1,75 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.fiscal.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// FiscalService is the contract the fiscal adapters (simulator, okc-<brand>) implement.
+// The adapters depend only on this package; they do not know sales' internal
+// structure. The units are the same as sales.v1: kuruş, base points, thousandths.
+service FiscalService {
+  // Register records the sale fiscally, prints the receipt and returns the fiscal number.
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+}
+
+// PaymentMethod is the payment method.
+enum PaymentMethod {
+  PAYMENT_METHOD_UNSPECIFIED = 0;
+  PAYMENT_METHOD_CASH = 1;
+  PAYMENT_METHOD_CARD = 2;
+  // Meal card or voucher (Multinet, Pluxee, Ticket, Setcard ...); a separate
+  // line in Z, no change is given.
+  PAYMENT_METHOD_MEAL_CARD = 3;
+}
+
+// ReceiptLine is an item on the receipt. Prices include VAT.
+message ReceiptLine {
+  string name = 1;
+  int64 qty_milli = 2;
+  int64 unit_price_kurus = 3;
+  int64 total_kurus = 4;
+  int64 tax_rate_bp = 5;
+}
+
+// TaxLine is the total and tax amount that fall on a VAT rate.
+message TaxLine {
+  int64 rate_bp = 1;
+  int64 gross_kurus = 2;
+  int64 tax_kurus = 3;
+}
+
+// Payment is a payment made to the receipt.
+message Payment {
+  PaymentMethod method = 1;
+  int64 amount_kurus = 2;
+  // collect says the payment has not been taken yet and the ÖKC will take it from its own POS
+  // (card and meal card; e.g. Beko X30TR). It is charged together with the receipt:
+  // if the ÖKC cannot take the payment no receipt is issued and Register returns FAILED_PRECONDITION
+  // (the sale stays open, no money has been taken). If not set (false) the payment
+  // was taken elsewhere; the ÖKC only writes it on the receipt. ÖKCs that take no money
+  // (the simulator) ignore this field.
+  bool collect = 3;
+}
+
+// Receipt is the content of the receipt to be printed.
+message Receipt {
+  string sale_id = 1;
+  string register_id = 2;
+  repeated ReceiptLine lines = 3;
+  repeated TaxLine taxes = 4;
+  int64 total_kurus = 5;
+  repeated Payment payments = 6;
+  int64 change_kurus = 7;
+  google.protobuf.Timestamp issued_at = 8;
+}
+
+message RegisterRequest {
+  Receipt receipt = 1;
+}
+
+message RegisterResponse {
+  string fiscal_no = 1;
+}

@@ -1,0 +1,39 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+name: Hata bildirimi
+description: Beklenmeyen davranış ya da çökme
+labels: [hata]
+body:
+  - type: markdown
+    attributes:
+      value: Güvenlik açığı bulduysanız bu formu kullanmayın; SECURITY.md dosyasındaki özel yolu izleyin. Müşteri verisi, parola ya da anahtar yapıştırmayın.
+  - type: dropdown
+    id: katman
+    attributes:
+      label: Hangi katman?
+      options: [Kasa, Operasyon (mağaza sunucusu), Merkez, Güncelleme merkezi, Kurulum betikleri, Diğer]
+    validations:
+      required: true
+  - type: input
+    id: release
+    attributes:
+      label: Sürüm ya da commit
+    validations:
+      required: true
+  - type: textarea
+    id: adimlar
+    attributes:
+      label: Yeniden üretme adımları
+    validations:
+      required: true
+  - type: textarea
+    id: beklenen
+    attributes:
+      label: Beklenen ve gerçekleşen davranış
+    validations:
+      required: true
+  - type: textarea
+    id: ortam
+    attributes:
+      label: Ortam (işletim sistemi, Podman/Docker sürümü, donanım)

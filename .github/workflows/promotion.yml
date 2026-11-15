@@ -1,0 +1,183 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Promotes a release to the pilot or prod channel: makes a channel notice from the digests of
+# the images the release workflow (release.yml) built and signs it with the channel's key
+# (docs/UPDATE.md "Promotion"). The same bytes are promoted; there is no rebuild.
+#
+# The approval rules are in the GitHub environments (Settings > Environments):
+#   pilot: 1 approver; secret CHANNEL_KEY (the seed of the pilot key, hex)
+#   prod:  2 approvers, different people from the pilot; secret CHANNEL_KEY (the prod key)
+# Whoever wants to keep the prod key offline does not define the key in the environment: the workflow
+# uploads the unsigned notice and the signing is done on an offline machine with `update-server sign-channel prod ...`.
+# The signed notices are added to the release page; the publisher's registry server takes them
+# into the channel directory (the signature protects integrity, the download path need not be trusted).
+#
+# The promotion gate (scripts/promotion-gate.py): before copying, signing and announcing it checks whether
+# the release run succeeded, whether CI and the four end-to-end scenarios succeeded for that commit, whether every
+# image has an SBOM and provenance on every platform (and whether the commit in the provenance is the
+# commit of the release). There is no option to bypass it; a release that cannot pass the gate is fixed and published
+# again with a new tag.
+#
+# This workflow was written but has not been run on GitHub yet.
+name: Terfi
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run:
+        description: "Run id of the release workflow to promote (Release)"
+        required: true
+      version:
+        description: "Release tag (0.4.0)"
+        required: true
+      channel:
+        description: "Target channel"
+        required: true
+        type: choice
+        options: [pilot, prod]
+      urgency:
+        description: "Urgency (information only; does not change behavior)"
+        required: true
+        type: choice
+        options: [normal, security]
+        default: normal
+      notes:
+        description: "Change summary (shown on the screen)"
+        required: true
+
+permissions:
+  contents: write
+  actions: read
+  packages: read
+
+jobs:
+  terfi:
+    name: promotion to the ${{ inputs.channel }} channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.channel }}
+    env:
+      PUBLISHER_REGISTRY: ${{ secrets.PUBLISHER_REGISTRY }}
+      COSIGN_KEY: ${{ secrets.COSIGN_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.27.4"
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: digest-*
+          path: digests
+          merge-multiple: true
+          run-id: ${{ inputs.release_run }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Promotion gate (e2e, SBOM, provenance)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RELEASE_RUN: ${{ inputs.release_run }}
+          VERSION: ${{ inputs.version }}
+        run: python3 scripts/promotion-gate.py --repo "$REPO" --release-run "$RELEASE_RUN" --version "$VERSION" --digests digests
+      - name: Copy the images to the channel's path
+        # The same digests are put under the channel's path in the publisher's registry (pilot <- test,
+        # prod <- pilot): bytes are copied, there is no rebuild. If the registry is not
+        # defined it is skipped (the channel notice is still produced).
+        env:
+          PUBLISHER_REGISTRY: ${{ secrets.PUBLISHER_REGISTRY }}
+          DST_CREDS: ${{ secrets.PUBLISHER_USER }}:${{ secrets.PUBLISHER_PASSWORD }}
+          CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PUBLISHER_REGISTRY" ]; then
+            echo "::warning::PUBLISHER_REGISTRY is not defined: the images were not copied to the registry."
+            exit 0
+          fi
+          command -v skopeo >/dev/null || sudo apt-get install -y skopeo
+          from="test"
+          if [ "$CHANNEL" = prod ]; then from="pilot"; fi
+          export SRC_CREDS="$DST_CREDS"
+          bash scripts/image-copy.sh "$PUBLISHER_REGISTRY/$from" "$PUBLISHER_REGISTRY/$CHANNEL" "$VERSION" digests
+      - uses: sigstore/cosign-installer@v3
+        if: ${{ env.PUBLISHER_REGISTRY != '' && env.COSIGN_KEY != '' }}
+      - name: Sign the images with the channel's cosign key
+        # Units verify this signature with their level's key when they pull (policy.json).
+        # If the key is not defined it is skipped; units whose level wants a signature cannot pull an unsigned image.
+        if: ${{ env.PUBLISHER_REGISTRY != '' && env.COSIGN_KEY != '' }}
+        env:
+          DST_CREDS: ${{ secrets.PUBLISHER_USER }}:${{ secrets.PUBLISHER_PASSWORD }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$COSIGN_KEY" > cosign.key
+          COSIGN_KEY=cosign.key bash scripts/image-sign.sh "$PUBLISHER_REGISTRY/$CHANNEL" digests
+          rm -f cosign.key
+      - name: Bildirim
+        env:
+          CHANNEL: ${{ inputs.channel }}
+          VERSION: ${{ inputs.version }}
+          URGENCY: ${{ inputs.urgency }}
+          NOTES: ${{ inputs.notes }}
+        run: |
+          set -euo pipefail
+          mkdir -p cikti
+          # The sequence number must grow per channel: the run number grows over time.
+          # A promotion to prod also feeds the pilot machines: the same images are put on the pilot channel
+          # too, signed with the prod key (pilot machines accept the prod key as well).
+          channels="$CHANNEL"
+          [ "$CHANNEL" = prod ] && channels="prod pilot"
+          for c in $channels; do
+            python3 scripts/channel-notice.py --digests digests --channel "$c" --version "$VERSION" \
+              --seq "$GITHUB_RUN_NUMBER" --urgency "$URGENCY" --notes "$NOTES" > "cikti/$c.manifest.json"
+          done
+      - name: Signature
+        env:
+          CHANNEL_KEY: ${{ secrets.CHANNEL_KEY }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CHANNEL_KEY" ]; then
+            echo "::warning::CHANNEL_KEY is not defined: the notices are uploaded unsigned, sign them offline."
+            exit 0
+          fi
+          umask 077
+          printf '%s' "$CHANNEL_KEY" > anahtar.key
+          cd services/update
+          for m in ../cikti/*.manifest.json; do
+            c=$(basename "$m" .manifest.json)
+            go run ./cmd/server sign-channel "$CHANNEL" ../anahtar.key "$m" > "../cikti/$c.json"
+          done
+          rm -f ../anahtar.key
+      - uses: actions/upload-artifact@v7
+        with:
+          name: channel-bildirimleri-${{ inputs.channel }}-${{ inputs.version }}
+          path: cikti
+      - name: Add to the release page
+        if: ${{ always() && hashFiles('cikti/*.json') != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(cikti/*.json)
+          [ ${#files[@]} -gt 0 ] || exit 0
+          # The release's own page (for the record).
+          gh release view "v$VERSION" >/dev/null 2>&1 || gh release create "v$VERSION" --title "v$VERSION" --notes "abarow $VERSION"
+          gh release upload "v$VERSION" "${files[@]}" --clobber
+          # The fixed address the publisher's registry server polls: in the "channels" release the latest signed
+          # notice of every channel (ABAROW_UPDATE_CHANNEL_SOURCE=https://github.com/<owner>/<repo>/releases/download/channels).
+          # The server verifies the notice with its own keys; it does not trust this address.
+          gh release view channels >/dev/null 2>&1 || gh release create channels --prerelease --title "channels" --notes "The latest signed notices of the channels (automatic)."
+          for f in "${files[@]}"; do
+            case "$f" in *.manifest.json) continue ;; esac
+            gh release upload channels "$f" --clobber
+          done

@@ -1,0 +1,40 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow store server message path (NATS; the leaf connections of the registers, the store stream)
+
+[Container]
+ContainerName=abarow-store
+Image=docker.io/library/nats:2.12-alpine
+Network=abarow-store.network
+Environment=GOMEMLIMIT=96MiB
+Volume=abarow-store-data:/data
+# Identity, authorization and the leaf TLS (natsauth -role store produces them; see
+# deploy/install/store-install.sh). Registers connect only with their own keys and
+# with TLS.
+Secret=abarow-store-nats-conf,type=mount,target=/etc/nats/nats.conf
+Secret=abarow-store-tls-cert,type=mount,target=/etc/nats/tls/server.pem
+Secret=abarow-store-tls-key,type=mount,target=/etc/nats/tls/server.key
+Exec=-c /etc/nats/nats.conf
+# Only the leaf port is opened to the store network; the client port (4222) is not opened.
+PublishPort=7421:7421
+HealthCmd=wget -q -O /dev/null http://127.0.0.1:8222/healthz?js-enabled-only=true
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy; dependent services wait.
+Notify=healthy
+PodmanArgs=--memory=128m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The store server does not wait for the external network: the registers connect from the store network; when the internet
+# is cut, network-online.target may never come and the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

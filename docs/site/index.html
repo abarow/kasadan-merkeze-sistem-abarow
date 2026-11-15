@@ -1,0 +1,887 @@
+<!doctype html>
+<!--
+  Copyright 2026 Mehmet ERGULCU and the abarow contributors
+  SPDX-License-Identifier: Apache-2.0
+
+  The introduction page of abarow: one file, no external request (docs/site/PLAN.md).
+-->
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="abarow: Türkiye için açık kaynak, üç katmanlı satış noktası sistemi. Mimari, veri akışı, performans ve kaynak kullanımı.">
+<title>abarow: satış noktası mimarisi</title>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #fafaf8; --fg: #1b1d21; --muted: #4c525c; --card: #ffffff;
+  --line: #dcdee3; --line-strong: #8a909b; --accent: #0e7490;
+  --reg: #b45309; --store: #0e7490; --hq: #6d28d9;
+  --sale: #15803d; --cat: #1d4ed8; --rec: #5b616b; --bad: #b91c1c; --warn: #b45309;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0f1115; --fg: #e6e8ec; --muted: #a8aeb8; --card: #171a21;
+    --line: #2b303a; --line-strong: #7b828e; --accent: #22d3ee;
+    --reg: #fbbf24; --store: #22d3ee; --hq: #a78bfa;
+    --sale: #4ade80; --cat: #60a5fa; --rec: #a8aeb8; --bad: #f87171; --warn: #fbbf24;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0f1115; --fg: #e6e8ec; --muted: #a8aeb8; --card: #171a21;
+  --line: #2b303a; --line-strong: #7b828e; --accent: #22d3ee;
+  --reg: #fbbf24; --store: #22d3ee; --hq: #a78bfa;
+  --sale: #4ade80; --cat: #60a5fa; --rec: #a8aeb8; --bad: #f87171; --warn: #fbbf24;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 64px; }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font: 17px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+a { color: var(--accent); }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+code, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .9em; }
+code { background: color-mix(in srgb, var(--fg) 8%, transparent); padding: .08em .35em; border-radius: 4px; }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 16px; }
+.prose { max-width: 72ch; }
+
+/* top bar */
+.bar { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(6px); border-bottom: 1px solid var(--line); }
+.bar .wrap { display: flex; align-items: center; gap: 16px; height: 52px; }
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--fg); text-decoration: none; letter-spacing: .01em; }
+.bar nav { display: flex; gap: 4px; overflow-x: auto; flex: 1; scrollbar-width: none; }
+.bar nav a { color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: 6px; white-space: nowrap; font-size: .95rem; }
+.bar nav a:hover { color: var(--fg); background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.btn {
+  font: inherit; font-size: .92rem; color: var(--fg); background: var(--card);
+  border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px 12px; cursor: pointer;
+}
+.btn:hover { border-color: var(--fg); }
+a.btn { text-decoration: none; display: inline-block; white-space: nowrap; }
+.btn[aria-pressed="true"] { background: color-mix(in srgb, var(--bad) 14%, var(--card)); border-color: var(--bad); }
+
+/* sections */
+section { padding: 56px 0 8px; }
+h1 { font-size: clamp(2.4rem, 7vw, 3.8rem); line-height: 1.05; margin: 0 0 12px; letter-spacing: -.02em; }
+h2 { font-size: clamp(1.5rem, 3.6vw, 2rem); line-height: 1.2; margin: 0 0 14px; letter-spacing: -.01em; }
+h3 { font-size: 1.1rem; margin: 28px 0 8px; }
+.lead { font-size: 1.15rem; color: var(--muted); max-width: 68ch; }
+.note { font-size: .88rem; color: var(--muted); max-width: 80ch; }
+.hero { padding-top: 48px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: .9rem; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 8px; }
+
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin: 28px 0 10px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+.stat b { display: block; font-size: 2rem; line-height: 1.1; letter-spacing: -.01em; }
+.stat span { color: var(--muted); font-size: .92rem; }
+
+/* flow figures */
+figure.flow { margin: 22px 0 8px; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.flow-host svg { display: block; width: 100%; height: auto; }
+.flow-host.tall svg { max-width: 460px; margin: 0 auto; }
+.flow-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+.flow-status { display: block; margin: 10px 0 0; min-height: 1.6em; font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 10px 0 0; padding: 0; list-style: none; font-size: .9rem; color: var(--muted); }
+.legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.legend .l-sale { background: var(--sale); }
+.legend .l-cat { background: var(--cat); }
+.legend .l-rec { border: 2px dashed var(--rec); width: 12px; height: 12px; }
+@media (prefers-reduced-motion: reduce) { [data-pause] { display: none; } }
+
+/* svg parts */
+svg text { fill: var(--fg); font-family: inherit; }
+.n-reg { --c: var(--reg); } .n-store { --c: var(--store); } .n-hq { --c: var(--hq); }
+.node .box { fill: color-mix(in srgb, var(--c) 9%, var(--card)); stroke: var(--c); stroke-width: 1.6; transition: stroke-width .25s; }
+.node.flash .box { stroke-width: 4; }
+.node .t-name { font-size: 16px; font-weight: 700; }
+.node .t-count { font-size: 12.5px; }
+.node .t-count b { font-size: 14px; }
+.node .t-status { font-size: 12px; fill: var(--muted); }
+.chip rect { fill: var(--card); stroke: var(--line-strong); }
+.chip.dashed rect { stroke-dasharray: 3 2; }
+.chip text { font-size: 12px; }
+.sq { fill: none; stroke: var(--line-strong); }
+.sq.on { fill: var(--warn); stroke: var(--warn); }
+.edge line { stroke: var(--line-strong); stroke-width: 2; }
+.edge polygon { fill: var(--line-strong); }
+.edge .lbl { font-size: 11.5px; fill: var(--muted); paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
+.edge .lbl-down { fill: var(--bad); font-weight: 700; font-size: 12px; display: none; }
+.edge.down line { stroke: var(--bad); stroke-dasharray: 7 5; }
+.edge.down polygon { fill: var(--bad); }
+.edge.down .lbl-up { display: none; }
+.edge.down .lbl-down { display: inline; }
+.dot-sale { fill: var(--sale); }
+.dot-catalog { fill: var(--cat); }
+.dot-receipt { fill: var(--card); stroke: var(--rec); stroke-width: 1.8; stroke-dasharray: 2.4 1.8; }
+
+/* tables */
+.tablebox { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-weight: 600; background: color-mix(in srgb, var(--fg) 4%, var(--card)); }
+tr:last-child td { border-bottom: 0; }
+
+/* stepper */
+.stepper { margin: 18px 0; padding: 14px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.pipe { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; }
+.pipe .box { flex: 1 1 140px; border: 1.5px solid var(--line-strong); border-radius: 10px; padding: 9px 11px; font-size: .92rem; background: var(--bg); }
+.pipe .box b { display: block; font-size: .95rem; }
+.pipe .box span { color: var(--muted); font-size: .85rem; }
+.pipe .arrow { align-self: center; color: var(--muted); font-size: 1.2rem; flex: 0 0 auto; }
+.pipe .row2 { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+.stepper.js [data-steps] { opacity: .35; transition: opacity .25s, border-color .25s; }
+.stepper.js [data-steps].on { opacity: 1; }
+.stepper.js .box.on { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.stepper .steps { margin: 14px 0 0; padding-left: 1.4em; }
+.stepper .steps li { margin: 6px 0; padding: 2px 8px; border-left: 3px solid transparent; }
+.stepper.js .steps li { color: var(--muted); }
+.stepper.js .steps li.on { color: var(--fg); border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.stepper .controls { display: none; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.stepper.js .controls { display: flex; }
+.step-label { color: var(--muted); font-size: .92rem; }
+
+/* resource usage */
+.pickers { display: flex; flex-wrap: wrap; gap: 12px 28px; margin: 18px 0 6px; }
+.pickers fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.pickers legend { font-size: .85rem; color: var(--muted); padding: 0; margin: 0 0 4px; }
+.seg-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg-opts label { position: relative; display: inline-block; }
+.seg-opts input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.seg-opts span { display: inline-block; padding: 7px 13px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--card); font-size: .93rem; }
+.seg-opts input:checked + span { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--card)); font-weight: 600; }
+.seg-opts input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+.machine { margin: 14px 0; padding: 14px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; }
+.machine header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 16px; }
+.machine h3 { margin: 0; font-size: 1.05rem; }
+.machine .mtotal { color: var(--muted); font-size: .9rem; }
+.part h4 { margin: 12px 0 6px; font-size: .85rem; color: var(--muted); font-weight: 600; }
+.brow { display: grid; grid-template-columns: minmax(120px, 190px) 1fr minmax(150px, auto); gap: 8px; align-items: center; font-size: .9rem; padding: 2px 0; }
+.track { position: relative; height: 12px; background: color-mix(in srgb, var(--fg) 8%, transparent); border-radius: 6px; }
+.fill { position: absolute; inset: 0 auto 0 0; min-width: 2px; background: var(--c); border-radius: 6px; }
+.tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--fg); }
+.bval { text-align: right; font-variant-numeric: tabular-nums; }
+.t-reg { --c: var(--reg); } .t-store { --c: var(--store); } .t-hq { --c: var(--hq); }
+.legend .l-bar { width: 16px; height: 8px; border-radius: 4px; background: var(--muted); }
+.legend .l-tick { width: 2px; height: 12px; border-radius: 0; background: var(--fg); margin: 0 9px 0 7px; }
+@media (prefers-reduced-motion: no-preference) { .fill, .tick { transition: width .35s, left .35s; } }
+@media (max-width: 640px) {
+  .brow { grid-template-columns: 1fr auto; }
+  .brow .track { grid-column: 1 / -1; order: 3; }
+}
+
+footer { margin-top: 64px; padding: 24px 0 40px; border-top: 1px solid var(--line); color: var(--muted); font-size: .9rem; }
+
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .bar .wrap { gap: 8px; }
+  section { padding-top: 40px; }
+  .pipe .arrow { transform: rotate(90deg); flex-basis: 100%; text-align: center; height: 1.2em; }
+  .pipe .arrow.back { transform: none; }
+}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="wrap">
+    <a class="brand" href="#top">abarow</a>
+    <nav aria-label="Bölümler">
+      <a href="#akis">Akış</a>
+      <a href="#kesinti">Bağlantı kesilince</a>
+      <a href="#kaynak">Kaynak</a>
+    </nav>
+    <a class="btn" href="https://github.com/abarow/kasadan-merkeze-sistem-abarow" rel="noopener">GitHub</a>
+    <button class="btn" id="theme" type="button" aria-label="Temayı değiştir">Tema</button>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Açık kaynak · Apache-2.0</p>
+      <h1>abarow</h1>
+      <p class="lead">Türkiye'deki perakende ve restoran için Linux üzerinde çalışan, açık kaynak bir satış noktası sistemi. Kasa, mağaza sunucusu ve merkez olmak üzere üç katmanda; her katman kendi başına çalışabilecek şekilde tasarlandı.</p>
+      <div class="stats">
+        <div class="stat"><b>≈95 MiB</b><span>Bir kasanın 9 servisinin yük altındaki belleği (boşta ≈68 MiB)</span></div>
+        <div class="stat"><b>119 ms</b><span>Bir satışın tamamı (5 çağrı), hafif yükte p50</span></div>
+        <div class="stat"><b>0 hata</b><span>682 satışta ve ≈113 bin okuma isteğinde</span></div>
+        <div class="stat"><b>2 satış</b><span>Gerçekçi yükte merkezde bekleyen en uzun kuyruk (50 mağaza, 100 kasa)</span></div>
+      </div>
+      <p class="note">Geliştirici bilgisayarında (Docker Desktop, 16 mantıksal CPU) ölçüldü. Mağaza donanımının değerini vermez, garanti değildir. <a href="#kaynak">Kaynak kullanımının ayrıntısı</a>.</p>
+    </div>
+  </section>
+
+  <section id="akis">
+    <div class="wrap">
+      <h2>Üç katman, tek olay akışı</h2>
+      <p class="lead">Her katmanda kendi PostgreSQL'i ve NATS JetStream'i çalışır. Satış olayları kasadan mağaza sunucusuna, oradan merkeze akar. Katalog ve fiyat merkezden kasalara iner. Üst katman olayı veritabanına işleyince makbuz geri gelir.</p>
+      <figure class="flow" data-flow data-seed="7" aria-label="Kasa, mağaza sunucusu ve merkez arasındaki olay akışı">
+        <div class="flow-host"></div>
+        <div class="flow-controls"><button class="btn" type="button" data-pause>Durdur</button></div>
+        <ul class="legend">
+          <li><i class="l-sale"></i>Satış olayı (yukarı)</li>
+          <li><i class="l-cat"></i>Katalog ve fiyat (aşağı)</li>
+          <li><i class="l-rec"></i>Teslim makbuzu (aşağı)</li>
+        </ul>
+        <noscript><p>Bu çizim hareketli olduğu için JavaScript ister. Kasa, mağaza sunucusu ve merkez birbirine NATS leaf bağlantısıyla bağlanır; olaylar yukarı, katalog ve makbuzlar aşağı akar.</p></noscript>
+      </figure>
+      <p class="note">Gösterim hızlandırılmıştır: kasa başına yaklaşık 2 saniyede bir satış. Ölçümlerde kasa başına 20 saniyede 1 satış kullanıldı.</p>
+      <ul class="prose">
+        <li>Her katmanın kendi PostgreSQL'i ve kendi NATS'ı vardır; bir katman üstünü beklemeden çalışır.</li>
+        <li>Olaylar yukarı akar. Katalog, fiyat ve makbuz aşağı iner.</li>
+        <li>Bağlantılar NATS leaf bağlantısıdır: TLS ve NKey ile korunur, bölüm "Güvenli iletişim"de.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="kesinti">
+    <div class="wrap">
+      <h2>Bağlantı kesilince</h2>
+      <p class="lead">Aynı çizim, bu kez bağlantıları siz kesiyorsunuz. Kasalar satmaya devam eder, olaylar bir alt katmanda birikir; bağlantı gelince sırayla akar.</p>
+      <figure class="flow" data-flow data-seed="21" aria-label="Bağlantı kesintisi gösterimi">
+        <div class="flow-host"></div>
+        <div class="flow-controls">
+          <button class="btn" type="button" data-cut="store" aria-pressed="false">Mağaza sunucusu bağlantısını kes</button>
+          <button class="btn" type="button" data-cut="hq" aria-pressed="false">Merkez (internet) bağlantısını kes</button>
+          <button class="btn" type="button" data-pause>Durdur</button>
+        </div>
+        <output class="flow-status" aria-live="polite"></output>
+        <noscript><p>Bu çizim hareketli olduğu için JavaScript ister. Bağlantı kesilirse kasalar satmaya devam eder ve olaylar bir alt katmanda birikir.</p></noscript>
+      </figure>
+
+      <h3>Ne çökerse ne olur</h3>
+      <div class="tablebox"><table>
+        <thead><tr><th>Ne çökerse</th><th>Ne olur</th></tr></thead>
+        <tbody>
+          <tr><td>İnternet</td><td>Mağaza, raporlar dahil normal çalışır; olaylar mağaza sunucusunda birikir.</td></tr>
+          <tr><td>Mağaza sunucusu</td><td>Market kasaları satmaya devam eder, olaylar kasalarda birikir; mağaza raporları durur. Restoranda masa paylaşımı durur.</td></tr>
+          <tr><td>Bir kasa</td><td>Diğer kasalar etkilenmez; o kasanın bekleyen olayları kasa açılınca gönderilir.</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Olay neden kaybolmaz, neden iki kez sayılmaz</h3>
+      <div class="stepper" data-stepper>
+        <div class="pipe">
+          <div class="box" data-steps="1"><b>Servis</b><span>satışı kaydeder</span></div>
+          <span class="arrow" aria-hidden="true" data-steps="1">→</span>
+          <div class="box" data-steps="1 2"><b>PostgreSQL</b><span>satış + outbox, tek işlem</span></div>
+          <span class="arrow" aria-hidden="true" data-steps="2">→</span>
+          <div class="box" data-steps="2"><b>Relay</b><span>outbox'ı sırayla yayınlar</span></div>
+          <span class="arrow" aria-hidden="true" data-steps="2">→</span>
+          <div class="box" data-steps="2 3 4 5"><b>Yerel JetStream</b><span>kimlikle tekrar ayıklar</span></div>
+          <span class="arrow" aria-hidden="true" data-steps="3">→</span>
+          <div class="box" data-steps="3 4"><b>Üst katman PostgreSQL</b><span>aynı kimliği bir kez işler</span></div>
+          <div class="row2">
+            <div class="box" data-steps="4"><b>Makbuz ↩</b><span>üst katman işleyince UUIDv7 üretir ve aşağı gönderir</span></div>
+            <div class="box" data-steps="5"><b>Saklama</b><span>makbuzu gelmiş olay da kasada en az 30, mağaza sunucusunda 90 gün durur</span></div>
+          </div>
+        </div>
+        <ol class="steps">
+          <li><b>Outbox:</b> servis satışı ve yayınlayacağı olayı aynı veritabanı işleminde yazar. "Satış kaydedildi ama olay gitmedi" durumu oluşmaz.</li>
+          <li><b>Relay:</b> ayrı bir döngü outbox'ı yazılış sırasıyla yerel JetStream'e yayınlar (500 ms aralıkla). NATS yoksa olay outbox'ta bekler.</li>
+          <li><b>Tekrar ayıklama:</b> her olayın benzersiz kimliği vardır. JetStream kimliği 10 dakikalık pencerede, alıcılar veritabanında ayıklar; aynı olay iki kez gelse bir kez işlenir.</li>
+          <li><b>Teslim makbuzu:</b> üst katman olayı kendi PostgreSQL'ine işleyince makbuz üretir ve aşağı gönderir. Alt katman, makbuzu gelmemiş olayı silmez. NATS'ın kendi onayı yalnız "alan akış yazdı" der; veritabanına işlendiğini makbuz kanıtlar.</li>
+          <li><b>Saklama:</b> makbuzu gelmiş olay da en az kasada 30, mağaza sunucusunda 90 gün durur.</li>
+        </ol>
+        <div class="controls">
+          <button class="btn" type="button" data-prev>Önceki</button>
+          <button class="btn" type="button" data-play aria-pressed="false">Oynat</button>
+          <button class="btn" type="button" data-next>Sonraki</button>
+          <span class="step-label" aria-live="polite"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section id="kaynak">
+    <div class="wrap">
+      <h2>Kaynak kullanımı: iki örnek kurulum</h2>
+      <p class="lead">Container başına CPU ve bellek, boşta ve gerçekçi satış yükü altında (her kasada 20 saniyede 1 satış). Bir kurulum seçin.</p>
+      <div class="pickers">
+        <fieldset class="seg">
+          <legend>Kurulum</legend>
+          <div class="seg-opts">
+            <label><input type="radio" name="scen" value="A" checked><span>1 mağaza + 1 kasa (tek makine)</span></label>
+            <label><input type="radio" name="scen" value="B"><span>1 merkez + 2 mağaza + 10 kasa</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="seg">
+          <legend>Ölçü</legend>
+          <div class="seg-opts">
+            <label><input type="radio" name="metric" value="mem" checked><span>Bellek</span></label>
+            <label><input type="radio" name="metric" value="cpu"><span>CPU</span></label>
+          </div>
+        </fieldset>
+      </div>
+      <div class="stats" id="res-stats"></div>
+      <p class="note" id="res-note"></p>
+      <div id="res-machines"></div>
+      <ul class="legend">
+        <li><i class="l-bar"></i>Çubuk: yük altında (ortalama)</li>
+        <li><i class="l-tick"></i>Çizgi: boşta</li>
+      </ul>
+      <details>
+        <summary>Bütün sayılar (tablo)</summary>
+        <div class="tablebox"><table id="res-table"></table></div>
+      </details>
+
+      <h3>Veri büyüyünce</h3>
+      <p class="prose">Yukarıdaki yığınlar tazedir, veritabanları boştur. Veritabanı belleği veriyle büyür. Aynı yükte, 30 günlük satışla dolu veritabanları:</p>
+      <div class="tablebox"><table>
+        <thead><tr><th>Veritabanı</th><th>Veri</th><th>CPU (ort.)</th><th>Bellek (en çok)</th><th>Taze yığında (en çok)</th></tr></thead>
+        <tbody>
+          <tr><td>Mağaza sunucusu, 1 kasa</td><td>9.000 satış, 29 MB</td><td>%2</td><td>74 MiB</td><td>55,8 MiB</td></tr>
+          <tr><td>Mağaza sunucusu, 5 kasa</td><td>45.000 satış, 102 MB</td><td>%14</td><td>149 MiB</td><td>56,8 MiB</td></tr>
+          <tr><td>Merkez, 2 mağaza × 5 kasa</td><td>90.000 satış, 229 MB</td><td>%17</td><td>249 MiB</td><td>62,1 MiB</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Bu CPU değerleri yığındakinden yüksektir: 30 günlük veride aylık ve ürün raporları ağır sorgulardır ve rapor ekranı açıktır.</p>
+
+      <h3>Ayrılan tavan ve kullanılan</h3>
+      <p class="prose">Her container'ın bir bellek tavanı vardır. Tavanların toplamı ("optimum") makinenin ayırması gereken bellektir; ölçülen kullanım bunun küçük bir kısmı.</p>
+      <div class="tablebox"><table>
+        <thead><tr><th>Makine</th><th>Ölçülen en çok (taze)</th><th>30 günlük veriyle (hesaplanan)</th><th>Optimum tavan</th></tr></thead>
+        <tbody>
+          <tr><td>Kasa</td><td>123 MiB</td><td>kasa veritabanı ölçülmedi</td><td>736 MB</td></tr>
+          <tr><td>Mağaza sunucusu, 5 kasa</td><td>168 MiB</td><td>≈260 MiB</td><td>608 MB</td></tr>
+          <tr><td>1 mağaza + 1 kasa, tek makine</td><td>200 MiB</td><td>≈210 MiB</td><td>1280 MB</td></tr>
+        </tbody>
+      </table></div>
+      <p class="note">Geliştirici bilgisayarında (Docker Desktop, WSL2, 16 mantıksal CPU) tek çalıştırmada, 2 dakikalık yükle ölçüldü; mağaza donanımının değerini vermez, garanti değildir. CPU, tek çekirdeğin yüzdesidir. İşletim sistemi ve kasadaki Chromium dahil değildir (≈256 MB ve ≈512 MB tahmin). Boşta CPU'nun bir kısmı Docker Desktop ve WSL2'nin sanallaştırma yüküdür; gerçek Linux ve Podman'da ölçülmedi.</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    Telif © 2026 Mehmet ERGULCU ve abarow katkıcıları · Apache-2.0 · Ölçümler: 05–14.11.2026
+  </div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+  var root = document.documentElement;
+
+  // theme: follows the system until the visitor chooses; the choice is kept if storage works
+  try {
+    var saved = localStorage.getItem('abarow-theme');
+    if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+  } catch (e) { /* storage may be blocked */ }
+  document.getElementById('theme').addEventListener('click', function () {
+    var dark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+    var next = dark ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('abarow-theme', next); } catch (e) { /* ignore */ }
+  });
+
+  var NS = 'http://www.w3.org/2000/svg';
+  var reduceMQ = matchMedia('(prefers-reduced-motion: reduce)');
+
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  // a small seeded generator: the same picture on every visit
+  function rng(seed) {
+    return function () {
+      seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+      var t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---- the flow drawing -------------------------------------------------------------------
+  var NODES = {
+    reg1: { tier: 'reg', name: 'Kasa 1', chips: ['PostgreSQL', 'outbox', 'NATS JetStream'], counter: 'Bekleyen olay', squares: true, status: true },
+    reg2: { tier: 'reg', name: 'Kasa 2', chips: ['PostgreSQL', 'outbox', 'NATS JetStream'], counter: 'Bekleyen olay', squares: true, status: true },
+    store: { tier: 'store', name: 'Mağaza sunucusu', chips: ['NATS JetStream', 'PostgreSQL', 'rapor ekranı'], counter: 'Merkeze bekleyen', squares: true, status: true },
+    hq: { tier: 'hq', name: 'Merkez', chips: ['NATS', 'ingest', 'PostgreSQL', 'rapor ekranı'], counter: 'İşlenen satış', squares: false, status: true }
+  };
+  var SQUARES = 12;
+
+  function chipW(t) { return Math.round(t.length * 6.9 + 16); }
+  function geom(spec, w) {
+    var pad = 12, rows = [[]], x = pad;
+    spec.chips.forEach(function (t) {
+      var cw = chipW(t);
+      if (x + cw > w - pad && rows[rows.length - 1].length) { rows.push([]); x = pad; }
+      rows[rows.length - 1].push({ t: t, x: x, w: cw });
+      x += cw + 6;
+    });
+    var chipsY = 40, rowH = 26, end = chipsY + rows.length * rowH;
+    var counterY = end + 14;
+    var squaresY = spec.squares ? counterY + 10 : 0;
+    var statusY = (spec.squares ? squaresY + 9 : counterY) + 22;
+    return { rows: rows, chipsY: chipsY, rowH: rowH, counterY: counterY, squaresY: squaresY, statusY: statusY, h: statusY + 12 };
+  }
+
+  function layout(mode) {
+    var L = { mode: mode, nodes: {}, edges: {} };
+    var g = {};
+    if (mode === 'wide') {
+      L.w = 960;
+      var w = { reg1: 190, reg2: 190, store: 200, hq: 190 };
+      Object.keys(NODES).forEach(function (k) { g[k] = geom(NODES[k], w[k]); });
+      var gap = 20, hh = Math.max(2 * g.reg1.h + 2 * gap + 40, g.store.h + 40, g.hq.h + 40);
+      L.h = hh;
+      var c = hh / 2, off = g.reg1.h / 2 + gap;
+      L.nodes.reg1 = { x: 10, y: c - off - g.reg1.h / 2, w: w.reg1, g: g.reg1 };
+      L.nodes.reg2 = { x: 10, y: c + off - g.reg2.h / 2, w: w.reg2, g: g.reg2 };
+      L.nodes.store = { x: 385, y: c - g.store.h / 2, w: w.store, g: g.store };
+      L.nodes.hq = { x: 760, y: c - g.hq.h / 2, w: w.hq, g: g.hq };
+      var r1y = L.nodes.reg1.y + g.reg1.h / 2, r2y = L.nodes.reg2.y + g.reg2.h / 2;
+      L.edges.r1 = { a: [200, r1y], b: [385, c - 45], lines: ['NATS leaf', 'TLS · NKey'], lx: 292.5, ly: (r1y + c - 45) / 2 - 30, anchor: 'middle' };
+      L.edges.r2 = { a: [200, r2y], b: [385, c + 45], lines: ['NATS leaf', 'TLS · NKey'], lx: 292.5, ly: (r2y + c + 45) / 2 + 20, anchor: 'middle' };
+      L.edges.s = { a: [585, c], b: [760, c], lines: ['NATS leaf · TLS', 'NKey · izin listesi'], lx: 672.5, ly: c - 28, anchor: 'middle' };
+    } else {
+      L.w = 360;
+      var w2 = { reg1: 168, reg2: 168, store: 260, hq: 260 };
+      Object.keys(NODES).forEach(function (k) { g[k] = geom(NODES[k], w2[k]); });
+      var y1 = 8, sy = y1 + g.reg1.h + 120, hy = sy + g.store.h + 120;
+      L.h = hy + g.hq.h + 8;
+      L.nodes.reg1 = { x: 8, y: y1, w: w2.reg1, g: g.reg1 };
+      L.nodes.reg2 = { x: 184, y: y1, w: w2.reg2, g: g.reg2 };
+      L.nodes.store = { x: 50, y: sy, w: w2.store, g: g.store };
+      L.nodes.hq = { x: 50, y: hy, w: w2.hq, g: g.hq };
+      var by = y1 + g.reg1.h;
+      L.edges.r1 = { a: [92, by], b: [120, sy], lines: ['NATS leaf', 'TLS · NKey'], lx: 96, ly: (by + sy) / 2 - 4, anchor: 'end' };
+      L.edges.r2 = { a: [268, by], b: [240, sy], lines: ['NATS leaf', 'TLS · NKey'], lx: 264, ly: (by + sy) / 2 - 4, anchor: 'start' };
+      L.edges.s = { a: [180, sy + g.store.h], b: [180, hy], lines: ['NATS leaf · TLS', 'NKey · izin listesi'], lx: 192, ly: (sy + g.store.h + hy) / 2 - 4, anchor: 'start' };
+    }
+    return L;
+  }
+
+  function Flow(fig) {
+    var host = fig.querySelector('.flow-host');
+    var statusEl = fig.querySelector('.flow-status');
+    var pauseBtn = fig.querySelector('[data-pause]');
+    var cutStore = fig.querySelector('[data-cut="store"]');
+    var cutHq = fig.querySelector('[data-cut="hq"]');
+    var rand = rng(Number(fig.dataset.seed) || 1);
+    var ui = null, mode = null;
+
+    function mkEdge() { return { linked: true, cool: 0, dcool: 0, downQ: [], len: 1, a: [0, 0], b: [0, 0], nx: 0, ny: 0 }; }
+    var S = {
+      t: 0, raf: 0, last: 0, visible: false, userPaused: false, linkStore: true, linkHq: true,
+      reg: [{ q: 0, flash: 0, next: 0.4 }, { q: 0, flash: 0, next: 1.4 }],
+      storeQ: [], store: { flash: 0 }, hq: { n: 0, flash: 0 }, nextCatalog: 5,
+      edges: { r1: mkEdge(), r2: mkEdge(), s: mkEdge() }, dots: []
+    };
+    var REG = { r1: 0, r2: 1 };
+
+    // ---- drawing
+    function build() {
+      var L = layout(mode);
+      host.textContent = '';
+      host.classList.toggle('tall', mode === 'tall');
+      var svg = el('svg', { viewBox: '0 0 ' + L.w + ' ' + L.h, role: 'img' }, host);
+      el('title', {}, svg).textContent = 'Kasa, mağaza sunucusu ve merkez arasındaki olay akışı';
+      el('desc', {}, svg).textContent = 'İki kasa NATS leaf bağlantısıyla mağaza sunucusuna, mağaza sunucusu merkeze bağlanır. Satış olayları yukarı akar; katalog, fiyat ve teslim makbuzları aşağı iner. Bağlantı kesilirse olaylar bir alt katmanda birikir.';
+      ui = { svg: svg, nodes: {}, edges: {}, cache: {} };
+      var edgesG = el('g', {}, svg), nodesG = el('g', {}, svg);
+      ui.dots = el('g', {}, svg);
+
+      Object.keys(L.edges).forEach(function (id) {
+        var d = L.edges[id], e = S.edges[id];
+        var dx = d.b[0] - d.a[0], dy = d.b[1] - d.a[1], len = Math.hypot(dx, dy);
+        e.a = d.a; e.b = d.b; e.len = len; e.nx = -dy / len; e.ny = dx / len;
+        var g = el('g', { 'class': 'edge' }, edgesG);
+        el('line', { x1: d.a[0], y1: d.a[1], x2: d.b[0], y2: d.b[1] }, g);
+        [[d.b, 1], [d.a, -1]].forEach(function (p) {
+          var ux = dx / len * p[1], uy = dy / len * p[1], tx = p[0][0], ty = p[0][1], s = 9;
+          var bx = tx - ux * s, by = ty - uy * s;
+          el('polygon', { points: tx + ',' + ty + ' ' + (bx + -uy * s * 0.5) + ',' + (by + ux * s * 0.5) + ' ' + (bx - -uy * s * 0.5) + ',' + (by - ux * s * 0.5) }, g);
+        });
+        d.lines.forEach(function (t, i) {
+          el('text', { 'class': 'lbl lbl-up', x: d.lx, y: d.ly + i * 13, 'text-anchor': d.anchor }, g).textContent = t;
+        });
+        el('text', { 'class': 'lbl lbl-down', x: d.lx, y: d.ly + 13, 'text-anchor': d.anchor }, g).textContent = 'bağlantı yok';
+        ui.edges[id] = g;
+      });
+
+      Object.keys(NODES).forEach(function (id) {
+        var spec = NODES[id], n = L.nodes[id], g = n.g;
+        var grp = el('g', { 'class': 'node n-' + spec.tier, transform: 'translate(' + n.x + ' ' + n.y + ')' }, nodesG);
+        el('rect', { 'class': 'box', width: n.w, height: g.h, rx: 12 }, grp);
+        el('text', { 'class': 't-name', x: 12, y: 26 }, grp).textContent = spec.name;
+        g.rows.forEach(function (row, r) {
+          row.forEach(function (c) {
+            var cg = el('g', { 'class': 'chip' + (c.t === 'outbox' ? ' dashed' : ''), transform: 'translate(' + c.x + ' ' + (g.chipsY + r * g.rowH) + ')' }, grp);
+            el('rect', { width: c.w, height: 20, rx: 6 }, cg);
+            el('text', { x: c.w / 2, y: 14, 'text-anchor': 'middle' }, cg).textContent = c.t;
+          });
+        });
+        var count = el('text', { 'class': 't-count', x: 12, y: g.counterY }, grp);
+        count.appendChild(document.createTextNode(spec.counter + ': '));
+        var num = el('tspan', { 'font-weight': '700' }, count);
+        var sqs = [];
+        if (spec.squares) {
+          for (var i = 0; i < SQUARES; i++) sqs.push(el('rect', { 'class': 'sq', x: 12 + i * 12, y: g.squaresY, width: 9, height: 9, rx: 2 }, grp));
+        }
+        var status = el('text', { 'class': 't-status', x: 12, y: g.statusY }, grp);
+        ui.nodes[id] = { grp: grp, num: num, sqs: sqs, status: status };
+      });
+      ui.cache = {};
+      S.dots.forEach(function (d) { d.el = null; });
+      refresh();
+    }
+
+    function setText(key, node, v) {
+      if (ui.cache[key] !== v) { ui.cache[key] = v; node.textContent = v; }
+    }
+    function setSquares(key, sqs, n) {
+      if (ui.cache[key] === n) return;
+      ui.cache[key] = n;
+      sqs.forEach(function (s, i) { s.setAttribute('class', i < n ? 'sq on' : 'sq'); });
+    }
+    function statusText() {
+      if (S.linkStore && S.linkHq) {
+        var waiting = S.reg[0].q + S.reg[1].q + S.storeQ.length;
+        return waiting > 2 && S.wasCut ? 'Bağlantı geldi: biriken olaylar sırayla akıyor.' : 'Bağlantılar açık: satışlar kasadan mağaza sunucusuna, oradan merkeze akıyor.';
+      }
+      if (!S.linkStore && S.linkHq) return 'Mağaza sunucusu bağlantısı kesik: kasalar satmaya devam ediyor, olaylar kasalarda birikiyor.';
+      if (S.linkStore && !S.linkHq) return 'Merkez bağlantısı kesik: mağaza normal çalışıyor, olaylar mağaza sunucusunda birikiyor.';
+      return 'İki bağlantı da kesik: kasalar satıyor ve olaylar kasalarda birikiyor; mağaza sunucusu merkeze zaten ulaşamıyor.';
+    }
+    function refresh() {
+      if (!ui) return;
+      var still = reduceMQ.matches;
+      [0, 1].forEach(function (i) {
+        var n = ui.nodes[i ? 'reg2' : 'reg1'], q = S.reg[i].q;
+        if (still) {
+          var cut = !S.linkStore;
+          setText('rn' + i, n.num, cut ? 'birikiyor' : '0');
+          setSquares('rs' + i, n.sqs, cut ? 5 : 0);
+        } else {
+          setText('rn' + i, n.num, String(q));
+          setSquares('rs' + i, n.sqs, Math.min(q, SQUARES));
+        }
+        setText('rt' + i, n.status, S.linkStore ? 'Mağaza sunucusuna bağlı' : 'Satış sürüyor');
+      });
+      var st = ui.nodes.store;
+      if (still) {
+        var held = S.linkStore && !S.linkHq;
+        setText('sn', st.num, held ? 'birikiyor' : '0');
+        setSquares('ss', st.sqs, held ? 5 : 0);
+      } else {
+        setText('sn', st.num, String(S.storeQ.length));
+        setSquares('ss', st.sqs, Math.min(S.storeQ.length, SQUARES));
+      }
+      setText('st', st.status, !S.linkStore ? 'Kasalardan veri gelmiyor' : (!S.linkHq ? 'Merkeze ulaşılamıyor' : 'Rapor güncel'));
+      var hq = ui.nodes.hq;
+      setText('hn', hq.num, still ? (S.linkStore && S.linkHq ? 'akış var' : 'akış yok') : String(S.hq.n));
+      setText('ht', hq.status, S.linkHq ? (S.linkStore ? 'Veri geliyor' : 'Yeni veri gelmiyor') : 'Mağazadan veri gelmiyor');
+      ui.edges.r1.classList.toggle('down', !S.linkStore);
+      ui.edges.r2.classList.toggle('down', !S.linkStore);
+      ui.edges.s.classList.toggle('down', !S.linkHq);
+      if (statusEl) setText('status', statusEl, statusText());
+    }
+
+    // ---- simulation
+    function queueDown(e, item) {
+      if (item.kind === 'catalog' && e.downQ.some(function (x) { return x.kind === 'catalog'; })) return;
+      e.downQ.push(item);
+    }
+    function spawn(eid, kind, dir, reg, fast) {
+      S.dots.push({ eid: eid, e: S.edges[eid], kind: kind, dir: dir, reg: reg, t: dir > 0 ? 0 : 1, speed: fast ? 420 : 210, el: null });
+    }
+    function returnDot(d) {
+      if (d.dir > 0) {
+        if (d.eid === 's') S.storeQ.unshift(d.reg); else S.reg[REG[d.eid]].q++;
+      } else if (d.kind === 'catalog') {
+        if (!d.e.downQ.some(function (x) { return x.kind === 'catalog'; })) d.e.downQ.unshift({ kind: 'catalog', ready: 0 });
+      } else {
+        d.e.downQ.unshift({ kind: 'receipt', reg: d.reg, ready: 0 });
+      }
+    }
+    function setEdge(e, up) {
+      if (e.linked === up) return;
+      e.linked = up;
+      if (up) { S.wasCut = true; return; }
+      S.dots = S.dots.filter(function (d) {
+        if (d.e !== e) return true;
+        returnDot(d);
+        if (d.el) d.el.remove();
+        return false;
+      });
+    }
+    function arrive(d) {
+      if (d.dir > 0) {
+        if (d.eid === 's') {
+          S.hq.n++; S.hq.flash = 0.5;
+          S.edges.s.downQ.push({ kind: 'receipt', reg: d.reg, ready: S.t + 0.35 });
+        } else {
+          S.storeQ.push(REG[d.eid]); S.store.flash = 0.4;
+        }
+      } else if (d.eid === 's') {
+        S.store.flash = 0.3;
+        if (d.kind === 'receipt') queueDown(S.edges[d.reg ? 'r2' : 'r1'], { kind: 'receipt', reg: d.reg, ready: 0 });
+        else { queueDown(S.edges.r1, { kind: 'catalog' }); queueDown(S.edges.r2, { kind: 'catalog' }); }
+      } else {
+        S.reg[REG[d.eid]].flash = 0.3;
+      }
+    }
+    function nextReady(e) {
+      for (var i = 0; i < e.downQ.length; i++) if ((e.downQ[i].ready || 0) <= S.t) return i;
+      return -1;
+    }
+    function step(dt) {
+      S.t += dt;
+      [0, 1].forEach(function (i) {
+        var r = S.reg[i];
+        if (S.t >= r.next) { r.q++; r.flash = 0.5; r.next = S.t + 1.8 + rand() * 0.9; }
+        r.flash = Math.max(0, r.flash - dt);
+      });
+      S.store.flash = Math.max(0, S.store.flash - dt);
+      S.hq.flash = Math.max(0, S.hq.flash - dt);
+      ['r1', 'r2'].forEach(function (id) {
+        var e = S.edges[id], r = S.reg[REG[id]];
+        e.cool -= dt; e.dcool -= dt;
+        if (e.linked && r.q > 0 && e.cool <= 0) {
+          r.q--; spawn(id, 'sale', 1, REG[id], r.q > 2); e.cool = r.q > 2 ? 0.07 : 0.16;
+        }
+        if (e.linked && e.dcool <= 0) {
+          var k = nextReady(e);
+          if (k >= 0) { var it = e.downQ.splice(k, 1)[0]; spawn(id, it.kind, -1, it.reg); e.dcool = 0.14; }
+        }
+      });
+      var es = S.edges.s;
+      es.cool -= dt; es.dcool -= dt;
+      if (es.linked && S.storeQ.length && es.cool <= 0) {
+        var reg = S.storeQ.shift(); spawn('s', 'sale', 1, reg, S.storeQ.length > 2); es.cool = S.storeQ.length > 2 ? 0.07 : 0.16;
+      }
+      if (es.linked && es.dcool <= 0) {
+        var j = nextReady(es);
+        if (j >= 0) { var it2 = es.downQ.splice(j, 1)[0]; spawn('s', it2.kind, -1, it2.reg); es.dcool = 0.14; }
+      }
+      if (S.t >= S.nextCatalog) { queueDown(es, { kind: 'catalog' }); S.nextCatalog = S.t + 7 + rand() * 2; }
+      var live = [];
+      S.dots.forEach(function (d) {
+        d.t += d.dir * d.speed * dt / d.e.len;
+        if ((d.dir > 0 && d.t >= 1) || (d.dir < 0 && d.t <= 0)) { arrive(d); if (d.el) d.el.remove(); } else live.push(d);
+      });
+      S.dots = live;
+    }
+    function draw() {
+      S.dots.forEach(function (d) {
+        if (!d.el) d.el = el('circle', { 'class': 'dot-' + d.kind, r: d.kind === 'receipt' ? 3.6 : 4.6 }, ui.dots);
+        var e = d.e, o = d.dir > 0 ? 6 : -6;
+        d.el.setAttribute('cx', (e.a[0] + (e.b[0] - e.a[0]) * d.t + e.nx * o).toFixed(1));
+        d.el.setAttribute('cy', (e.a[1] + (e.b[1] - e.a[1]) * d.t + e.ny * o).toFixed(1));
+      });
+      var flashes = { reg1: S.reg[0].flash, reg2: S.reg[1].flash, store: S.store.flash, hq: S.hq.flash };
+      Object.keys(flashes).forEach(function (id) { ui.nodes[id].grp.classList.toggle('flash', flashes[id] > 0); });
+      refresh();
+    }
+
+    // ---- running
+    function running() { return S.visible && !document.hidden && !S.userPaused && !reduceMQ.matches; }
+    function frame(ts) {
+      S.raf = 0;
+      if (!running()) return;
+      var dt = Math.min(0.1, (ts - S.last) / 1000) || 0;
+      S.last = ts;
+      step(dt); draw();
+      S.raf = requestAnimationFrame(frame);
+    }
+    function sync() {
+      if (running()) {
+        if (!S.raf) { S.last = performance.now(); S.raf = requestAnimationFrame(frame); }
+      } else if (S.raf) { cancelAnimationFrame(S.raf); S.raf = 0; }
+    }
+    function setLink(which, up) {
+      if (which === 'store') { S.linkStore = up; setEdge(S.edges.r1, up); setEdge(S.edges.r2, up); }
+      else { S.linkHq = up; setEdge(S.edges.s, up); }
+      if (ui) { ui.dots.textContent = ''; S.dots.forEach(function (d) { d.el = null; }); refresh(); }
+    }
+
+    if (cutStore) cutStore.addEventListener('click', function () {
+      var cut = cutStore.getAttribute('aria-pressed') !== 'true';
+      cutStore.setAttribute('aria-pressed', String(cut));
+      cutStore.textContent = cut ? 'Mağaza sunucusu bağlantısını geri getir' : 'Mağaza sunucusu bağlantısını kes';
+      setLink('store', !cut);
+    });
+    if (cutHq) cutHq.addEventListener('click', function () {
+      var cut = cutHq.getAttribute('aria-pressed') !== 'true';
+      cutHq.setAttribute('aria-pressed', String(cut));
+      cutHq.textContent = cut ? 'Merkez bağlantısını geri getir' : 'Merkez (internet) bağlantısını kes';
+      setLink('hq', !cut);
+    });
+    if (pauseBtn) pauseBtn.addEventListener('click', function () {
+      S.userPaused = !S.userPaused;
+      pauseBtn.textContent = S.userPaused ? 'Sürdür' : 'Durdur';
+      sync();
+    });
+    new IntersectionObserver(function (entries) {
+      S.visible = entries[0].isIntersecting; sync();
+    }, { threshold: 0.1 }).observe(fig);
+    document.addEventListener('visibilitychange', sync);
+    reduceMQ.addEventListener('change', function () { if (ui) { ui.cache = {}; ui.dots.textContent = ''; S.dots = []; refresh(); } sync(); });
+    function pickMode() {
+      var m = host.clientWidth && host.clientWidth < 700 ? 'tall' : 'wide';
+      if (m !== mode) { mode = m; build(); }
+    }
+    mode = 'wide'; build(); pickMode();
+    if (window.ResizeObserver) new ResizeObserver(pickMode).observe(host);
+  }
+
+  document.querySelectorAll('[data-flow]').forEach(Flow);
+
+  // ---- the stepped explanations ------------------------------------------------------------
+  document.querySelectorAll('[data-stepper]').forEach(function (rootEl) {
+    var items = [].slice.call(rootEl.querySelectorAll('.steps > li'));
+    var marked = [].slice.call(rootEl.querySelectorAll('[data-steps]'));
+    var label = rootEl.querySelector('.step-label');
+    var play = rootEl.querySelector('[data-play]');
+    var cur = 0, timer = 0;
+    rootEl.classList.add('js');
+    function show(i) {
+      cur = (i + items.length) % items.length;
+      items.forEach(function (li, k) { li.classList.toggle('on', k === cur); });
+      marked.forEach(function (m) { m.classList.toggle('on', m.dataset.steps.split(' ').indexOf(String(cur + 1)) >= 0); });
+      label.textContent = 'Adım ' + (cur + 1) + ' / ' + items.length;
+    }
+    function stop() { if (timer) { clearInterval(timer); timer = 0; } play.setAttribute('aria-pressed', 'false'); play.textContent = 'Oynat'; }
+    rootEl.querySelector('[data-prev]').addEventListener('click', function () { stop(); show(cur - 1); });
+    rootEl.querySelector('[data-next]').addEventListener('click', function () { stop(); show(cur + 1); });
+    play.addEventListener('click', function () {
+      if (timer) { stop(); return; }
+      play.setAttribute('aria-pressed', 'true'); play.textContent = 'Durdur';
+      timer = setInterval(function () { show(cur + 1); }, 2500);
+    });
+    new IntersectionObserver(function (entries) { if (!entries[0].isIntersecting) stop(); }, { threshold: 0.05 }).observe(rootEl);
+    show(0);
+  });
+})();
+</script>
+<script>
+(function () {
+  'use strict';
+  // measured 14.11.2026 (docs/PERFORMANCE.md): [name, idle MiB, load MiB, peak MiB, idle CPU %, load CPU %]
+  var RES = {"A":{"machines":[{"title":"Tek makine: kasa + mağaza sunucusu","count":1,"parts":[{"tier":"reg","name":"Kasa (10 container)","rows":[["register-db",43.9,46.1,47.4,0.8,0.8],["nats",11.4,15.0,17.6,1.0,1.2],["staff",8.0,8.4,13.3,0.8,0.9],["sales",7.7,8.1,9.1,0.8,1.0],["catalog",5.8,6.1,7.8,0.7,0.6],["retail",5.2,5.8,7.4,0.5,0.5],["gateway",3.0,5.6,6.9,0.5,0.6],["payment",5.1,5.2,6.7,0.7,0.6],["fiscal",3.2,3.7,5.4,0.7,0.6],["device",3.2,3.5,5.9,0.5,0.5]]},{"tier":"store","name":"Mağaza sunucusu (5 container)","rows":[["store-db",47.3,52.6,55.8,0.7,0.9],["store (NATS)",7.7,9.4,10.9,0.9,1.1],["report",7.6,8.4,10.7,0.8,0.9],["inventory",6.3,6.6,10.1,0.7,0.8],["store-catalog-admin",5.7,6.0,6.9,0.7,0.7]]}],"total":{"idleMem":171.1,"loadMem":190.5,"peakMem":199.6,"idleCpu":10.8,"loadCpu":11.7}}],"load":{"sales":7,"errors":0,"screenReads":14,"saleP50ms":68,"saleP95ms":118}},"B":{"machines":[{"title":"Kasa makinesi","count":10,"parts":[{"tier":"reg","name":"10 container (5 kasanın ortalaması)","rows":[["register-db",42.7,45.5,47.7,0.9,1.1],["nats",13.6,17.4,19.4,1.1,1.3],["sales",7.8,8.8,9.9,0.8,1.0],["staff",8.2,8.8,11.1,0.9,1.0],["catalog",6.5,6.7,8.4,0.7,0.8],["gateway",3.6,6.5,8.0,0.5,0.7],["retail",4.9,5.9,7.6,0.6,0.7],["payment",5.0,5.2,6.3,0.7,0.7],["fiscal",3.5,4.3,5.8,0.6,0.7],["device",3.8,4.3,5.8,0.5,0.7]]}],"total":{"idleMem":99.6,"loadMem":113.5,"peakMem":123.2,"idleCpu":7.4,"loadCpu":8.7}},{"title":"Mağaza sunucusu (5 kasalı)","count":2,"parts":[{"tier":"store","name":"5 container","rows":[["store (NATS)",46.5,68.2,79.6,1.9,2.4],["store-db",51.1,54.6,56.8,0.7,1.1],["report",11.2,13.1,16.7,1.1,1.6],["inventory",8.5,8.9,10.1,0.7,0.9],["store-catalog-admin",7.7,7.9,12.2,0.8,0.9]]}],"total":{"idleMem":125.0,"loadMem":152.7,"peakMem":167.9,"idleCpu":5.2,"loadCpu":6.9}},{"title":"Merkez","count":1,"parts":[{"tier":"hq","name":"6 container","rows":[["headquarters-db",58.2,60.6,62.1,1.0,1.1],["ingest",12.9,13.8,15.2,0.8,1.0],["headquarters (NATS)",9.9,11.1,12.3,0.9,1.1],["catalog-admin",9.1,10.2,11.5,0.6,0.8],["headquarters-inventory",9.3,10.1,11.3,0.7,0.8],["reporting",8.2,9.3,11.5,0.6,0.6]]}],"total":{"idleMem":107.5,"loadMem":115.1,"peakMem":121.8,"idleCpu":4.7,"loadCpu":5.5}}],"fleet":{"idleMem":1353.7,"loadMem":1555.3,"idleCpu":89.5,"loadCpu":106.1},"load":{"sales":34,"errors":0,"screenReads":14,"saleP50ms":65,"saleP95ms":115}}};
+
+  function fmt(v) { return v.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }); }
+  function checked(name) { return document.querySelector('input[name="' + name + '"]:checked').value; }
+  function mk(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+
+  function stats(scen, S) {
+    if (scen === 'A') {
+      var t = S.machines[0].total;
+      return [
+        ['15', 'container, hepsi tek makinede'],
+        [fmt(t.loadMem) + ' MiB', 'yük altında bellek (en çok ' + fmt(t.peakMem) + ' MiB)'],
+        ['%' + fmt(t.loadCpu), 'CPU, tek çekirdeğin yüzdesi (boşta %' + fmt(t.idleCpu) + ')'],
+        ['≈210 MiB', '30 günlük veriyle bellek (hesaplanan)']
+      ];
+    }
+    var f = S.fleet, reg = S.machines[0].total;
+    return [
+      ['≈' + fmt(f.loadMem / 1024) + ' GiB', 'yük altında toplam bellek, 116 container (türetilmiş)'],
+      ['≈1,9 GiB', '30 günlük veriyle toplam bellek (hesaplanan)'],
+      ['%' + Math.round(f.loadCpu), 'toplam CPU, tek çekirdeğin yüzdesi; 13 makineye dağılmış (türetilmiş)'],
+      [fmt(reg.loadMem) + ' MiB', 'bir kasa makinesi, yük altında (mağaza sunucusu: ' + fmt(S.machines[1].total.loadMem) + ' MiB)']
+    ];
+  }
+
+  function render() {
+    var scen = checked('scen'), metric = checked('metric'), S = RES[scen];
+    var mem = metric === 'mem', iIdle = mem ? 1 : 4, iLoad = mem ? 2 : 5, unit = mem ? ' MiB' : ' %';
+    var max = 0;
+    S.machines.forEach(function (m) {
+      m.parts.forEach(function (p) { p.rows.forEach(function (r) { max = Math.max(max, r[iLoad], r[iIdle]); }); });
+    });
+
+    var st = document.getElementById('res-stats');
+    st.textContent = '';
+    stats(scen, S).forEach(function (s) {
+      var box = mk('div', 'stat');
+      box.appendChild(mk('b', null, s[0]));
+      box.appendChild(mk('span', null, s[1]));
+      st.appendChild(box);
+    });
+
+    var L = S.load;
+    document.getElementById('res-note').textContent = scen === 'A'
+      ? 'Doğrudan ölçüldü (15 container). Yük: ' + L.sales + ' satış, hata ' + L.errors + ', satış p50 ' + L.saleP50ms + ' ms.'
+      : '1 merkez + 1 mağaza + 5 kasa doğrudan ölçüldü (61 container; ' + L.sales + ' satış, hata ' + L.errors + ', satış p50 ' + L.saleP50ms + ' ms). İkinci mağaza ve 5 kasası ölçülenin aynısı sayılarak eklendi: makine adedi ve toplamlar türetilmiştir. Merkez, ölçüm sırasında bir mağazaya bağlıydı.';
+
+    var host = document.getElementById('res-machines');
+    host.textContent = '';
+    S.machines.forEach(function (m) {
+      var card = mk('article', 'machine');
+      var head = mk('header');
+      head.appendChild(mk('h3', null, m.title + (m.count > 1 ? '  × ' + m.count : '')));
+      var t = m.total;
+      head.appendChild(mk('span', 'mtotal', mem
+        ? 'Makine toplamı: ' + fmt(t.loadMem) + ' MiB yükte (en çok ' + fmt(t.peakMem) + '), ' + fmt(t.idleMem) + ' MiB boşta'
+        : 'Makine toplamı: %' + fmt(t.loadCpu) + ' yükte, %' + fmt(t.idleCpu) + ' boşta'));
+      card.appendChild(head);
+      m.parts.forEach(function (p) {
+        var part = mk('div', 'part t-' + p.tier);
+        part.appendChild(mk('h4', null, p.name));
+        p.rows.forEach(function (r) {
+          var row = mk('div', 'brow');
+          row.appendChild(mk('span', null, r[0]));
+          var track = mk('div', 'track');
+          track.setAttribute('aria-hidden', 'true');
+          var fill = mk('div', 'fill');
+          fill.style.width = (r[iLoad] / max * 100).toFixed(1) + '%';
+          var tick = mk('div', 'tick');
+          tick.style.left = (r[iIdle] / max * 100).toFixed(1) + '%';
+          track.appendChild(fill);
+          track.appendChild(tick);
+          row.appendChild(track);
+          row.appendChild(mk('span', 'bval', mem
+            ? fmt(r[iLoad]) + ' MiB · boşta ' + fmt(r[iIdle])
+            : '%' + fmt(r[iLoad]) + ' · boşta %' + fmt(r[iIdle])));
+          part.appendChild(row);
+        });
+        card.appendChild(part);
+      });
+      host.appendChild(card);
+    });
+
+    var table = document.getElementById('res-table');
+    table.textContent = '';
+    var thead = mk('thead'), hr = mk('tr');
+    ['Container', 'Boşta (' + unit.trim() + ')', 'Yük (' + unit.trim() + ')'].concat(mem ? ['Yük, en çok (MiB)'] : []).forEach(function (h) { hr.appendChild(mk('th', null, h)); });
+    thead.appendChild(hr);
+    table.appendChild(thead);
+    var tbody = mk('tbody');
+    S.machines.forEach(function (m) {
+      m.parts.forEach(function (p) {
+        var g = mk('tr'), gh = mk('th', null, m.title + ': ' + p.name);
+        gh.colSpan = mem ? 4 : 3;
+        g.appendChild(gh);
+        tbody.appendChild(g);
+        p.rows.forEach(function (r) {
+          var tr = mk('tr');
+          [r[0], fmt(r[iIdle]), fmt(r[iLoad])].concat(mem ? [fmt(r[3])] : []).forEach(function (c) { tr.appendChild(mk('td', null, c)); });
+          tbody.appendChild(tr);
+        });
+      });
+    });
+    table.appendChild(tbody);
+  }
+
+  document.querySelectorAll('input[name="scen"], input[name="metric"]').forEach(function (i) { i.addEventListener('change', render); });
+  render();
+})();
+</script>
+</body>
+</html>

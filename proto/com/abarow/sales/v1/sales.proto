@@ -1,0 +1,165 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.sales.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// SalesService manages the life cycle of a receipt (a sale).
+//
+// Units: money fields are kuruş (_kurus), rates are base points (_bp, 20% = 2000),
+// miktarlar binde bir birimdir (_milli, 1 adet = 1000). Fiyatlar KDV dahildir.
+service SalesService {
+  // CreateSale creates an open sale from the lines the vertical module collected.
+  rpc CreateSale(CreateSaleRequest) returns (CreateSaleResponse);
+  // GetSale returns the sale.
+  rpc GetSale(GetSaleRequest) returns (GetSaleResponse);
+  // ListSales returns the sales in the given status from newest to oldest (at most 100).
+  // For example SALE_STATUS_CHARGED: sales whose payment was taken but whose fiscal record (receipt)
+  // could not be made; they wait to be completed at the register, while they exist the end of
+  // day and shift closing are not done.
+  rpc ListSales(ListSalesRequest) returns (ListSalesResponse);
+  // Checkout takes the payment, makes the fiscal record and closes the sale.
+  rpc Checkout(CheckoutRequest) returns (CheckoutResponse);
+  // VoidSale cancels a sale whose payment has not been taken.
+  rpc VoidSale(VoidSaleRequest) returns (VoidSaleResponse);
+  // RefundCharged gives back the payment of a sale whose payment was taken but whose fiscal
+  // record (receipt) could not be made, and cancels the sale (refunded). First the
+  // payment is refunded; if it fails the sale stays charged. The caller checks the
+  // authority (manager).
+  rpc RefundCharged(RefundChargedRequest) returns (RefundChargedResponse);
+  // GetOutboxStatus counts the sale events not yet published to the message path.
+  // The end of day and shift closing wait for it to reach zero so that the
+  // report is not incomplete.
+  rpc GetOutboxStatus(GetOutboxStatusRequest) returns (GetOutboxStatusResponse);
+}
+
+// SaleStatus is the sale's status.
+enum SaleStatus {
+  SALE_STATUS_UNSPECIFIED = 0;
+  SALE_STATUS_OPEN = 1;
+  SALE_STATUS_PAID = 2;
+  SALE_STATUS_VOIDED = 3;
+  // Payment taken, the fiscal record is awaited. When Checkout is retried it continues with the
+  // same payment.
+  SALE_STATUS_CHARGED = 4;
+}
+
+// PaymentMethod is the payment method.
+enum PaymentMethod {
+  PAYMENT_METHOD_UNSPECIFIED = 0;
+  PAYMENT_METHOD_CASH = 1;
+  PAYMENT_METHOD_CARD = 2;
+  // Meal card or voucher (Multinet, Pluxee, Ticket, Setcard ...); a separate
+  // line in Z, no change is given.
+  PAYMENT_METHOD_MEAL_CARD = 3;
+}
+
+// SaleLine is an item in the sale.
+message SaleLine {
+  string product_id = 1;
+  string barcode = 2;
+  string name = 3;
+  int64 qty_milli = 4;
+  int64 unit_price_kurus = 5;
+  int64 tax_rate_bp = 6;
+}
+
+// Payment is a payment made to the sale.
+message Payment {
+  PaymentMethod method = 1;
+  int64 amount_kurus = 2;
+  // The payment's counterpart in the payment service (e.g. the card transaction reference).
+  string ref = 3;
+}
+
+// TaxLine is the total and tax amount that fall on a VAT rate.
+message TaxLine {
+  int64 rate_bp = 1;
+  int64 gross_kurus = 2;
+  int64 tax_kurus = 3;
+}
+
+// Sale is a whole receipt.
+message Sale {
+  string id = 1;
+  string register_id = 2;
+  SaleStatus status = 3;
+  repeated SaleLine lines = 4;
+  repeated Payment payments = 5;
+  repeated TaxLine taxes = 6;
+  int64 total_kurus = 7;
+  int64 tax_total_kurus = 8;
+  int64 change_kurus = 9;
+  // The receipt number that increases per register; gaps mean missing receipts.
+  int64 receipt_no = 10;
+  string fiscal_no = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp paid_at = 13;
+  google.protobuf.Timestamp voided_at = 14;
+  // The cashier who made the sale (audit trail); empty for a sale with no cashier.
+  string cashier_id = 15;
+  // The payment of the cancelled sale had been taken and was given back (because its
+  // fiscal record could not be made).
+  bool refunded = 16;
+}
+
+message CreateSaleRequest {
+  repeated SaleLine lines = 1;
+  string cashier_id = 2;
+}
+
+message CreateSaleResponse {
+  Sale sale = 1;
+}
+
+message GetSaleRequest {
+  string sale_id = 1;
+}
+
+message GetSaleResponse {
+  Sale sale = 1;
+}
+
+message CheckoutRequest {
+  string sale_id = 1;
+  repeated Payment payments = 2;
+}
+
+message CheckoutResponse {
+  Sale sale = 1;
+}
+
+message VoidSaleRequest {
+  string sale_id = 1;
+}
+
+message VoidSaleResponse {
+  Sale sale = 1;
+}
+
+message GetOutboxStatusRequest {}
+
+message GetOutboxStatusResponse {
+  // The number of unpublished events.
+  int64 pending = 1;
+}
+
+message ListSalesRequest {
+  SaleStatus status = 1;
+  int32 limit = 2;
+}
+
+message ListSalesResponse {
+  repeated Sale sales = 1;
+}
+
+message RefundChargedRequest {
+  string sale_id = 1;
+}
+
+message RefundChargedResponse {
+  Sale sale = 1;
+}

@@ -1,0 +1,64 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+# Restaurant register: it is added on top of compose.yaml; instead of the market module
+# the restaurant module (tables, check, menu with images), the catalog with the trial menu
+# (seed/restaurant: with images and options), the kitchen tickets to a separate printer
+# (simulator). The project and port are separate so it can run at the same time as the market register.
+# From the repository root:
+#   docker compose -p abarow-restaurant -f deploy/compose/compose.yaml -f deploy/compose/restaurant.yaml up --build -d
+#   ABAROW_UI_PORT=8089 and http://localhost:8089 in the browser
+#   ... --profile ui-test run --rm ui-smoke                       # browser test
+services:
+  gateway:
+    environment:
+      ABAROW_MODULE_URL: http://restaurant:8080
+      ABAROW_MODULE: restaurant
+    depends_on: !override
+      restaurant: { condition: service_healthy }
+      staff: { condition: service_healthy }
+
+  # The market module does not run on this register.
+  retail:
+    profiles: [market]
+
+  restaurant:
+    build:
+      context: ../..
+      dockerfile: deploy/container/module-ui.Containerfile
+      args: { MODULE: services/modules/restaurant, PKG: ./cmd/restaurant, UI: ui/apps/restaurant }
+    image: ghcr.io/abarow/abarow-restaurant:dev
+    environment:
+      ABAROW_DATABASE_URL: postgres://abarow:${ABAROW_DB_PASSWORD:-register-test}@register-db:5432/abarow?sslmode=disable
+      ABAROW_CATALOG_ADDR: catalog:9000
+      ABAROW_SALES_ADDR: sales:9000
+      ABAROW_DEVICE_ADDR: device:9000
+      ABAROW_STAFF_ADDR: staff:9000
+      ABAROW_TZ: Europe/Istanbul
+      GOMEMLIMIT: 48MiB
+    mem_limit: 64m
+    healthcheck:
+      test: ["CMD", "/service", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    depends_on:
+      register-db: { condition: service_healthy }
+      catalog: { condition: service_healthy }
+      sales: { condition: service_healthy }
+      device: { condition: service_healthy }
+      staff: { condition: service_healthy }
+    restart: unless-stopped
+
+  catalog:
+    environment:
+      ABAROW_CATALOG_SEED: /seed/restaurant/catalog.json
+
+  # The kitchen tickets go to the separate (simulator) printer; the bar tickets to the receipt printer.
+  device:
+    environment:
+      ABAROW_KITCHEN_PRINTER: simulator
+
+  ui-smoke:
+    command: ["sh", "-c", "cp /work/restaurant.mjs /work/package.json . && npm install --no-audit --no-fund --silent && mkdir -p /work/out && node restaurant.mjs"]
+

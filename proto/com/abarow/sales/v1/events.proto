@@ -1,0 +1,57 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.sales.v1;
+
+import "com/abarow/sales/v1/sales.proto";
+import "google/protobuf/timestamp.proto";
+
+// The events are published in NATS with a short subject (sale.completed.v1), and with the
+// full name as the CloudEvents type (com.abarow.sale.completed.v1).
+// The content is the protobuf encoding of these messages (content-type:
+// application/protobuf); the other CloudEvents properties are in the ce-* headers.
+// event_id is unique for every event (the same as ce-id); consumers de-duplicate repeats
+// with it.
+
+// SaleCompleted announces a sale whose payment was taken and fiscal record made.
+message SaleCompleted {
+  string event_id = 1;
+  string store_id = 2;
+  string register_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  Sale sale = 5;
+}
+
+// SaleCharged (sale.charged.v1) announces a sale whose payment was taken but whose
+// fiscal record (receipt) could not be made: the ÖKC/printer gave an error during payment. The sale
+// waits until it is completed at the register (sale.completed.v1) or its payment is refunded and it is
+// cancelled (sale.voided.v1, refunded). It can be published again at every failed
+// attempt; consumers merge by sale id.
+// It is not published on a successful payment.
+message SaleCharged {
+  string event_id = 1;
+  string store_id = 2;
+  string register_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  // The sale (status charged; with its payments).
+  Sale sale = 5;
+  // Why the fiscal record could not be made (e.g. "printer is not answering").
+  string reason = 6;
+}
+
+// SaleVoided announces a cancelled sale: a sale cancelled before its payment was taken
+// or one cancelled with its payment refunded because its fiscal record could not be made
+// (refunded).
+message SaleVoided {
+  string event_id = 1;
+  string store_id = 2;
+  string register_id = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+  string sale_id = 5;
+  int64 total_kurus = 6;
+  // The sale's cashier; empty for a sale with no cashier.
+  string cashier_id = 7;
+  bool refunded = 8;
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@abarow/ui-smoke",
+  "private": true,
+  "version": "0.0.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}

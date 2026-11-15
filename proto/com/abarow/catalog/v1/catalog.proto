@@ -1,0 +1,118 @@
+// Copyright 2026 Mehmet ERGULCU and the abarow contributors
+// SPDX-License-Identifier: Apache-2.0
+
+syntax = "proto3";
+
+package com.abarow.catalog.v1;
+
+// CatalogService provides product and price information. Prices are VAT-included kuruş,
+// rates are base points (20% = 2000).
+service CatalogService {
+  // GetByBarcode returns the product that corresponds to the barcode. For weighed products
+  // the barcode is the scale prefix + the product code (e.g. 2700001); the module decodes the weight
+  // from the scale barcode.
+  rpc GetByBarcode(GetByBarcodeRequest) returns (GetByBarcodeResponse);
+  // SearchProducts returns the products that have the query in their name; if the query is empty
+  // it returns the quick key products.
+  rpc SearchProducts(SearchProductsRequest) returns (SearchProductsResponse);
+  // GetProduct returns the product with the given id with the price in effect (the restaurant
+  // adds a product from the menu by product id). NOT_FOUND if none or withdrawn from sale;
+  // FAILED_PRECONDITION if its price is not in effect yet.
+  rpc GetProduct(GetProductRequest) returns (GetProductResponse);
+  // ListMenu returns the products on the menu (those that have a category) with the prices in effect
+  // in menu order: the categories by their lowest-ordered product,
+  // the products by order and name.
+  rpc ListMenu(ListMenuRequest) returns (ListMenuResponse);
+  // GetImage is the product's image; NOT_FOUND if there is no image.
+  rpc GetImage(GetImageRequest) returns (GetImageResponse);
+}
+
+// Unit is the product's sales unit.
+enum Unit {
+  UNIT_UNSPECIFIED = 0;
+  UNIT_PIECE = 1;
+  UNIT_KG = 2;
+}
+
+// Product is a catalog product.
+message Product {
+  string id = 1;
+  string name = 2;
+  Unit unit = 3;
+  int64 unit_price_kurus = 4;
+  int64 tax_rate_bp = 5;
+  repeated string barcodes = 6;
+  // Shown as a quick key on the register screen.
+  bool quick_key = 7;
+  // The category on the restaurant menu (e.g. "Soups"); if empty the product is not on the menu.
+  string category = 8;
+  // The order on the menu (small first).
+  int32 menu_order = 9;
+  // The station the kitchen ticket goes to: "kitchen" or "bar"; kitchen if empty.
+  string station = 10;
+  // The options selected in the order (cooking, extras ...).
+  repeated OptionGroup option_groups = 11;
+  // The image's SHA-256 digest (hexadecimal) and type (image/jpeg, image/png,
+  // image/webp); empty if there is no image. The image itself comes separately (GetImage).
+  string image_sha256 = 12;
+  string image_type = 13;
+}
+
+// OptionGroup is a product's option group: in the order at least min and at most
+// max options are selected (optional if min is 0).
+message OptionGroup {
+  string id = 1;
+  string name = 2;
+  int32 min = 3;
+  int32 max = 4;
+  repeated Option options = 5;
+}
+
+// Option is an option; when selected price_delta_kurus is added to the line's price
+// (KDV dahil, eksi olabilir) eklenir.
+message Option {
+  string id = 1;
+  string name = 2;
+  int64 price_delta_kurus = 3;
+}
+
+message GetProductRequest {
+  string product_id = 1;
+}
+
+message GetProductResponse {
+  Product product = 1;
+}
+
+message ListMenuRequest {}
+
+message ListMenuResponse {
+  repeated Product products = 1;
+}
+
+message GetImageRequest {
+  string product_id = 1;
+}
+
+message GetImageResponse {
+  string sha256 = 1;
+  string content_type = 2;
+  bytes data = 3;
+}
+
+message GetByBarcodeRequest {
+  string barcode = 1;
+}
+
+message GetByBarcodeResponse {
+  Product product = 1;
+}
+
+message SearchProductsRequest {
+  string query = 1;
+  int32 limit = 2;
+}
+
+message SearchProductsResponse {
+  repeated Product products = 1;
+}

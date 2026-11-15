@@ -1,0 +1,46 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow headquarters event intake (the stores' events into PostgreSQL)
+# Wants (not Requires): while NATS or the database restarts this service
+# does not stop, it renews the connection itself. After + Notify=healthy makes the start wait.
+Wants=abarow-headquarters.service abarow-db.service
+After=abarow-headquarters.service abarow-db.service
+
+[Container]
+ContainerName=abarow-ingest
+Image=ghcr.io/abarow/abarow-ingest:0.1
+# Every service is updated on its own, but not by itself: a new release
+# is applied once approved on the screen (docs/UPDATE.md).
+Network=abarow-headquarters.network
+Environment=ABAROW_NATS_URL=nats://abarow-headquarters:4222
+Environment=ABAROW_NATS_NKEY=/run/secrets/nats.nk
+Environment=ABAROW_STORES=/config/stores.json
+Environment=GOMEMLIMIT=48MiB
+# The list of connected stores (written by headquarters-install.sh store-add). A directory is mounted
+# instead of the file: the list is written by moving a file over it.
+Volume=%h/abarow/headquarters/config:/config:ro,z
+# NATS identity (secret key; only this container reads it).
+Secret=abarow-headquarters-nats-ingest,type=mount,target=/run/secrets/nats.nk,uid=65532,mode=0400
+# The database address (with the password).
+Secret=abarow-db-url,type=env,target=ABAROW_DATABASE_URL
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+Notify=healthy
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# Headquarters does not wait for the external network: the services connect to each other inside the machine,
+# the stores renew the connection themselves. On a machine where network-online.target
+# never comes the boot would take minutes.
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

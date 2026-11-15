@@ -1,0 +1,66 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow store reports and the store server screen
+# Wants (not Requires): while NATS restarts this service does not stop, it renews
+# the connection itself. After + Notify=healthy makes the start wait for NATS and the database
+# bekletir.
+Wants=abarow-store.service abarow-store-db.service
+After=abarow-store.service abarow-store-db.service
+
+[Container]
+ContainerName=abarow-report
+Image=ghcr.io/abarow/abarow-report:0.1
+# Every service is updated on its own, but not by itself: a new release
+# is applied once approved on the screen (docs/UPDATE.md).
+Network=abarow-store.network
+Environment=ABAROW_NATS_URL=nats://abarow-store:4222
+Environment=ABAROW_NATS_NKEY=/run/secrets/nats.nk
+Environment=ABAROW_REGISTERS=/config/registers.json
+# Stock module: the screen's stock requests are forwarded to the inventory.
+Environment=ABAROW_INVENTORY_URL=http://abarow-inventory:8080
+# Product and price management: catalog requests are forwarded to catalog-admin. While headquarters
+# counts as connected it is closed to writing; once the manager closes the connection from the screen
+# it is managed at the store.
+Environment=ABAROW_CATALOG_ADMIN_URL=http://abarow-store-catalog-admin:8080
+Environment=ABAROW_TZ=Europe/Istanbul
+Environment=GOMEMLIMIT=48MiB
+# The database address (contains the password; written as a secret at install).
+Secret=abarow-store-db-url,type=env,target=ABAROW_DATABASE_URL
+# The list of connected registers (written by store-install.sh register-add). A directory is mounted
+# instead of the file: the list is written by moving a file over it.
+Volume=%h/abarow/store/config:/config:ro,Z
+# NATS identity (secret key; only this container reads it).
+Secret=abarow-store-nats-report,type=mount,target=/run/secrets/nats.nk,uid=65532,mode=0400
+# The bcrypt digest of the screen's store password (not the password itself).
+Secret=abarow-report-password,type=env,target=ABAROW_REPORT_PASSWORD_HASH
+# The screen serves HTTPS. The certificate is the same as the store server's leaf connection
+# (the server certificate signed by the store CA and issued to the --address names of the install);
+# so that browsers show no warning the store CA (ca.pem) is installed on the managers'
+# devices. The files are read on every connection: when the certificate
+# is renewed the service does not restart.
+Secret=abarow-store-tls-cert,type=mount,target=/run/secrets/tls/server.pem,uid=65532,mode=0444
+Secret=abarow-store-tls-key,type=mount,target=/run/secrets/tls/server.key,uid=65532,mode=0400
+Environment=ABAROW_TLS_CERT=/run/secrets/tls/server.pem
+Environment=ABAROW_TLS_KEY=/run/secrets/tls/server.key
+# The store server screen is opened to the store network (it asks for a sign-in).
+PublishPort=8090:8080
+HealthCmd=["/service", "healthcheck"]
+HealthInterval=5s
+HealthTimeout=3s
+HealthRetries=12
+# The unit counts as active once the container is healthy.
+Notify=healthy
+PodmanArgs=--memory=64m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The store server does not wait for the external network (see abarow-store.container).
+DefaultDependencies=false
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,35 @@
+# Copyright 2026 Mehmet ERGULCU and the abarow contributors
+# SPDX-License-Identifier: Apache-2.0
+
+[Unit]
+Description=abarow image mirror (headquarters: a cache of the images coming from the upper tier)
+Wants=abarow-headquarters-mirror-auth.service
+After=abarow-headquarters-mirror-auth.service
+
+[Container]
+ContainerName=abarow-headquarters-mirror
+# Zot is an OCI-compatible registry. Authentication is with the tokens of the authorization service
+# (bearer); the install script writes its configuration as %h/abarow/mirror/zot.json.
+Image=ghcr.io/project-zot/zot-linux-amd64:v2.1.23
+Network=abarow-headquarters.network
+Exec=serve /etc/zot/zot.json
+# The directory is shared with the agent: the agent renews identity.json with the upper tier's token and
+# makes Zot reload the configuration (Zot reads the identity file only when the configuration changes).
+Volume=%h/abarow/mirror:/etc/zot:Z
+# The token verification certificate (mirror.crt): the authorization service's data volume, read-only.
+Volume=abarow-headquarters-mirror-auth:/etc/mirror:ro
+Volume=abarow-headquarters-mirror-data:/var/lib/registry
+Secret=abarow-headquarters-tls-cert,type=mount,target=/run/secrets/tls/server.pem,mode=0444
+Secret=abarow-headquarters-tls-key,type=mount,target=/run/secrets/tls/server.key,mode=0400
+PublishPort=5443:5000
+PodmanArgs=--memory=256m
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+
+[Quadlet]
+# The install script writes the network setting.
+
+[Install]
+WantedBy=default.target
