@@ -57,6 +57,10 @@ Bir satış (sepet aç, 3 ürün okut, sepeti kapat, nakit öde: 5 çağrı) haf
 - **Kendi sunucunda:** Her işletme kendi merkezini çalıştırır; verileri kendisinde kalır.
 - **Teknoloji:** Go ile hexagonal mikroservisler. Her servis ayrı bir container'da (Podman) çalışır ve tek başına güncellenebilir. Önyüz Svelte ile yazılır ve Chromium kiosk modunda açılır. Veri üç katmanda da PostgreSQL'de tutulur.
 
+![abarow mimarisi: kasa, mağaza sunucusu ve merkez](docs/images/architecture.jpg)
+
+*Kasa, mağaza sunucusu (operasyon) ve merkez. Satışlar yukarı, katalog ve fiyatlar aşağı akar. Ayrıntı: [docs/DESIGN.md](docs/DESIGN.md), [docs/DATA-FLOW.md](docs/DATA-FLOW.md).*
+
 ## Deneyin
 
 Docker kurulu bir bilgisayarda, depo kökünden (deneme verisiyle; gerçek kurulumda kullanmayın):
