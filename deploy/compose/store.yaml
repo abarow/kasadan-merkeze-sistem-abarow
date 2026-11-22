@@ -178,7 +178,7 @@ services:
 
   # Opens the store server screen in a real browser and takes screenshots.
   ui-smoke:
-    image: mcr.microsoft.com/playwright:v1.64.1-noble
+    image: mcr.microsoft.com/playwright:v1.65.1-noble
     # The dependencies are installed inside the container; only the images are written to the repository.
     working_dir: /tmp/ui-smoke
     command: ["sh", "-c", "cp /work/store.mjs /work/package.json . && npm install --no-audit --no-fund --silent && mkdir -p /work/out && node store.mjs"]
