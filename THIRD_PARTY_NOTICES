@@ -8,34 +8,34 @@ scripts/third-party-notices.py (see docs/LICENSES.md) and ships in every image a
 INVENTORY (checked by scripts/third-party-notices.py --check)
 
   go github.com/coreos/go-oidc/v3 v3.21.0
-  go github.com/go-jose/go-jose/v4 v4.1.8
+  go github.com/go-jose/go-jose/v4 v4.1.9
   go github.com/godbus/dbus/v5 v5.1.0
   go github.com/google/uuid v1.6.0
   go github.com/jackc/pgpassfile v1.0.0
   go github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761
-  go github.com/jackc/pgx/v5 v5.11.0
+  go github.com/jackc/pgx/v5 v5.13.0
   go github.com/jackc/puddle/v2 v2.2.3
-  go github.com/klauspost/compress v1.20.3
-  go github.com/mfridman/interpolate v0.0.2
-  go github.com/nats-io/nats.go v1.55.0
-  go github.com/nats-io/nkeys v0.4.16
+  go github.com/klauspost/compress v1.20.4
+  go github.com/mfridman/interpolate v0.2.0
+  go github.com/nats-io/nats.go v1.56.0
+  go github.com/nats-io/nkeys v0.4.17
   go github.com/nats-io/nuid v1.0.1
-  go github.com/pressly/goose/v3 v3.29.0
+  go github.com/pressly/goose/v3 v3.30.1
   go github.com/sethvargo/go-retry v0.5.0
   go go.uber.org/multierr v1.11.0
-  go golang.org/x/crypto v0.58.0
+  go golang.org/x/crypto v0.59.0
   go golang.org/x/net v0.62.0
-  go golang.org/x/oauth2 v0.37.0
-  go golang.org/x/sync v0.24.0
-  go golang.org/x/sys v0.49.0
-  go golang.org/x/text v0.43.0
-  go google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8
-  go google.golang.org/grpc v1.84.0
+  go golang.org/x/oauth2 v0.38.0
+  go golang.org/x/sync v0.25.0
+  go golang.org/x/sys v0.50.0
+  go golang.org/x/text v0.44.0
+  go google.golang.org/genproto/googleapis/rpc v0.0.0-20261110000943-09e21b237f2c
+  go google.golang.org/grpc v1.85.0
   go google.golang.org/protobuf v1.36.12
   npm clsx 2.1.1
   npm esm-env 1.2.2
-  npm svelte 5.57.2
-  npm vite 8.3.5
+  npm svelte 5.58.0
+  npm vite 8.3.8
 
 -------------------------------------------------------------------------------
 
@@ -46,40 +46,40 @@ Every service is a static Go program built with go1.27.4; the standard library
 
 Modules:
   github.com/coreos/go-oidc/v3 v3.21.0  [Apache-2.0]
-  github.com/go-jose/go-jose/v4 v4.1.8  [Apache-2.0]
+  github.com/go-jose/go-jose/v4 v4.1.9  [Apache-2.0]
   github.com/godbus/dbus/v5 v5.1.0  [BSD-2-Clause]
   github.com/google/uuid v1.6.0  [BSD-3-Clause]
   github.com/jackc/pgpassfile v1.0.0  [MIT]
   github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761  [MIT]
-  github.com/jackc/pgx/v5 v5.11.0  [MIT]
+  github.com/jackc/pgx/v5 v5.13.0  [MIT]
   github.com/jackc/puddle/v2 v2.2.3  [MIT]
-  github.com/klauspost/compress v1.20.3  [Apache-2.0]
-  github.com/mfridman/interpolate v0.0.2  [MIT]
-  github.com/nats-io/nats.go v1.55.0  [Apache-2.0]
-  github.com/nats-io/nkeys v0.4.16  [Apache-2.0]
+  github.com/klauspost/compress v1.20.4  [Apache-2.0]
+  github.com/mfridman/interpolate v0.2.0  [MIT]
+  github.com/nats-io/nats.go v1.56.0  [Apache-2.0]
+  github.com/nats-io/nkeys v0.4.17  [Apache-2.0]
   github.com/nats-io/nuid v1.0.1  [Apache-2.0]
-  github.com/pressly/goose/v3 v3.29.0  [MIT]
+  github.com/pressly/goose/v3 v3.30.1  [MIT]
   github.com/sethvargo/go-retry v0.5.0  [Apache-2.0]
   go.uber.org/multierr v1.11.0  [MIT]
-  golang.org/x/crypto v0.58.0  [BSD-3-Clause]
+  golang.org/x/crypto v0.59.0  [BSD-3-Clause]
   golang.org/x/net v0.62.0  [BSD-3-Clause]
-  golang.org/x/oauth2 v0.37.0  [BSD-3-Clause]
-  golang.org/x/sync v0.24.0  [BSD-3-Clause]
-  golang.org/x/sys v0.49.0  [BSD-3-Clause]
-  golang.org/x/text v0.43.0  [BSD-3-Clause]
-  google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8  [Apache-2.0]
-  google.golang.org/grpc v1.84.0  [Apache-2.0]
+  golang.org/x/oauth2 v0.38.0  [BSD-3-Clause]
+  golang.org/x/sync v0.25.0  [BSD-3-Clause]
+  golang.org/x/sys v0.50.0  [BSD-3-Clause]
+  golang.org/x/text v0.44.0  [BSD-3-Clause]
+  google.golang.org/genproto/googleapis/rpc v0.0.0-20261110000943-09e21b237f2c  [Apache-2.0]
+  google.golang.org/grpc v1.85.0  [Apache-2.0]
   google.golang.org/protobuf v1.36.12  [BSD-3-Clause]
 
 -------------------------------------------------------------------------------
 Applies to:
   - Go standard library (go1.27.4)
-  - golang.org/x/crypto v0.58.0 (LICENSE)
+  - golang.org/x/crypto v0.59.0 (LICENSE)
   - golang.org/x/net v0.62.0 (LICENSE)
-  - golang.org/x/oauth2 v0.37.0 (LICENSE)
-  - golang.org/x/sync v0.24.0 (LICENSE)
-  - golang.org/x/sys v0.49.0 (LICENSE)
-  - golang.org/x/text v0.43.0 (LICENSE)
+  - golang.org/x/oauth2 v0.38.0 (LICENSE)
+  - golang.org/x/sync v0.25.0 (LICENSE)
+  - golang.org/x/sys v0.50.0 (LICENSE)
+  - golang.org/x/text v0.44.0 (LICENSE)
 -------------------------------------------------------------------------------
 Copyright 2009 The Go Authors.
 
@@ -112,11 +112,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -------------------------------------------------------------------------------
 Applies to:
   - Go standard library (go1.27.4) (PATENTS)
-  - golang.org/x/crypto v0.58.0 (PATENTS)
+  - golang.org/x/crypto v0.59.0 (PATENTS)
   - golang.org/x/net v0.62.0 (PATENTS)
-  - golang.org/x/sync v0.24.0 (PATENTS)
-  - golang.org/x/sys v0.49.0 (PATENTS)
-  - golang.org/x/text v0.43.0 (PATENTS)
+  - golang.org/x/sync v0.25.0 (PATENTS)
+  - golang.org/x/sys v0.50.0 (PATENTS)
+  - golang.org/x/text v0.44.0 (PATENTS)
   - google.golang.org/protobuf v1.36.12 (PATENTS)
 -------------------------------------------------------------------------------
 Additional IP Rights Grant (Patents)
@@ -350,13 +350,13 @@ Apache License
 
 -------------------------------------------------------------------------------
 Applies to:
-  - github.com/go-jose/go-jose/v4 v4.1.8 (LICENSE)
-  - github.com/nats-io/nats.go v1.55.0 (LICENSE)
-  - github.com/nats-io/nkeys v0.4.16 (LICENSE)
+  - github.com/go-jose/go-jose/v4 v4.1.9 (LICENSE)
+  - github.com/nats-io/nats.go v1.56.0 (LICENSE)
+  - github.com/nats-io/nkeys v0.4.17 (LICENSE)
   - github.com/nats-io/nuid v1.0.1 (LICENSE)
   - github.com/sethvargo/go-retry v0.5.0 (LICENSE)
-  - google.golang.org/genproto/googleapis/rpc v0.0.0-20261005182115-fad411399dd8 (LICENSE)
-  - google.golang.org/grpc v1.84.0 (LICENSE)
+  - google.golang.org/genproto/googleapis/rpc v0.0.0-20261110000943-09e21b237f2c (LICENSE)
+  - google.golang.org/grpc v1.85.0 (LICENSE)
 -------------------------------------------------------------------------------
                                  Apache License
                            Version 2.0, January 2004
@@ -678,7 +678,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 -------------------------------------------------------------------------------
 Applies to:
-  - github.com/jackc/pgx/v5 v5.11.0 (LICENSE)
+  - github.com/jackc/pgx/v5 v5.13.0 (LICENSE)
 -------------------------------------------------------------------------------
 Copyright (c) 2013-2021 Jack Christensen
 
@@ -732,7 +732,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 -------------------------------------------------------------------------------
 Applies to:
-  - github.com/klauspost/compress v1.20.3 (LICENSE)
+  - github.com/klauspost/compress v1.20.4 (LICENSE)
 -------------------------------------------------------------------------------
 Copyright (c) 2012 The Go Authors. All rights reserved.
 Copyright (c) 2019 Klaus Post. All rights reserved.
@@ -1041,7 +1041,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 -------------------------------------------------------------------------------
 Applies to:
-  - github.com/mfridman/interpolate v0.0.2 (LICENSE.txt)
+  - github.com/mfridman/interpolate v0.2.0 (LICENSE.txt)
 -------------------------------------------------------------------------------
 MIT License
 
@@ -1070,7 +1070,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 -------------------------------------------------------------------------------
 Applies to:
-  - github.com/pressly/goose/v3 v3.29.0 (LICENSE)
+  - github.com/pressly/goose/v3 v3.30.1 (LICENSE)
 -------------------------------------------------------------------------------
 MIT License
 
@@ -1160,7 +1160,7 @@ Copyright 2014 CoreOS, Inc
 This product includes software developed at CoreOS, Inc.
 (http://www.coreos.com/).
 
-[google.golang.org/grpc v1.84.0 (NOTICE.txt)]
+[google.golang.org/grpc v1.85.0 (NOTICE.txt)]
 Copyright 2014 gRPC authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
@@ -1181,17 +1181,17 @@ limitations under the License.
 
 The screens are built with Svelte and Vite; the code of these packages is in the bundles:
 
-  svelte 5.57.2  [MIT]
+  svelte 5.58.0  [MIT]
   esm-env 1.2.2  [MIT]
   clsx 2.1.1  [MIT]
-  vite 8.3.5  [MIT]
+  vite 8.3.8  [MIT]
 
 The Inter font (SIL Open Font License 1.1) is listed in NOTICE; its license text is served with each
 screen (/licenses/Inter-OFL.txt).
 
 -------------------------------------------------------------------------------
 Applies to:
-  - svelte 5.57.2
+  - svelte 5.58.0
 -------------------------------------------------------------------------------
 Copyright (c) 2016-2025 [Svelte Contributors](https://github.com/sveltejs/svelte/graphs/contributors)
 
@@ -1229,7 +1229,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 -------------------------------------------------------------------------------
 Applies to:
-  - vite 8.3.5
+  - vite 8.3.8
 -------------------------------------------------------------------------------
 # Vite core license
 Vite is released under the MIT license:
