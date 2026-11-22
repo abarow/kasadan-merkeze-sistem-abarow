@@ -36,3 +36,6 @@ __pycache__/
 
 # OWASP ZAP reports (scripts/zap-scan.py); they hold the test session
 /zap-out/
+
+# Wrangler (Cloudflare) yerel önbelleği
+.wrangler/
